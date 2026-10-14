@@ -1,0 +1,17 @@
+{
+  "name": "axiom-agent",
+  "version": "0.1.0",
+  "description": "Axiom core: an LLM tool-use loop over a local workspace, with cost tracking, sessions and sandboxed tools.",
+  "type": "module",
+  "bin": { "axiom": "./bin/axiom.js" },
+  "scripts": {
+    "build": "tsc",
+    "start": "tsx bin/axiom.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "lint": "tsc --noEmit"
+  },
+  "license": "MIT",
+  "dependencies": { "picocolors": "^1.1.1" },
+  "devDependencies": { "@types/node": "^22.13.0", "tsx": "^4.19.2", "typescript": "^5.7.3" },
+  "engines": { "node": ">=22.0.0" }
+}
