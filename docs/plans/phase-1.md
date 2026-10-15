@@ -10,11 +10,11 @@
 
 | Làn | Người | Phần |
 |---|---|---|
-| A | _(điền tên)_ | UC-01 Triage, eval, wire họ OpenAI + 2 wire agent |
-| B | _(điền tên)_ | Catalog, credential, resolver, `/login`, wire họ Google |
-| C | _(điền tên)_ | Target repo, secret, tool tìm kiếm, seeded bugs, OAuth |
+| A | _(điền tên)_ | UC-01 Triage, eval, prompt (skill + `AGENTS.md`), 5 wire, đăng nhập kiểu hook (3 luồng) |
+| B | _(điền tên)_ | Catalog, credential + refresh, resolver, `/login`, đăng nhập API key / cloud / device code (4 luồng) |
+| C | _(điền tên)_ | Target repo, tool tìm kiếm, secret, seeded bugs, đăng nhập OAuth code (9 luồng) |
 | D | _(điền tên)_ | Khung chung (D0), CI, router, headless, trace, 4 wire |
-| E | _(điền tên)_ | TUI (Ink), màn hình duyệt, footer, telemetry |
+| E | _(điền tên)_ | TUI (Ink), màn hình duyệt, footer, telemetry, 3 wire Google |
 
 ## Đã xong (không làm lại)
 
@@ -38,10 +38,10 @@ Thêm của nhóm: Axiom dùng được hằng ngày ("Bản dùng được") v�
 
 ```
  Bắt đầu ──┬─ D: D0 khung chung (~1 giờ) ──► merge ──► D2 → D3 → D4 ──────────────────┐
-           ├─ A: A1 eval case + SKILL.md ─────────────► A2 → A3 → A4 → A5 → A6 ────────┤
-           ├─ B: B1 script sinh catalog ──────────────► B2 → B3 → B4 ──────────────────┤
-           ├─ C: C1 target repo, C2 tool tìm kiếm ────► C3 → C4 → C5 → C6 ─────────────┼─► Ghép
-           └─ E: E1 store (TS thuần) ─────────────────► E2 → E3 → E4 → E5 ─────────────┘
+           ├─ A: A1 eval case + SKILL.md ─────────────► A2 → A3 → A4 → A5 → A6 → A7 ───┤
+           ├─ B: B1 script sinh catalog ──────────────► B2 → B3 → B4 → B5 ─────────────┤
+           ├─ C: C1 target repo, C2 tool tìm kiếm ────► C3 → C4 → C5 ──────────────────┼─► Ghép
+           └─ E: E1 store (TS thuần) ─────────────────► E2 → E3 → E4 → E5 → E6 ────────┘
 ```
 
 - **Điểm đồng bộ duy nhất là D0**, ở đầu ngày. Trong lúc D làm D0, task đầu của A, B, C, E không cần file D0 tạo (A1 JSON + SKILL.md, B1 script + JSON, C1–C2 repo + tool mới, E1 store dùng `EventBus` có sẵn), nên không ai ngồi chờ.
@@ -66,16 +66,16 @@ Thân stub trả giá trị rỗng hoặc `throw new Error('chưa làm')`. Chữ
 | `src/llm/catalog/index.ts` | Kiểu `ModelInfo`, `WireApi`, `Catalog`; `loadCatalog` stub (`providers.md` bước 2). Import bằng `'../llm/catalog/index.js'` | B1 |
 | `src/llm/model-resolver.ts` | `resolveModel`, `createProviderFor` (`providers.md` bước 4). Stub **giữ hành vi hiện tại**: đọc `loadConfig()` và gọi `createProvider` có sẵn, không throw | B2 |
 | `src/llm/provider-factory.ts` | Bảng `WIRES` đủ 14 wire: 2 wire cũ trỏ class có sẵn, 12 wire mới trỏ stub | — |
-| `src/llm/providers/<wire>.ts` × 12 | Class kế thừa `BaseLLMProvider`, `chat` throw `'chưa làm'` | A6, B4, D4 |
+| `src/llm/providers/<wire>.ts` × 12 | Class kế thừa `BaseLLMProvider`, `chat` throw `'chưa làm'` | A6, D4, E6 |
 | `src/core/secrets.ts` | `SECRET_NAME`, `scrubEnv`, `registerSecret`, `redact` (`providers.md` bước 1); stub trả nguyên đầu vào | C3 |
 | `src/core/prompt.ts` | `buildSystemPrompt(base: string, workspaceRoot: string): string` = `base` + `skillsIndex()` + `loadProjectRules(workspaceRoot)` | — (xong ở D0) |
 | `src/core/skills.ts` | `skillsIndex(): string` trả `''` | A2 |
-| `src/core/project-rules.ts` | `loadProjectRules(workspaceRoot: string): string` trả `''` | C5 |
+| `src/core/project-rules.ts` | `loadProjectRules(workspaceRoot: string): string` trả `''` | A2 |
 | `src/core/trace.ts` | `startTrace(bus: EventBus): { runId: string; close(): void }` không làm gì | D3 |
 | `src/commands/types.ts` | Nguyên văn `tui.md` mục 9 (import `ModelInfo` từ `catalog/index.js`) | — |
 | `src/commands/router.ts` | `parseCommand`, `CommandRouter` stub (`tui.md` bước 2) | D2 |
 | `src/commands/index.ts` + `{help,clear,exit,triage,login,logout,model,models}.ts` | Đăng ký đủ 8 lệnh; mỗi lệnh `run` throw `'chưa làm'`. `clear`/`exit` trả `CommandResult` với `kind: 'clear'`/`'exit'`, TUI và headless tự xử lý | D2 (`help` `clear` `exit`), A5 (`triage`), B3 (còn lại) |
-| `src/llm/auth/engines/index.ts` | Kiểu `Credential`, `LoginEngine = (provider: ProviderEntry, ui: CommandUI) => Promise<Credential>`; bảng `LOGIN_ENGINES` theo kiểu `login` trong catalog: `api-key`, `oauth-code`, `device-code`, `cloud-fields`, `hook`; mỗi engine là 1 file stub | B3 (`api-key`), B4 (`cloud-fields`), C6 (`oauth-code`, `device-code`, `hook`) |
+| `src/llm/auth/engines/index.ts` | Kiểu `Credential`, `LoginEngine = (provider: ProviderEntry, ui: CommandUI) => Promise<Credential>`; bảng `LOGIN_ENGINES` theo kiểu `login` trong catalog: `api-key`, `oauth-code`, `device-code`, `cloud-fields`, `hook`; mỗi engine là 1 file stub | B3 (`api-key`), B4 (`cloud-fields`), B5 (`device-code`), C5 (`oauth-code`), A7 (`hook`) |
 | `src/cli/agent.ts` | `createAgent(opts: { workspaceRoot: string; mock?: boolean; signal?: AbortSignal }): Promise<AgentLoop>`: `buildSystemPrompt` + `resolveModel('@default')` + `createProviderFor` + `startTrace(agent.eventBus)`. Headless và TUI đều tạo agent qua hàm này | — |
 | `src/tui/index.tsx` | `startTui(argv: string[]): Promise<void>` stub: chạy REPL cũ | E4 |
 | `src/cli/index.ts`, `bin/axiom.ts` | Headless dùng `createAgent`; TTY và không `-p` → `startTui(argv)` | — |
@@ -90,8 +90,8 @@ Thân stub trả giá trị rỗng hoặc `throw new Error('chưa làm')`. Chữ
 | `workspace/<repo>` | C1 | Thư mục tạm (`fs.mkdtemp`) |
 | `CommandRouter` | D2 | Gọi `command.run(args, ctxGiả)` trực tiếp |
 | Credential store | B2 | `AXIOM_HOME` tạm + file `auth.json` giả |
-| `LOGIN_ENGINES` | B3, B4, C6 | Engine nào chưa có thân thì `/login` báo "chưa hỗ trợ" |
-| Engine OAuth | C6 | Credential giả trong `AXIOM_HOME` tạm |
+| `LOGIN_ENGINES` | B3, B4, B5, C5, A7 | Engine nào chưa có thân thì `/login` báo "chưa hỗ trợ" |
+| Refresh token | B2 | Credential giả chưa hết hạn trong `AXIOM_HOME` tạm |
 | Wire class | Chủ wire | Gọi class trực tiếp với server HTTP giả |
 
 ## Bản dùng được

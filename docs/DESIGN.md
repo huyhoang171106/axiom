@@ -101,11 +101,11 @@ Quy tắc:
 
 | SV | UC sở hữu | Harness phụ trách | Phần mềm (TUI) phụ trách |
 |---|---|---|---|
-| A | UC-01 Triage, UC-09 PR notes (dự phòng) | Structured output (zod), schema retry, gán model theo role cho từng UC, skill loader, prompt, eval runner, connector GitHub | `/triage` (Phase 2: renderer IssueTicket) |
+| A | UC-01 Triage, UC-09 PR notes (dự phòng) | Structured output (zod), schema retry, gán model theo role cho từng UC, skill loader, nạp `AGENTS.md` target repo, eval runner, đăng nhập kiểu hook, connector GitHub | `/triage` (Phase 2: renderer IssueTicket) |
 | B | UC-02 RAG, UC-11 MCP | Provider, credentials, model resolver (`docs/guides/providers.md`), index tree-sitter + BM25 + embedding, citation validator, MCP server, khung connector | `/login` `/logout` `/model`, hiển thị trích dẫn bấm được, `/ask`, `/connect` |
-| C | UC-03 Bug fix | Bảo vệ secret, trace JSONL + run ID, `list_dir`/`search_code`, OAuth, `apply_patch`, Verifier, test-tamper guard, Oracle, bộ seeded bugs, loader `AGENTS.md` | Diff viewer tô màu, tiến trình từng vòng fix |
+| C | UC-03 Bug fix | Bảo vệ secret, `list_dir`/`search_code`, đăng nhập OAuth code, `apply_patch`, Verifier, test-tamper guard, Oracle, bộ seeded bugs | Diff viewer tô màu, tiến trình từng vòng fix |
 | D | UC-04 Multi-step + resume | Khung chung (stub, file dùng chung), bộ lệnh (`CommandRouter`, headless `-p`), trace JSONL + run ID, CI, checkpointer, compaction/handoff, memory | `/resume` `/memory` `/tree` `/cost` |
-| E | UC-05 HITL, UC-06 Reviewer | Audit log, Reviewer read-only (policy engine allow/ask/deny đã có) | Khung TUI (Ink), màn hình duyệt, footer + telemetry, panel review |
+| E | UC-05 HITL, UC-06 Reviewer | Audit log, Reviewer read-only (policy engine allow/ask/deny đã có), wire họ Google | Khung TUI (Ink), màn hình duyệt, footer + telemetry, panel review |
 
 Mỗi người viết `docs/uc-XX.md` cho UC của mình (thiết kế, failure mode, kết quả eval) — dùng luôn khi vấn đáp (điểm cá nhân = điểm nhóm × hệ số vấn đáp).
 
@@ -175,3 +175,4 @@ Quy tắc của lớp: mỗi phase chỉ dùng kiến thức đã học đến t
 | 2026-10-28 | D0 thêm `createAgent` (headless và TUI dùng chung), `LOGIN_ENGINES` (mỗi kiểu đăng nhập một file), stub `resolveModel` giữ hành vi cũ; triage dùng tool bắt buộc thay cho `response_format`; thêm `CLAUDE.md` nạp `AGENTS.md` | Bỏ các chỗ hai làn sửa cùng file và chỗ chưa ai nối resolver vào luồng chat |
 | 2026-10-28 | Bắt buộc mọi thay đổi đi qua branch → PR → tác giả tự merge khi CI xanh; không commit thẳng `main` | Không ai chờ người review; `main` luôn qua CI |
 | 2026-10-28 | CI/CD: `ci` (lint, test, eval, gitleaks), `pr-title`, `release` theo tag, Dependabot; `main` bảo vệ, chỉ squash merge, auto-merge khi xanh, xoá branch sau merge | Tự merge mà vẫn không phá `main`; tiêu đề PR thành commit đúng quy ước |
+| 2026-10-28 | Cân bằng A, B, C, E (D giữ nguyên): mỗi engine đăng nhập một chủ (`hook` A, `api-key`/`cloud-fields`/`device-code` B, `oauth-code` C), refresh chung về B; wire Google sang E; nạp `AGENTS.md` target repo sang A | Độ khó kỹ thuật 4 người ngang nhau; mỗi engine và file `auth/<id>.json` chỉ một người sửa |

@@ -2,7 +2,7 @@
 
 Người làm phần provider, model, đăng nhập và cost phải tuân theo file này. Thiết kế lấy theo [oh-my-pi](https://github.com/can1357/oh-my-pi) (đọc ở commit `c3b645c`, 28/10/2026): `docs/providers.md`, `docs/models.md`, `docs/adding-a-provider.md`, `docs/secrets.md`, và catalog `packages/catalog/src/compat/rules/{providers,auth}/*.kdl`.
 
-Owner: **B** (catalog, credential, đăng nhập API key, model resolver). **C** OAuth và subscription. Wire mới chia theo nhóm: **A** họ OpenAI, **B** họ Google, **D** Ollama/Bedrock và `cursor`/`devin`, **A** thêm `factory`/`gitlab-duo`, **B** hook đăng nhập cloud (xem `docs/plans/phase-1-{A,B,C,D,E}.md`). **A** gán model theo role cho từng UC. **E** hiển thị cost trên footer.
+Owner: **B** (catalog, credential + refresh, đăng nhập API key, cloud, device code, model resolver). **C** engine `oauth-code` và 9 luồng của nó. **A** engine `hook` (`openai-codex-device`, `github-copilot`, `cursor`). Wire mới: **A** họ OpenAI + `factory`/`gitlab-duo`, **E** họ Google, **D** Ollama/Bedrock và `cursor`/`devin` (xem `docs/plans/phase-1-{A,B,C,D,E}.md`). **A** gán model theo role cho từng UC. **E** hiển thị cost trên footer.
 
 **Cách dùng file này.** File này là hướng dẫn bắt buộc cho người và cho AI coding assistant viết code phần provider.
 - Đọc hết file trước khi viết code.
