@@ -22,12 +22,12 @@
 - Refactor nền: tên tool theo §4.1, policy `decide()` allow/ask/deny, Approver `approve|deny|editedArgs`, `ToolRegistry(allowed)`, `AgentLoop` nhận `systemPrompt`/`model`, giữ `tc.id`. 12/12 test pass.
 - Có sẵn: agent loop, provider Anthropic/OpenAI, `MockProvider`, cost tracker, sandbox, session, repetition guard, 4 tool `read_file` `write_file` `edit` `run_command`.
 - Tài liệu: `AGENTS.md`, `docs/`.
+- CI/CD: `ci.yml` (lint, test, eval khi có script, gitleaks), `pr-title.yml`, `release.yml` (tag `v*` → GitHub Release), Dependabot, `.env.example`, `.env` trong `.gitignore`. `main` được bảo vệ: chỉ merge qua PR có CI xanh, PR tự merge khi xanh (`--auto`).
 
 ## Yêu cầu của lớp còn lại
 
 | Yêu cầu | Task |
 |---|---|
-| CI | D1 |
 | 1 skill | A2 |
 | Log từng bước | D3 (trace JSONL) |
 | 1 UC chạy từ ứng dụng tới agent, ≥ 10 eval case | A1–A5, D2, E4 |
@@ -37,7 +37,7 @@ Thêm của nhóm: Axiom dùng được hằng ngày ("Bản dùng được") v�
 ## Một mạch, không ai chờ ai
 
 ```
- Bắt đầu ──┬─ D: D0 khung chung (~1 giờ) ──► merge ──► D1 → D2 → D3 → D4 ─────────────┐
+ Bắt đầu ──┬─ D: D0 khung chung (~1 giờ) ──► merge ──► D2 → D3 → D4 ──────────────────┐
            ├─ A: A1 eval case + SKILL.md ─────────────► A2 → A3 → A4 → A5 → A6 ────────┤
            ├─ B: B1 script sinh catalog ──────────────► B2 → B3 → B4 ──────────────────┤
            ├─ C: C1 target repo, C2 tool tìm kiếm ────► C3 → C4 → C5 → C6 ─────────────┼─► Ghép
@@ -52,7 +52,7 @@ Thêm của nhóm: Axiom dùng được hằng ngày ("Bản dùng được") v�
 Quy tắc:
 - **Chỉ sửa file trong làn của mình.** File chung do D0 tạo; sau đó ai cũng chỉ điền thân file mình được giao. Phải sửa file chung thì chỉ thêm dòng (`CONVENTIONS.md` mục Git).
 - **Chữ ký trong guide và bảng D0 là hợp đồng.** Không ai đổi. Muốn đổi: ghi "Nhật ký quyết định" trong `DESIGN.md` và báo người dùng.
-- **Branch và PR (bắt buộc):** mỗi task một branch từ `main` (`b/b2-resolver`). Tự mở PR, CI xanh thì tự merge (squash), không chờ người review. Lệnh: `CONVENTIONS.md` mục Git.
+- **Branch và PR (bắt buộc):** mỗi task một branch từ `main` (`b/b2-resolver`). Tự mở PR với auto-merge, CI xanh thì GitHub tự merge (squash), không chờ người review. Lệnh: `CONVENTIONS.md` mục Git.
 - Mỗi commit: `npm run lint && npm test` pass.
 
 ## D0 tạo sẵn
@@ -62,7 +62,6 @@ Thân stub trả giá trị rỗng hoặc `throw new Error('chưa làm')`. Chữ
 | File | Nội dung D0 | Người điền thân |
 |---|---|---|
 | `package.json`, `tsconfig.json` | `zod`, `ink`, `react`, `@types/react`; `"jsx": "react-jsx"`; script `eval` → `tsx evals/run.ts` | — |
-| `.gitignore` | Thêm `.env` | — |
 | `src/core/types.ts` | `'plan' \| 'review'` vào `ModelRole`; `disabledProviders`, `enabledProviders` vào `AxiomConfig` | — |
 | `src/llm/catalog/index.ts` | Kiểu `ModelInfo`, `WireApi`, `Catalog`; `loadCatalog` stub (`providers.md` bước 2). Import bằng `'../llm/catalog/index.js'` | B1 |
 | `src/llm/model-resolver.ts` | `resolveModel`, `createProviderFor` (`providers.md` bước 4). Stub **giữ hành vi hiện tại**: đọc `loadConfig()` và gọi `createProvider` có sẵn, không throw | B2 |
@@ -81,7 +80,6 @@ Thân stub trả giá trị rỗng hoặc `throw new Error('chưa làm')`. Chữ
 | `src/tui/index.tsx` | `startTui(argv: string[]): Promise<void>` stub: chạy REPL cũ | E4 |
 | `src/cli/index.ts`, `bin/axiom.ts` | Headless dùng `createAgent`; TTY và không `-p` → `startTui(argv)` | — |
 | `evals/run.ts` | In "chưa có eval", exit 0 | A4 |
-| `.github/workflows/ci.yml` | `npm ci`, `tsc`, `npm test`, `npm run eval`, `gitleaks` | — (D1 kiểm CI xanh) |
 
 ## Seam (trước khi có thân thật)
 
@@ -122,7 +120,7 @@ Thân stub trả giá trị rỗng hoặc `throw new Error('chưa làm')`. Chữ
 
 1. Mọi PR đã merge. Chạy checklist "Bản dùng được".
 2. Mỗi người thử thật ≥ 3 provider hoặc luồng đăng nhập trong làn mình, ghi bảng kết quả (provider, kết quả, ghi chú lỗi).
-3. README, video demo, `git tag v0.1-phase1`.
+3. README, video demo, `git tag v0.1-phase1 && git push origin v0.1-phase1` (workflow `release` tự tạo GitHub Release).
 
 Video: `/login` → chat về target repo → `/triage` issue có stack trace → `/triage` issue mơ hồ (agent hỏi lại) → đọc `.env` bị chặn → mở trace → `npm run eval -- --uc 01`.
 

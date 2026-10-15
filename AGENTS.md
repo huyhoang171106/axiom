@@ -38,7 +38,7 @@ If a doc and the code disagree, stop and ask. Do not pick one silently.
 3. Branch `<lane>/<task-id>-<slug>` from `main`. Touch only your lane's files; shared files are append-only (`CONVENTIONS.md`, Git).
 4. Signatures in a guide or the Seam table are contracts: copy them exactly, never change them.
 5. Finish with "Done means" below and set the task row to `done` in your lane file.
-6. Open the PR yourself and merge it yourself when CI is green (`gh pr create --base main --fill`, then `gh pr merge --squash --delete-branch`). Mandatory for every change; see `CONVENTIONS.md` Git.
+6. Open the PR yourself with auto-merge on: `gh pr create --base main --fill && gh pr merge --auto --squash`. It merges itself when CI is green. Mandatory for every change; see `CONVENTIONS.md` Git.
 
 ## Commands
 

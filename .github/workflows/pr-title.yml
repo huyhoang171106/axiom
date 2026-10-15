@@ -1,0 +1,26 @@
+name: pr-title
+
+# Squash merge uses the PR title as the commit message on main, so the title must follow CONVENTIONS.md (Git).
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions: {}
+
+jobs:
+  pr-title:
+    name: pr-title
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if ! printf '%s' "$TITLE" | grep -Eq '^(feat|fix|refactor|test|docs|ci|chore|perf)(\([a-z0-9-]+\))?!?: [^ ].*$'; then
+            echo "::error::PR title must be 'type(scope): subject', e.g. 'feat(llm): add model resolver'. See docs/CONVENTIONS.md (Git)."
+            exit 1
+          fi
+          if [ "${#TITLE}" -gt 72 ]; then
+            echo "::error::PR title is ${#TITLE} characters; keep it at 72 or fewer."
+            exit 1
+          fi
