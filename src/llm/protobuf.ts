@@ -1,6 +1,6 @@
 // src/llm/protobuf.ts - Minimal protobuf encode/decode and Connect framing for the Connect-based wires
 
-/** proto3 writer; zero values are omitted like a generated encoder does. */
+/** proto3 writer; zero values are omitted like a generated encoder does, unless `always` (oneof members, map values). */
 export class ProtoWriter {
   private readonly parts: Uint8Array[] = [];
 
@@ -19,20 +19,20 @@ export class ProtoWriter {
     this.varint((field << 3) | wireType);
   }
 
-  uint(field: number, value: number | bigint): this {
-    if (value) {
+  uint(field: number, value: number | bigint, always = false): this {
+    if (value || always) {
       this.tag(field, 0);
       this.varint(value);
     }
     return this;
   }
 
-  bool(field: number, value: boolean | undefined): this {
-    return this.uint(field, value ? 1 : 0);
+  bool(field: number, value: boolean | undefined, always = false): this {
+    return this.uint(field, value ? 1 : 0, always);
   }
 
-  double(field: number, value: number): this {
-    if (value) {
+  double(field: number, value: number, always = false): this {
+    if (value || always) {
       this.tag(field, 1);
       const bytes = new Uint8Array(8);
       new DataView(bytes.buffer).setFloat64(0, value, true);
@@ -41,8 +41,8 @@ export class ProtoWriter {
     return this;
   }
 
-  bytes(field: number, value: Uint8Array): this {
-    if (value.length > 0) {
+  bytes(field: number, value: Uint8Array, always = false): this {
+    if (value.length > 0 || always) {
       this.tag(field, 2);
       this.varint(value.length);
       this.parts.push(value);
@@ -50,8 +50,8 @@ export class ProtoWriter {
     return this;
   }
 
-  string(field: number, value: string | undefined): this {
-    return this.bytes(field, new TextEncoder().encode(value ?? ''));
+  string(field: number, value: string | undefined, always = false): this {
+    return this.bytes(field, new TextEncoder().encode(value ?? ''), always);
   }
 
   /** Embedded message; written even when empty, since presence can matter for a message field. */
@@ -121,6 +121,56 @@ export function protoMessages(fields: ProtoFields, field: number): ProtoFields[]
 
 export function protoMessage(fields: ProtoFields, field: number): ProtoFields | undefined {
   return protoMessages(fields, field).at(-1);
+}
+
+/** Entries of a `map<string, bytes>` field (each entry is a message: key = 1, value = 2). */
+export function protoMap(fields: ProtoFields, field: number): Map<string, Uint8Array> {
+  const entries = new Map<string, Uint8Array>();
+  for (const entry of protoMessages(fields, field)) {
+    const value = entry.get(2)?.at(-1);
+    entries.set(protoString(entry, 1), value instanceof Uint8Array ? value : new Uint8Array());
+  }
+  return entries;
+}
+
+export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+
+/** `google.protobuf.Value`: null = 1, number = 2, string = 3, bool = 4, struct = 5 (map field 1), list = 6 (field 1). */
+export function encodeJsonValue(value: unknown): ProtoWriter {
+  const writer = new ProtoWriter();
+  if (value === null || value === undefined) return writer.uint(1, 0, true);
+  if (typeof value === 'number') return Number.isFinite(value) ? writer.double(2, value, true) : writer.uint(1, 0, true);
+  if (typeof value === 'string') return writer.string(3, value, true);
+  if (typeof value === 'boolean') return writer.bool(4, value, true);
+  if (Array.isArray(value)) {
+    const list = new ProtoWriter();
+    for (const item of value) list.message(1, encodeJsonValue(item));
+    return writer.message(6, list);
+  }
+  const struct = new ProtoWriter();
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    if (item !== undefined) struct.message(1, new ProtoWriter().string(1, key, true).message(2, encodeJsonValue(item)));
+  }
+  return writer.message(5, struct);
+}
+
+export function decodeJsonValue(data: Uint8Array): JsonValue {
+  const fields = decodeProto(data);
+  if (fields.has(2)) return protoDouble(fields, 2);
+  if (fields.has(3)) return protoString(fields, 3);
+  if (fields.has(4)) return protoNumber(fields, 4) !== 0;
+  if (fields.has(5)) {
+    const out: { [key: string]: JsonValue } = {};
+    for (const entry of protoMessages(protoMessage(fields, 5)!, 1)) {
+      const value = entry.get(2)?.at(-1);
+      out[protoString(entry, 1)] = value instanceof Uint8Array ? decodeJsonValue(value) : null;
+    }
+    return out;
+  }
+  if (fields.has(6)) {
+    return (protoMessage(fields, 6)!.get(1) ?? []).filter((v): v is Uint8Array => v instanceof Uint8Array).map(decodeJsonValue);
+  }
+  return null;
 }
 
 export const CONNECT_COMPRESSED = 0x01;

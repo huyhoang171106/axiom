@@ -7,7 +7,7 @@
 | D0 | **Làm đầu tiên, nhanh nhất có thể.** Tạo đủ các file trong bảng "D0 tạo sẵn" của `phase-1.md`, chữ ký nguyên văn từ guide | `npm run lint && npm test` pass, `npm start -- --mock "hi"` vẫn chạy; merge vào `main`; báo cả nhóm | done |
 | D2 | Điền `parseCommand`, `CommandRouter`, lệnh `help` `clear` `exit`; cờ `-p` headless; `axiom <lệnh>` và `/<lệnh>` gọi cùng `router.get(...).run(...)`; lệnh sai thì gợi ý từ `complete` (`tui.md` bước 1–2) | Test `parseCommand`, `complete`; `npm start -- -p "hi" --mock` và `npm start -- --mock "hi"` đều chạy | done |
 | D3 | Điền `startTrace()`: mỗi run một ID; ghi node, tool call (tham số, kết quả, thời gian, `metadata.policy`), token, chi phí; mọi giá trị qua `redact` | `~/.axiom/traces/<runId>.jsonl` + test | done |
-| D4 | Điền 4 wire: `ollama-chat`, `bedrock-converse-stream` (SigV4), `cursor-agent`, `devin-agent` | Test server giả cho cả 4 | 3/4, còn `cursor-agent` |
+| D4 | Điền 4 wire: `ollama-chat`, `bedrock-converse-stream` (SigV4), `cursor-agent`, `devin-agent` | Test server giả cho cả 4 | done |
 
 D chủ trì bước "Ghép" cuối ngày (`phase-1.md`).
 
