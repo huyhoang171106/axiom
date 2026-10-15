@@ -2,7 +2,7 @@
 
 Người làm giao diện terminal phải tuân theo file này. Bố cục và cách hiển thị học từ [pi-open-tui](https://github.com/OldSuns/pi-open-tui) (ảnh mẫu: `assets/preview_dashboard_1.png` của repo đó). Phần duyệt hành động, diff và slash command học từ Claude Code.
 
-> **Quy tắc bản quyền và §1.5.** pi-open-tui là extension của Pi coding agent và dựng trên `pi-tui`. Không cài, không phụ thuộc vào Pi hay `pi-tui`. Axiom tự dựng lại giao diện bằng **Ink**. Chỉ học bố cục, không chép code. Ghi nguồn tham khảo trong báo cáo.
+> **Quy tắc bản quyền.** Axiom tự dựng lại giao diện bằng **Ink**. Chỉ học bố cục của pi-open-tui, không chép code. Ghi nguồn tham khảo trong báo cáo.
 
 Owner: **E** (khung TUI, màn hình duyệt, footer và telemetry). **D**: điểm vào, bộ lệnh (bước 1–2). **C**: diff viewer. Owner của mỗi UC tự làm phần hiển thị kết quả UC của mình.
 

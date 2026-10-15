@@ -10,8 +10,8 @@ Owner: **B** (catalog, credential + refresh, đăng nhập API key, cloud, devic
 - "PHẢI" và "KHÔNG ĐƯỢC" là luật. Muốn làm khác thì ghi vào "Nhật ký quyết định" trong `docs/DESIGN.md` và hỏi owner trước.
 - Code có sẵn thì mở rộng, không viết lại. `src/core/types.ts` đã có `ModelRole`, `modelRoles`, `CustomModelInfo`, `ProviderCredentials`. `src/llm/providers/openai.ts` và `anthropic.ts` là 2 wire đã có.
 
-> **Quy tắc bản quyền và §1.5.**
-> - oh-my-pi là một coding agent. Không cài, không gọi, không bọc nó làm tool. Không chép code.
+> **Quy tắc bản quyền.**
+> - Không chép code của oh-my-pi.
 > - **Được** lấy dữ kiện công khai (ID, tên biến môi trường, base URL, model mặc định, cách đăng nhập) vì đó là thông tin của provider, không phải code. Ghi nguồn "oh-my-pi catalog, MIT" trong mục "Minh bạch sử dụng AI và trích dẫn" của báo cáo.
 > - Axiom tự viết lại cấu trúc bằng JSON và TypeScript (mục 7), không dùng KDL.
 

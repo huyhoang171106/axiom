@@ -8,7 +8,7 @@ Mục tiêu: **10/10** = 7,5 (5 UC trọn điểm, làm 7 UC để dự phòng) 
 
 | Mục | Quyết định |
 |---|---|
-| Ngôn ngữ agent | TypeScript (giữ core Axiom sẵn có; đề §1.5.2 cho phép) |
+| Ngôn ngữ agent | TypeScript (giữ core Axiom sẵn có) |
 | Workflow | `@langchain/langgraph` (JS) — `interrupt()` + SQLite checkpointer (từ Phase 2) |
 | Model | 91 provider theo `docs/guides/providers.md`, chọn model theo role qua `resolveModel('@role')`; `MockProvider` cho CI/eval tất định |
 | Target repo | 1 repo Python 1k–10k LOC có pytest, license MIT/BSD (ứng viên: `tinydb`, `humanize` — đo bằng `cloc` trước khi chốt) |
@@ -144,7 +144,6 @@ Quy tắc của lớp: mỗi phase chỉ dùng kiến thức đã học đến t
 | Phase 1 trễ hạn | Làm bù trong 28/10, 5 làn độc lập; D0 tạo stub đầu ngày nên không ai chờ ai |
 | UC-03 dưới 40% | Oracle + error memory; giữ UC-09 làm dự phòng điểm |
 | Lộ API key (−1,0) | `.env` trong `.gitignore` (chưa có, task D1), `gitleaks` trong CI, chỉ commit `.env.example`, `scrubEnv` + `redact` (task C1) |
-| Vi phạm §1.5 (dùng coding agent có sẵn) | Agent chỉ gọi LLM API + thư viện; ghi rõ trong mục minh bạch AI |
 | Dùng kiến thức chưa học | MCP/multi-agent chỉ làm ở Phase 3 |
 
 ## 8. Quy ước tài liệu
@@ -163,8 +162,8 @@ Quy tắc của lớp: mỗi phase chỉ dùng kiến thức đã học đến t
 | 2026-10-28 | Chat tự do + slash command theo UC, dùng chung harness | Trải nghiệm như Claude Code nhưng mỗi UC vẫn có workflow và eval riêng |
 | 2026-10-28 | Connectors qua MCP, phải `/connect` trước khi dùng | Token không vào context LLM; MCP thuộc kiến thức Phase 3 |
 | 2026-10-28 | Xong Phase 1 phải là bản dùng được hằng ngày | Nhóm tự dùng Axiom để phát triển các phase sau |
-| 2026-10-28 | Provider theo thiết kế oh-my-pi, TUI theo bố cục pi-open-tui (dựng lại bằng Ink) | Chỉ học thiết kế, không phụ thuộc vào coding agent khác (§1.5) |
-| 2026-10-28 | Danh sách provider giống oh-my-pi (91 ID), có cả subscription OAuth (Claude Pro/Max, ChatGPT Plus/Pro, Copilot, Gemini, …) | Nhóm xác định §1.5 chỉ cấm dùng coding agent có sẵn; dùng gói subscription của provider để gọi model là được phép. Rủi ro: provider có thể chặn client hoặc khoá tài khoản → eval và demo dùng API key |
+| 2026-10-28 | Provider theo thiết kế oh-my-pi, TUI theo bố cục pi-open-tui (dựng lại bằng Ink) | Chỉ học thiết kế, không chép code |
+| 2026-10-28 | Danh sách provider giống oh-my-pi (91 ID), có cả subscription OAuth (Claude Pro/Max, ChatGPT Plus/Pro, Copilot, Gemini, …) | Dùng gói subscription của provider để gọi model. Rủi ro: provider có thể chặn client hoặc khoá tài khoản → eval và demo dùng API key |
 | 2026-10-28 | Làm toàn bộ provider (87/91), mọi luồng đăng nhập và 12 wire mới ngay trong Phase 1 | Yêu cầu của nhóm: xong Phase 1 là dùng được với mọi provider |
 | 2026-10-28 | ~~Phase 1 chia 3 mốc: M1 nền chung (29/10), M2 nộp lớp `v0.1-phase1` (30/10), M3 đủ provider `v0.1.1` (03/11). Wire của M3 chia cho cả 5 người~~ (đã thay bằng 2 dòng dưới) | Provider đầy đủ không làm kịp trong 3 ngày nếu chỉ B làm; M3 lấn 1 tuần đầu Phase 2 |
 | 2026-10-28 | ~~Nhóm còn 4 SV (A–D).~~ (sai, nhóm 5 SV — xem dòng cuối) Phase 1 chia 4 làn độc lập, giao tiếp qua seam có hợp đồng ngày 0 và bản giả. Việc của E ở Phase 1: TUI, bộ lệnh → D; loader `AGENTS.md` → C; wire `cursor`/`devin` → D, `factory`/`gitlab-duo` → A. Chủ sở hữu UC-05, UC-06 cho Phase 2–3 quyết định sau | Không ai phải chờ người khác; mục 4 (chủ sở hữu) cập nhật khi chốt Phase 2 |

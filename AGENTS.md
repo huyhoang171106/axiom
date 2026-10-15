@@ -22,7 +22,7 @@ Axiom (SE373 Đề tài 01): an LLM tool-use loop over a local workspace, with c
 
 | Need | File |
 |---|---|
-| Topic spec (UCs, schemas such as IssueTicket, grading, §1.5) | `2026-10-06_de_tai_01_coding_agent.md` |
+| Topic spec (UCs, schemas such as IssueTicket, grading) | `2026-10-06_de_tai_01_coding_agent.md` |
 | Architecture, owners, decision log | `docs/DESIGN.md` |
 | Naming, layout, import direction, git, tests | `docs/CONVENTIONS.md` |
 | Phase overview, seams, done criteria | `docs/plans/phase-1.md` |
