@@ -10,3 +10,8 @@ import path from 'node:path';
 export function harnessHome(): string {
   return process.env.AXIOM_HARNESS_HOME || path.join(os.homedir(), '.axiom');
 }
+
+/** `~/.axiom`, or AXIOM_HOME so tests never touch the real one (providers.md section 8). */
+export function axiomHome(): string {
+  return process.env.AXIOM_HOME || path.join(os.homedir(), '.axiom');
+}
