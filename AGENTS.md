@@ -79,7 +79,6 @@ Proceed without asking when the task is trivial and reversible, or when reading 
 
 ## Never
 
-- Use, call, wrap, or copy code from another coding agent (Claude Code, Codex CLI, Gemini CLI, Aider, OpenHands, Pi, oh-my-pi, and similar) inside Axiom. Topic §1.5: a violation gives 0 points.
 - Add a tool path that skips `executeTool` / `decide()`.
 - Put an API key value in code, logs, traces, tests, or commits. Only `.env.example` is committed.
 - Fabricate file paths, hashes, APIs, or test results. Check, or say "I don't know".
