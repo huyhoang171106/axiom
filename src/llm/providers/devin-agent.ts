@@ -31,6 +31,8 @@ const MAX_FRAME_BYTES = 16 * 1024 * 1024;
 // The backend gates behavior on the client identity; this is the released Devin CLI's.
 const CLIENT = { ideName: 'devin-cli', ideType: 'chisel', version: '3000.11.205', extensionName: 'chisel' };
 const SESSION_TOKEN_PREFIX = 'devin-session-token$';
+// The released CLI is a Go binary; this is the user agent of its Connect client on chat calls.
+const CHAT_USER_AGENT = 'connect-go/1.18.1 (go1.26.3)';
 
 const SOURCE = { USER: 1, SYSTEM: 2, TOOL: 4 } as const; // exa.chat_pb.ChatMessageSource
 const REQUEST_TYPE_CASCADE = 5; // exa.chat_pb.ChatMessageRequestType
@@ -61,7 +63,11 @@ export class DevinAgentProvider extends BaseLLMProvider {
     const request = new ProtoWriter()
       .message(1, this.metadata(auth.userJwt))
       .string(2, messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n'));
-    messages.forEach((m, index) => m.role !== 'system' && request.message(3, this.prompt(m, index)));
+    messages.forEach((m, index) => {
+      // An empty assistant turn (an aborted reply) carries nothing; the index still seeds stable ids.
+      if (m.role === 'system' || (m.role === 'assistant' && !m.content && !m.toolCalls?.length)) return;
+      request.message(3, this.prompt(m, index));
+    });
     request
       .uint(7, REQUEST_TYPE_CASCADE)
       .message(8, new ProtoWriter().uint(1, 1).uint(2, maxTokens ?? this.info.maxTokens ?? 64000).uint(3, 400).double(5, temperature ?? 1).uint(7, 40).double(8, Math.fround(0.95)))
@@ -75,7 +81,7 @@ export class DevinAgentProvider extends BaseLLMProvider {
 
     const response = await fetch(auth.baseUrl + CHAT_PATH, {
       method: 'POST',
-      headers: { 'content-type': 'application/connect+proto', 'connect-protocol-version': '1', 'connect-accept-encoding': 'gzip', 'accept-encoding': 'identity', ...this.info.headers },
+      headers: { 'content-type': 'application/connect+proto', 'connect-protocol-version': '1', 'connect-accept-encoding': 'gzip', 'accept-encoding': 'identity', 'user-agent': CHAT_USER_AGENT, ...this.info.headers },
       body: connectFrame(request.finish()),
       signal,
     });
@@ -182,15 +188,21 @@ export class DevinAgentProvider extends BaseLLMProvider {
     const hex = crypto.createHash('sha256').update(`${this.cascadeId}\0${index}\0${m.role}`).digest('hex');
     const messageId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
     const prompt = new ProtoWriter().string(1, messageId);
-    if (m.role === 'tool') return prompt.uint(2, SOURCE.TOOL).string(3, m.content).string(7, m.toolCallId).bool(9, m.isError);
+    if (m.role === 'tool') return prompt.uint(2, SOURCE.TOOL).string(3, m.content).string(7, wireCallId(m.toolCallId)).bool(9, m.isError);
     if (m.role === 'assistant') {
       prompt.uint(2, SOURCE.SYSTEM).string(3, m.content);
-      for (const tc of m.toolCalls ?? []) prompt.message(6, new ProtoWriter().string(1, tc.id).string(2, tc.name).string(3, JSON.stringify(tc.arguments)));
+      for (const tc of m.toolCalls ?? []) prompt.message(6, new ProtoWriter().string(1, wireCallId(tc.id)).string(2, tc.name).string(3, JSON.stringify(tc.arguments)));
       return prompt;
     }
     return prompt.uint(2, SOURCE.USER).string(3, m.content);
   }
 }
+
+/**
+ * Cascade forwards replayed call ids to the model's own backend, and OpenAI-routed models reject ids over
+ * 40 characters or outside [A-Za-z0-9_-] (`invalid_argument`). Ids from other wires (`call_<uuid>`) can be both.
+ */
+const wireCallId = (id: string | undefined) => (id ?? '').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 40);
 
 /** `{ "error": { "code", "message" } }` from the end-of-stream frame, or undefined when the stream ended cleanly. */
 function trailerError(text: string): { code: string; message: string } | undefined {

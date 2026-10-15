@@ -118,6 +118,32 @@ test('authenticates, streams text and thinking, assembles a split tool call and 
   }
 });
 
+test('replays foreign tool-call ids in the shape Cascade accepts, skips empty turns and sends the CLI user agent', async () => {
+  const srv = await fakeDevin([chunk({ text: 'hi', usage: [1, 1, 0, 0] }), end()]);
+  const longId = `call_${'a'.repeat(32)}|fc.1`;
+  try {
+    await new DevinAgentProvider(info(srv.url), 'sk-ws-test').chat({
+      model: 'swe-1-6',
+      messages: [
+        { role: 'user', content: 'x' },
+        { role: 'assistant', content: '' },
+        { role: 'user', content: 'y' },
+        { role: 'assistant', content: '', toolCalls: [{ id: longId, name: 'read_file', arguments: {} }] },
+        { role: 'tool', content: 'r', toolCallId: longId, name: 'read_file' },
+      ],
+    });
+    const chat = srv.seen[1];
+    assert.match(String(chat.headers['user-agent']), /^connect-go\//);
+    const prompts = protoMessages(decodeProto(readConnectFrames(chat.body, 1 << 24).frames[0].payload), 3);
+    assert.deepEqual(prompts.map((p) => protoNumber(p, 2)), [1, 1, 2, 4]); // the empty assistant turn is gone
+    const sentId = protoString(protoMessages(prompts[2], 6)[0], 1);
+    assert.equal(sentId, `call_${'a'.repeat(32)}_fc`); // 40 chars, '|' and '.' replaced
+    assert.equal(protoString(prompts[3], 7), sentId);
+  } finally {
+    await srv.close();
+  }
+});
+
 test('a bare session JWT is sent with its prefix', async () => {
   const srv = await fakeDevin([chunk({ text: 'hi', usage: [1, 1, 0, 0] }), end()]);
   try {

@@ -176,6 +176,7 @@ export class CursorAgentProvider extends BaseLLMProvider {
     let content = '';
     const toolCalls: ToolCall[] = [];
     let usage: { input: number; output: number; cacheRead: number; cacheWrite: number } | undefined;
+    // Token deltas are a running output estimate; a turnEnded count, when non-zero, replaces it.
     let streamedTokens = 0;
     let turnEnded = false;
 
@@ -213,7 +214,7 @@ export class CursorAgentProvider extends BaseLLMProvider {
         resolve({
           content,
           toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-          usage: wireUsage(this.info, usage ? Math.max(usage.input - usage.cacheRead - usage.cacheWrite, 0) : 0, usage?.output ?? streamedTokens, usage?.cacheRead ?? 0, usage?.cacheWrite ?? 0),
+          usage: wireUsage(this.info, usage ? Math.max(usage.input - usage.cacheRead - usage.cacheWrite, 0) : 0, usage?.output || streamedTokens, usage?.cacheRead ?? 0, usage?.cacheWrite ?? 0),
           usageMissing: !usage,
         });
       };

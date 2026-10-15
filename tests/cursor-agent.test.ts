@@ -273,6 +273,24 @@ test('AgentLoop runs the handed-back call through its registry and finishes on t
   }
 });
 
+test('a turnEnded without an output count keeps the streamed token estimate', async () => {
+  const srv = await fakeCursor(async (io) => {
+    await io.next();
+    io.send(1, textDelta('hi'));
+    io.send(1, update(8, new ProtoWriter().uint(1, 7)));
+    io.send(1, update(8, new ProtoWriter().uint(1, 5)));
+    io.send(1, turnEnded(100, 0, 0));
+    io.end();
+  });
+  try {
+    const r = await new CursorAgentProvider(info(srv.url), 't').chat({ model: 'claude-x-high', messages: [{ role: 'user', content: 'x' }] });
+    assert.equal(r.usage.promptTokens, 100);
+    assert.equal(r.usage.completionTokens, 12);
+  } finally {
+    await srv.close();
+  }
+});
+
 test('stream errors, a stream cut before turnEnded and a missing token become ProviderError', async () => {
   const failing = await fakeCursor(async (io) => {
     await io.next();

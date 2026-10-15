@@ -25,6 +25,7 @@ interface OllamaChunk {
   done?: boolean;
   done_reason?: string;
   prompt_eval_count?: number;
+  prompt_eval_cached_count?: number;
   eval_count?: number;
 }
 
@@ -99,10 +100,12 @@ export class OllamaChatProvider extends BaseLLMProvider {
     }
     handle(buffer + decoder.decode());
 
+    // Ollama Cloud reports prompt cache hits apart; `prompt_eval_count` is the whole prompt. Local Ollama omits the field.
+    const cached = last?.prompt_eval_cached_count ?? 0;
     return {
       content,
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-      usage: wireUsage(this.info, last?.prompt_eval_count ?? 0, last?.eval_count ?? 0),
+      usage: wireUsage(this.info, (last?.prompt_eval_count ?? 0) - cached, last?.eval_count ?? 0, cached),
       // No final `done` line means the stream was cut and the counts above are not measurements.
       usageMissing: !last,
       finishReason: last?.done_reason && last.done_reason !== 'stop' ? last.done_reason : undefined,

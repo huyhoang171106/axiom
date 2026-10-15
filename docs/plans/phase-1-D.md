@@ -12,3 +12,8 @@
 D chủ trì bước "Ghép" cuối ngày (`phase-1.md`).
 
 Xong khi: trace của run thật không có giá trị key; thử thật ≥ 3 provider dùng wire của D (ollama local tính 1).
+
+| Điều kiện | Trạng thái |
+|---|---|
+| Trace không có key | Chờ `redact` của C3; test `no registered secret value reaches the trace` trong `tests/trace.test.ts` đang `todo` |
+| ≥ 3 provider | Đạt (28/10, nhóm chấp nhận thay cho chạy thật vì máy chưa có credential): cả 4 wire (`ollama-cloud`, `amazon-bedrock`, `devin`, `cursor`) đã đối chiếu với oh-my-pi commit `c3b645c` về endpoint, header, field protobuf/JSON, khung stream, cách tính token; các chỗ lệch đã sửa kèm test |

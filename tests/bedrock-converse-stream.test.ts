@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import zlib from 'node:zlib';
-import { BedrockConverseStreamProvider, signV4 } from '../src/llm/providers/bedrock-converse-stream.js';
+import { BedrockConverseStreamProvider, resolveBedrockRegion, signV4 } from '../src/llm/providers/bedrock-converse-stream.js';
 import type { ModelInfo } from '../src/llm/catalog/index.js';
 import { ProviderError } from '../src/llm/provider-error.js';
 import { startFakeServer } from './fake-server.js';
@@ -115,7 +115,7 @@ test('streams text, reasoning and a tool call; reports usage with cache and sign
 
     const req = srv.seen[0];
     assert.equal(req.url, '/model/us.anthropic.claude-x-v1%3A0/converse-stream');
-    assert.match(String(req.headers.authorization), /^AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE\/\d{8}\/us-east-1\/bedrock\/aws4_request, SignedHeaders=content-type;host;x-amz-date, Signature=[0-9a-f]{64}$/);
+    assert.match(String(req.headers.authorization), /^AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE\/\d{8}\/us-east-1\/bedrock\/aws4_request, SignedHeaders=accept;content-type;host;x-amz-date, Signature=[0-9a-f]{64}$/);
     const sent = JSON.parse(req.body.toString());
     assert.deepEqual(sent.system, [{ text: 'You are Axiom.' }]);
     assert.deepEqual(sent.inferenceConfig, { maxTokens: 256 });
@@ -168,21 +168,43 @@ test('HTTP errors keep the status; no credential anywhere tells the user how to 
   }
 });
 
-test('AWS_REGION moves the standard runtime host and the signing region', async () => {
+test('the user region moves the standard runtime host and the signing region', async () => {
   const realFetch = globalThis.fetch;
   let seenUrl = '';
   let seenAuth = '';
+  let seenBody = '';
   globalThis.fetch = (async (url: string, init: RequestInit) => {
     seenUrl = url;
     seenAuth = (init.headers as Record<string, string>).authorization;
+    seenBody = String(init.body);
     return new Response('{"message":"stop"}', { status: 400 });
   }) as typeof fetch;
   try {
-    const provider = new BedrockConverseStreamProvider(info('https://bedrock-runtime.us-east-1.amazonaws.com'), JSON.stringify({ ...KEYS, AWS_REGION: 'eu-west-1' }));
-    await assert.rejects(provider.chat({ model: MODEL, messages: [{ role: 'user', content: 'x' }] }), /400/);
-    assert.equal(seenUrl, 'https://bedrock-runtime.eu-west-1.amazonaws.com/model/us.anthropic.claude-x-v1%3A0/converse-stream');
-    assert.match(seenAuth, /\/eu-west-1\/bedrock\/aws4_request/);
+    const provider = new BedrockConverseStreamProvider(info('https://bedrock-runtime.us-east-1.amazonaws.com'), JSON.stringify({ ...KEYS, AWS_REGION: 'us-west-2' }));
+    const messages = [
+      { role: 'user' as const, content: 'x' },
+      { role: 'assistant' as const, content: '' },
+      { role: 'user' as const, content: 'y' },
+    ];
+    await assert.rejects(provider.chat({ model: MODEL, messages }), /400/);
+    assert.equal(seenUrl, 'https://bedrock-runtime.us-west-2.amazonaws.com/model/us.anthropic.claude-x-v1%3A0/converse-stream');
+    assert.match(seenAuth, /\/us-west-2\/bedrock\/aws4_request/);
+    // The empty assistant turn is dropped and the two user turns merge, keeping roles alternating.
+    assert.deepEqual(JSON.parse(seenBody).messages, [{ role: 'user', content: [{ text: 'x' }, { text: 'y' }] }]);
   } finally {
     globalThis.fetch = realFetch;
   }
+});
+
+test('a geo inference profile goes to a region of its geo; an ARN goes to its own region', () => {
+  assert.equal(resolveBedrockRegion('us.anthropic.claude-x-v1:0', 'us-west-2'), 'us-west-2');
+  assert.equal(resolveBedrockRegion('us.anthropic.claude-x-v1:0', 'eu-west-1'), 'us-east-1');
+  assert.equal(resolveBedrockRegion('us.anthropic.claude-x-v1:0', 'us-gov-west-1'), 'us-east-1');
+  assert.equal(resolveBedrockRegion('eu.anthropic.claude-x-v1:0', undefined), 'eu-west-1');
+  assert.equal(resolveBedrockRegion('apac.amazon.nova-pro-v1:0', 'ap-northeast-2'), 'ap-northeast-2');
+  assert.equal(resolveBedrockRegion('jp.anthropic.claude-x-v1:0', 'ap-southeast-1'), 'ap-northeast-1');
+  assert.equal(resolveBedrockRegion('global.anthropic.claude-x-v1:0', 'eu-west-1'), 'eu-west-1');
+  assert.equal(resolveBedrockRegion('anthropic.claude-x-v1:0', undefined), 'us-east-1');
+  assert.equal(resolveBedrockRegion('arn:aws:bedrock:eu-central-1:123456789012:inference-profile/x', 'us-east-1'), 'eu-central-1');
+  assert.equal(resolveBedrockRegion('constructor.x', 'eu-west-1'), 'eu-west-1');
 });

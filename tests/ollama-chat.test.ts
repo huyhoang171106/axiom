@@ -125,3 +125,19 @@ test('a stream cut before the done line is flagged as missing usage', async () =
     await srv.close();
   }
 });
+
+test('Ollama Cloud prompt cache hits are counted and priced as cache reads', async () => {
+  const srv = await startFakeServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'application/x-ndjson' });
+    res.end(ndjson({ message: { role: 'assistant', content: 'ok' }, done: true, done_reason: 'stop', prompt_eval_count: 1000, prompt_eval_cached_count: 800, eval_count: 500 }));
+  });
+  try {
+    const priced = { ...info(srv.url), cost: { input: 1, output: 2, cacheRead: 0.1 } };
+    const r = await new OllamaChatProvider(priced, 'key-1').chat({ model: 'gpt-oss:120b', messages: [{ role: 'user', content: 'hi' }] });
+    assert.equal(r.usage.promptTokens, 1000);
+    assert.equal(r.usage.cacheReadInputTokens, 800);
+    assert.equal(r.usage.costEstimate, 0.00128); // (200*1 + 800*0.1 + 500*2) / 1e6
+  } finally {
+    await srv.close();
+  }
+});

@@ -43,7 +43,7 @@ interface BedrockEvent {
 
 /** A corrupt length prefix must fail fast instead of buffering gigabytes. */
 const MAX_FRAME_BYTES = 16 * 1024 * 1024;
-const RUNTIME_HOST = /^bedrock-runtime\.([a-z0-9-]+)\.amazonaws\.com$/;
+const RUNTIME_HOST = /^bedrock-runtime\.[a-z0-9-]+\.amazonaws\.com$/;
 
 export class BedrockConverseStreamProvider extends BaseLLMProvider {
   readonly name: LLMProviderType;
@@ -66,8 +66,8 @@ export class BedrockConverseStreamProvider extends BaseLLMProvider {
       });
     }
     const base = new URL(this.info.baseUrl);
-    const region = auth.region ?? process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? RUNTIME_HOST.exec(base.hostname)?.[1] ?? 'us-east-1';
-    // The catalog URL names one region; a region set by the user moves the standard runtime host with it.
+    const region = resolveBedrockRegion(model, auth.region ?? process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION);
+    // The catalog URL is a placeholder for AWS's own host; gateways and VPC endpoints are used as configured.
     if (RUNTIME_HOST.test(base.hostname)) base.hostname = `bedrock-runtime.${region}.amazonaws.com`;
     const url = `${base.origin}${base.pathname.replace(/\/+$/, '')}/model/${encodeURIComponent(model)}/converse-stream`;
 
@@ -80,7 +80,7 @@ export class BedrockConverseStreamProvider extends BaseLLMProvider {
         toolConfig: { tools: tools.map((t) => ({ toolSpec: { name: t.name, description: t.description, inputSchema: { json: t.parameters } } })) },
       }),
     });
-    const headers: Record<string, string> = { 'content-type': 'application/json', ...this.info.headers };
+    const headers: Record<string, string> = { 'content-type': 'application/json', accept: 'application/vnd.amazon.eventstream', ...this.info.headers };
     if ('bearer' in auth) headers.authorization = `Bearer ${auth.bearer}`;
     else Object.assign(headers, signV4({ method: 'POST', url, headers, body, keys: auth.keys, region, service: 'bedrock' }));
 
@@ -172,11 +172,38 @@ function toBedrockMessages(messages: Message[]): { role: 'user' | 'assistant'; c
       if (m.content.trim()) content.push({ text: m.content });
       for (const tc of m.toolCalls ?? []) content.push({ toolUse: { toolUseId: tc.id, name: tc.name, input: tc.arguments } });
     }
+    // An empty turn (an aborted reply) is rejected outright; dropping it lets its neighbours merge.
+    if (content.length === 0) continue;
     const last = turns.at(-1);
     if (last?.role === role) last.content.push(...content);
     else turns.push({ role, content });
   }
   return turns;
+}
+
+/**
+ * Cross-region inference profiles (`us.anthropic...`) are served only from regions of their geo; anywhere else
+ * Bedrock answers "The provided model identifier is invalid". `global.` profiles work from any region.
+ */
+const PROFILE_GEOS: Record<string, { home: string; serves: (region: string) => boolean }> = {
+  us: { home: 'us-east-1', serves: (r) => r.startsWith('us-') && !r.startsWith('us-gov-') },
+  'us-gov': { home: 'us-gov-west-1', serves: (r) => r.startsWith('us-gov-') },
+  eu: { home: 'eu-west-1', serves: (r) => r.startsWith('eu-') },
+  apac: { home: 'ap-southeast-1', serves: (r) => r.startsWith('ap-') },
+  au: { home: 'ap-southeast-2', serves: (r) => r === 'ap-southeast-2' || r === 'ap-southeast-4' },
+  jp: { home: 'ap-northeast-1', serves: (r) => r === 'ap-northeast-1' || r === 'ap-northeast-3' },
+};
+
+/** Region for one call: an ARN names its own; a geo profile keeps the user's region only when that region serves it. */
+export function resolveBedrockRegion(modelId: string, userRegion: string | undefined): string {
+  const arn = modelId.split(':');
+  if (arn[0] === 'arn' && arn[2] === 'bedrock' && arn[3]) return arn[3];
+  const prefix = modelId.split('.')[0];
+  if (Object.hasOwn(PROFILE_GEOS, prefix)) {
+    const geo = PROFILE_GEOS[prefix];
+    return userRegion && geo.serves(userRegion) ? userRegion : geo.home;
+  }
+  return userRegion || 'us-east-1';
 }
 
 function resolveAuth(credential: string | undefined): BedrockAuth | undefined {
