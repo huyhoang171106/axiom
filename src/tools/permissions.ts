@@ -1,13 +1,21 @@
-// src/tools/permissions.ts - Decides which tool calls need user approval
+// src/tools/permissions.ts - Policy engine: decides allow / ask / deny for every tool call, in code, before it runs
 import fs from 'node:fs';
 import path from 'node:path';
+
+export type Verdict = 'allow' | 'ask' | 'deny';
+export interface PolicyDecision {
+  verdict: Verdict;
+  reason: string;
+}
 
 export interface ApprovalRequest {
   name: string;
   args: Record<string, unknown>;
   reason: string;
 }
-export type Approver = (req: ApprovalRequest) => Promise<boolean>;
+/** A human answer to an `ask`: run as proposed, refuse, or run with arguments the human edited. */
+export type ApprovalDecision = 'approve' | 'deny' | { editedArgs: Record<string, unknown> };
+export type Approver = (req: ApprovalRequest) => Promise<ApprovalDecision>;
 
 /**
  * Commands that only read state, as the argv shape that stays read-only.
@@ -207,16 +215,16 @@ export function isNonPublicHost(hostname: string): boolean {
 
 /** Path argument of every tool that reads or writes a path, with the word used in the prompt. */
 const PATH_TOOLS: Record<string, string> = {
-  read: 'reads',
+  read_file: 'reads',
   search: 'searches',
   glob: 'globs',
   find: 'searches',
-  write: 'writes',
+  write_file: 'writes',
   edit: 'edits',
 };
 
-export function needsApproval(name: string, args: Record<string, unknown>, workspaceRoot: string): string | null {
-  if (name === 'bash') return bashNeedsApproval(typeof args.command === 'string' ? args.command : '');
+function needsApproval(name: string, args: Record<string, unknown>, workspaceRoot: string): string | null {
+  if (name === 'run_command') return bashNeedsApproval(typeof args.command === 'string' ? args.command : '');
 
   const verb = PATH_TOOLS[name];
   if (verb) {
@@ -245,4 +253,40 @@ export function needsApproval(name: string, args: Record<string, unknown>, works
   if (name === 'remember' || name === 'skill_write') return 'persists instructions into future prompts';
 
   return null;
+}
+
+/**
+ * Secret files the agent may never touch (topic §4.1 / UC-05): `.env` and its variants (`.env.example` is a
+ * template and stays readable), `*.pem`, anything under `.ssh`, and `.git/config` (may hold credentials).
+ */
+export function isSecretPath(p: string): boolean {
+  const n = p.trim().replace(/\\/g, '/').replace(/^['"]|['"]$/g, '');
+  return (
+    /(^|\/)\.env(\.(?!example$)[^/]*)?$/.test(n) ||
+    /\.pem$/i.test(n) ||
+    /(^|\/|^~)\.ssh(\/|$)/.test(n) ||
+    /(^|\/)\.git\/config$/.test(n)
+  );
+}
+
+const PUSH_TO_MAIN = /\bgit\s+push\b[^;&|\n]*\b(?:main|master)\b/;
+
+/** Hard denials first (never asked, never run), then the approval rules of `needsApproval`. */
+export function decide(name: string, args: Record<string, unknown>, workspaceRoot: string): PolicyDecision {
+  if (name === 'run_command') {
+    const command = typeof args.command === 'string' ? args.command : '';
+    // Token scan over the raw text, quotes included: `cat ".env"` must not slip through.
+    const secret = command.split(/[\s;&|<>()`$=]+/).find((t) => t && isSecretPath(t));
+    if (secret) return { verdict: 'deny', reason: `touches a secret file (${secret})` };
+    if (PUSH_TO_MAIN.test(command)) return { verdict: 'deny', reason: 'pushes to the main branch' };
+  }
+  if (PATH_TOOLS[name]) {
+    const raw = typeof args.path === 'string' ? args.path.trim() : '';
+    if (raw && isSecretPath(raw)) return { verdict: 'deny', reason: `secret file (${raw})` };
+    if (raw && escapesWorkspace(raw, workspaceRoot)) {
+      return { verdict: 'deny', reason: `outside the workspace (${path.resolve(workspaceRoot, raw)})` };
+    }
+  }
+  const reason = needsApproval(name, args, workspaceRoot);
+  return reason ? { verdict: 'ask', reason } : { verdict: 'allow', reason: 'allowed by policy' };
 }

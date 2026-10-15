@@ -21,7 +21,8 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
   agent.eventBus.on('tool_call_start', (tc) => console.error(pc.dim(`\n> ${tc.name} ${JSON.stringify(tc.arguments).slice(0, 120)}`)));
 
   // Risky calls (writes outside the workspace, destructive shell, ...) need a yes unless --yes was given.
-  const approver: Approver = async ({ name, reason }) => /^y/i.test(await rl.question(pc.yellow(`\nAllow ${name}? (${reason}) [y/N] `)));
+  const approver: Approver = async ({ name, reason }) =>
+    /^y/i.test(await rl.question(pc.yellow(`\nAllow ${name}? (${reason}) [y/N] `))) ? 'approve' : 'deny';
   agent.toolRegistry.approver = yes ? undefined : approver;
   agent.toolRegistry.allowWithoutApprover = yes;
 

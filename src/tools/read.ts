@@ -34,7 +34,7 @@ interface TextSlice {
 }
 
 export class ReadTool extends BaseTool {
-  readonly name = 'read';
+  readonly name = 'read_file';
   readonly isReadOnly = true;
   readonly description =
     'Read file contents with line numbers (cat -n style: number, tab, text) or list directory entries with types and sizes';
@@ -155,7 +155,7 @@ export class ReadTool extends BaseTool {
       return this.formatNotebook(buffer.toString('utf8'), displayPath);
     }
     if (looksBinary(buffer)) {
-      return `[Binary file: ${displayPath}, ${formatBytes(size)}] (not shown; use bash if you need to inspect the bytes)`;
+      return `[Binary file: ${displayPath}, ${formatBytes(size)}] (not shown; use run_command if you need to inspect the bytes)`;
     }
 
     const decoded = buffer.toString('utf8');

@@ -32,7 +32,7 @@ test('plain answer completes', async () => {
 
 test('write tool call changes a file and is tracked', async () => {
   const { agent, root } = setup([
-    { content: '', toolCalls: [{ id: 't1', name: 'write', arguments: { path: 'a.txt', content: 'x' } }] },
+    { content: '', toolCalls: [{ id: 't1', name: 'write_file', arguments: { path: 'a.txt', content: 'x' } }] },
     'done',
   ]);
   const r = await agent.runTask('make a.txt');
@@ -42,7 +42,7 @@ test('write tool call changes a file and is tracked', async () => {
 });
 
 test('step limit fails a looping agent', async () => {
-  const call = { content: '', toolCalls: [{ id: 't', name: 'read', arguments: { path: 'nope' } }] };
+  const call = { content: '', toolCalls: [{ id: 't', name: 'read_file', arguments: { path: 'nope' } }] };
   const { agent } = setup([call, call, call, call], { maxSteps: 2 });
   const r = await agent.runTask('loop');
   assert.equal(r.status, 'failed');
@@ -50,7 +50,7 @@ test('step limit fails a looping agent', async () => {
 
 test('risky call is refused without approver', async () => {
   const { agent } = setup([
-    { content: '', toolCalls: [{ id: 't', name: 'bash', arguments: { command: 'rm -rf /tmp/x' } }] },
+    { content: '', toolCalls: [{ id: 't', name: 'run_command', arguments: { command: 'rm -rf /tmp/x' } }] },
     'ok',
   ]);
   agent.toolRegistry.allowWithoutApprover = false;
@@ -64,4 +64,44 @@ test('repetition guard fires on third identical call', () => {
   assert.equal(g.record('x', {}), undefined);
   assert.equal(g.record('x', {}), undefined);
   assert.match(g.record('x', {})!, /REPETITION GUARD/);
+});
+
+test('write_file refuses to overwrite an existing file', async () => {
+  const { agent, root } = setup([
+    { content: '', toolCalls: [{ id: 't', name: 'write_file', arguments: { path: 'a.txt', content: 'new' } }] },
+    'ok',
+  ]);
+  fs.writeFileSync(path.join(root, 'a.txt'), 'old');
+  await agent.runTask('overwrite');
+  assert.equal(fs.readFileSync(path.join(root, 'a.txt'), 'utf8'), 'old');
+  assert.match(agent.transcript().find((m) => m.role === 'tool')!.content, /already exists/);
+});
+
+test('role options set the system prompt and model sent to the provider', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-'));
+  const seen: { model: string; system?: string }[] = [];
+  class Spy extends MockProvider {
+    override async chat(params: Parameters<MockProvider['chat']>[0]) {
+      seen.push({ model: params.model, system: params.messages.find((m) => m.role === 'system')?.content });
+      return super.chat(params);
+    }
+  }
+  const agent = new AgentLoop({
+    config: { ...DEFAULT_CONFIG, workspaceRoot: root },
+    provider: new Spy('mock', ['ok']),
+    costTracker: new CostTracker(),
+    sessionManager: new SessionManager({ workspaceRoot: root, sessionsDir: path.join(root, '.s'), autoSave: false } as never),
+    systemPrompt: 'You are the reviewer.',
+    model: 'cheap-model',
+  });
+  await agent.runTask('review');
+  assert.deepEqual(seen, [{ model: 'cheap-model', system: 'You are the reviewer.' }]);
+});
+
+test('tool result keeps the model tool call id', async () => {
+  const { agent } = setup([{ content: '', toolCalls: [{ id: 'call-42', name: 'read_file', arguments: { path: 'nope' } }] }, 'done']);
+  const ids: string[] = [];
+  agent.eventBus.on('tool_call_end', (r) => ids.push(r.toolCallId));
+  await agent.runTask('read');
+  assert.deepEqual(ids, ['call-42']);
 });

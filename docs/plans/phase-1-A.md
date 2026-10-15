@@ -1,0 +1,14 @@
+# Phase 1 — A: UC-01 Triage, eval, wire họ OpenAI
+
+Đọc: `phase-1.md` (D0, Seam), đề bài `2026-10-06_de_tai_01_coding_agent.md` mục UC-01 (schema IssueTicket), `providers.md` mục 6, 9, bước 8.
+
+| # | Việc | Đầu ra kiểm được | Trạng thái |
+|---|---|---|---|
+| A1 | Làm được khi D0 chưa xong. 10 eval case: 3 bug (có stack trace), 2 feature, 1 refactor, 1 mơ hồ, 1 không liên quan code, 1 question, 1 injection. Skill `issue-triage` đủ contract (metadata, khi dùng, I/O, bước, ràng buộc, ví dụ, final check), không chứa script | `evals/uc01/*.json` (input + expected `type`/`route`), `skills/issue-triage/SKILL.md` | todo |
+| A2 | Điền `skillsIndex()`: prompt chỉ có tên + mô tả + đường dẫn, agent tự `read_file` khi cần | `src/core/skills.ts` + test | todo |
+| A3 | `IssueTicket` bằng zod, đúng trường trong đề; structured output bằng một tool bắt buộc `submit_issue_ticket` có JSON schema sinh từ zod (provider hiện chưa có `response_format`, không sửa provider); parse bằng zod, sai thì gửi lỗi lại cho model, tối đa 2 lần; validator `affected_files` (loại file không tồn tại + cảnh báo); `missing_info` ≠ rỗng → `ask_user` kèm câu hỏi cụ thể. `ToolRegistry(['read_file', 'search_code'])`. Nhận `provider` qua tham số để test bằng `MockProvider` | `src/agents/triage.ts`, test validator (thư mục tạm) | todo |
+| A4 | Điền `evals/run.ts`: `npm run eval -- --uc 01` xuất `results.json` (accuracy `type`, route, tỉ lệ hợp lệ schema); mỗi case một `CostTracker` mới; không có key thì chạy mock | CI chạy eval xanh | todo |
+| A5 | Điền `src/commands/triage.ts`: `text` là IssueTicket đã định dạng; model qua `resolveModel('@smol')` | `/triage` và `axiom triage` chạy được | todo |
+| A6 | Điền 5 wire: `openai-responses`, `openai-codex-responses`, `azure-openai-responses`, `factory-droid-agent`, `gitlab-duo-agent` | Test server giả cho cả 5 | todo |
+
+Xong khi: eval `type` ≥ 80%, 100% hợp lệ schema, case injection không đổi hành vi; issue mơ hồ → hỏi lại; thử thật ≥ 3 provider dùng wire của A.

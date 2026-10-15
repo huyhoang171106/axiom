@@ -186,7 +186,7 @@ export function destructiveReason(command: string): string | null {
 }
 
 export class BashTool extends BaseTool {
-  readonly name = 'bash';
+  readonly name = 'run_command';
   readonly description =
     'Execute shell commands deterministically with safety checks and output limits. Runs sandboxed when a backend is configured (AXIOM_SANDBOX_URL for the deep-agent sandbox service, otherwise bwrap); otherwise it runs directly.';
   readonly parameters = {

@@ -1,4 +1,4 @@
-// src/tools/write.ts - Deterministic atomic file write tool
+// src/tools/write.ts - Atomic tool that creates new files; existing files are changed with `edit`, never overwritten
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -8,8 +8,9 @@ import { BaseTool, type ToolExecutionContext } from './base-tool.js';
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 export class WriteTool extends BaseTool {
-  readonly name = 'write';
-  readonly description = 'Write contents to a file atomically, creating parent directories if needed';
+  readonly name = 'write_file';
+  readonly description =
+    'Create a NEW file atomically, creating parent directories if needed. Refuses existing files: change those with "edit".';
   readonly parameters = {
     type: 'object',
     properties: {
@@ -20,10 +21,6 @@ export class WriteTool extends BaseTool {
       content: {
         type: 'string',
         description: 'Text content to write into the file',
-      },
-      overwrite: {
-        type: 'boolean',
-        description: 'Overwrite the file if it already exists (default true). Set false to refuse.',
       },
     },
     required: ['path', 'content'],
@@ -46,16 +43,17 @@ export class WriteTool extends BaseTool {
     const bytes = Buffer.byteLength(content, 'utf8');
     if (bytes > MAX_FILE_SIZE) {
       throw new Error(
-        `Content too large: ${formatBytes(bytes)} exceeds the ${formatBytes(MAX_FILE_SIZE)} limit; split the write or use bash`
+        `Content too large: ${formatBytes(bytes)} exceeds the ${formatBytes(MAX_FILE_SIZE)} limit; split the write`
       );
     }
 
     const targetPath = this.resolvePath(rawPath, context);
     const parentDir = path.dirname(targetPath);
 
-    const existed = await pathExists(targetPath);
-    if (existed && args.overwrite === false) {
-      throw new Error(`File already exists: ${rawPath}. Pass overwrite: true to replace it.`);
+    // Whole-file rewrites of existing code are what the topic forbids (§4.1: changes go through diffs), and they
+    // silently drop whatever the model did not reproduce. Only new files are written here.
+    if (await pathExists(targetPath)) {
+      throw new Error(`File already exists: ${rawPath}. Use "edit" to change an existing file.`);
     }
 
     // Create parent directories if they don't exist
@@ -78,8 +76,7 @@ export class WriteTool extends BaseTool {
     }
 
     const lineCount = content.split(/\r?\n/).length;
-    const action = existed ? 'overwrote' : 'created';
-    return `Successfully wrote ${bytes} bytes (${lineCount} lines) to ${rawPath} (${action})`;
+    return `Created ${rawPath} (${bytes} bytes, ${lineCount} lines)`;
   }
 }
 

@@ -1,0 +1,104 @@
+# AGENTS.md
+
+Read this file before every task. **Working code only. Finish the job. Plausibility is not correctness.**
+
+Always read these two files too (Claude Code loads them through the imports below):
+
+@docs/CONVENTIONS.md
+@docs/DESIGN.md
+
+Tools that do not read AGENTS.md: `ln -s AGENTS.md CLAUDE.md` (or `GEMINI.md`).
+
+## Project
+
+Axiom (SE373 Đề tài 01): an LLM tool-use loop over a local workspace, with cost tracking, sessions and sandboxed tools.
+
+- TypeScript (ESM), Node >= 22, npm. Runtime deps: `picocolors` only.
+- Source: `src/{cli,core,llm,tools}`. Entry: `bin/axiom.ts`. Tests: `tests/*.test.ts` (`node:test` via tsx).
+- Do not edit: `dist/` (build output), `node_modules/`.
+- Repo: `github.com/huyhoang171106/new_harness`. Team: 5 people, lanes A–E. Docs are Vietnamese; code, comments, commits are English.
+
+## Where things are
+
+| Need | File |
+|---|---|
+| Topic spec (UCs, schemas such as IssueTicket, grading, §1.5) | `2026-10-06_de_tai_01_coding_agent.md` |
+| Architecture, owners, decision log | `docs/DESIGN.md` |
+| Naming, layout, import direction, git, tests | `docs/CONVENTIONS.md` |
+| Phase overview, seams, done criteria | `docs/plans/phase-1.md` |
+| One person's tasks | `docs/plans/phase-1-{A,B,C,D,E}.md` |
+| Provider / TUI rules | `docs/guides/providers.md`, `docs/guides/tui.md` |
+
+If a doc and the code disagree, stop and ask. Do not pick one silently.
+
+## Task workflow
+
+1. Find the task ID (e.g. `B2`) in your lane file. Do only that task, in lane order. Skip rows marked `done`.
+2. Need another lane's code that is not on `main` yet? Use the fake listed in the "Seam" table. Never write the other lane's part yourself.
+3. Branch `<lane>/<task-id>-<slug>` from `main`. Touch only your lane's files; shared files are append-only (`CONVENTIONS.md`, Git).
+4. Signatures in a guide or the Seam table are contracts: copy them exactly, never change them.
+5. Finish with "Done means" below and set the task row to `done` in your lane file.
+6. Open the PR yourself and merge it yourself when CI is green (`gh pr create --base main --fill`, then `gh pr merge --squash --delete-branch`). Mandatory for every change; see `CONVENTIONS.md` Git.
+
+## Commands
+
+- Install: `npm install`
+- Run: `npm start`
+- Test one file: `npx tsx --test tests/core.test.ts`
+- Test all: `npm test`
+- Lint + typecheck: `npm run lint` (`tsc --noEmit`)
+- Build: `npm run build`
+
+Use single-file tests while you iterate. Run the full check at the end.
+
+## Done means
+
+1. `npm run lint && npm test` pass. Read the output; do not assume.
+2. New behavior or a bug fix has a test that fails without the change.
+3. If a check fails, fix the cause, not the test.
+
+## Always
+
+- Follow `docs/CONVENTIONS.md` and `docs/DESIGN.md` (imported at the top). Read `docs/plans/phase-N.md` for the current tasks.
+- Before you write code for these parts, read the guide completely and follow its steps in order. Its "PHẢI" (MUST) and "KHÔNG ĐƯỢC" (MUST NOT) rules are mandatory.
+  - Provider, model, login, API key, secrets: `docs/guides/providers.md`
+  - TUI, slash commands, headless commands: `docs/guides/tui.md`
+- Send every tool call through `ToolRegistry.executeTool` and `decide()` in `src/tools/permissions.ts`.
+- Read the files you change and their callers. Match existing patterns.
+- State the plan in 1–2 sentences before editing. For non-trivial work, list steps with a check for each.
+- Fix root causes. Suppressing an error is not a fix.
+
+## Ask first
+
+- The request has two plausible readings that change the output.
+- A change touches a design decision. To change one, first add a row to "Nhật ký quyết định" in `docs/DESIGN.md`.
+- You need a credential, secret, or production resource.
+- The stated goal and the literal request conflict.
+
+Proceed without asking when the task is trivial and reversible, or when reading code or running a command resolves the doubt.
+
+## Never
+
+- Use, call, wrap, or copy code from another coding agent (Claude Code, Codex CLI, Gemini CLI, Aider, OpenHands, Pi, oh-my-pi, and similar) inside Axiom. Topic §1.5: a violation gives 0 points.
+- Add a tool path that skips `executeTool` / `decide()`.
+- Put an API key value in code, logs, traces, tests, or commits. Only `.env.example` is committed.
+- Fabricate file paths, hashes, APIs, or test results. Check, or say "I don't know".
+- Make drive-by refactors, reformatting, or cleanups outside the request. Do remove orphans your own change creates.
+- Add features, abstractions, config, or error handling for cases nobody asked for or that cannot happen.
+- Hardcode a model name in `src/` (use `resolveModel('@role')`), or call the network in tests.
+- Commit on `main`, push or force-push `main`, or commit `.env`, `dist/`, traces, logs.
+- Import `tui/` from `commands/` or `agents/`, or call `console.log` in `src/tui/`.
+
+## Style
+
+- No flattery or filler. Start with the answer or the action.
+- If the user's premise is wrong, say so before doing the work.
+- Direct and concise. Give a recommendation, not a survey.
+- Commits: Conventional Commits, `type(scope): subject` under 72 chars, body explains why (`docs/CONVENTIONS.md` mục 9).
+- After two failed fixes for the same issue, stop, summarize what you learned, and ask for a reset.
+
+## Project Learnings
+
+When the user corrects your approach, add a concrete one-line rule here ("Always use X for Y"). Tighten an existing line instead of adding a duplicate. Remove lines that no longer apply.
+
+- (empty)

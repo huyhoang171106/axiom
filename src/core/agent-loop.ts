@@ -21,6 +21,10 @@ export interface AgentLoopOptions {
   eventBus?: EventBus;
   maxSteps?: number;
   budgetLimitDollars?: number;
+  /** Role prompt (triage, coder, reviewer, ...); defaults to the general coding agent prompt. */
+  systemPrompt?: string;
+  /** Model for this role; defaults to `config.defaultModel`. */
+  model?: string;
   signal?: AbortSignal;
 }
 
@@ -32,10 +36,10 @@ export interface TaskResult {
   error?: string;
 }
 
-const SYSTEM_PROMPT = [
+export const DEFAULT_SYSTEM_PROMPT = [
   'You are Axiom, an autonomous software engineering agent running in the user\'s workspace with bash and file tools.',
   '1. Ground every claim in actual file contents or command output; read before you edit.',
-  '2. To fix a bug or implement a feature you MUST modify files with the "edit" or "write" tool, not just describe changes.',
+  '2. To fix a bug or implement a feature you MUST modify files with the "edit" or "write_file" tool, not just describe changes.',
   '3. Make surgical changes; do not restyle unrelated code.',
   '4. Verify changes by running tests or a typecheck before declaring completion.',
   '5. When done, summarize the result concisely.',
@@ -53,6 +57,8 @@ export class AgentLoop {
   private readonly guard = new RepetitionGuard();
   private readonly maxSteps: number;
   private readonly budgetLimitDollars: number;
+  private readonly systemPrompt: string;
+  private readonly model?: string;
   private signal?: AbortSignal;
 
   constructor(options: AgentLoopOptions) {
@@ -61,12 +67,14 @@ export class AgentLoop {
     this.stateMachine = new ExecutionStateMachine(this.eventBus);
     this.sessionManager = options.sessionManager ?? new SessionManager({ workspaceRoot: this.config.workspaceRoot });
     this.costTracker = options.costTracker ?? defaultCostTracker;
-    this.toolRegistry = options.toolRegistry ?? new ToolRegistry(true);
+    this.toolRegistry = options.toolRegistry ?? new ToolRegistry();
     this.providerRegistry = options.providerRegistry ?? defaultProviderRegistry;
     this.provider = options.provider;
     this.maxSteps = options.maxSteps ?? 60;
     this.budgetLimitDollars = options.budgetLimitDollars ?? this.config.budgetLimitDollars ?? 5;
     this.signal = options.signal;
+    this.systemPrompt = options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+    this.model = options.model;
   }
 
   public registerTool(tool: BaseTool): void {
@@ -82,7 +90,7 @@ export class AgentLoop {
     this.guard.reset();
     const session = this.sessionManager.getSession() ?? this.sessionManager.createSession(prompt);
     if (!session.messages.some((m) => m.role === 'system')) {
-      session.messages.unshift({ role: 'system', content: SYSTEM_PROMPT, timestamp: Date.now() });
+      session.messages.unshift({ role: 'system', content: this.systemPrompt, timestamp: Date.now() });
     }
     this.sessionManager.addMessage({ role: 'user', content: prompt });
 
@@ -94,7 +102,7 @@ export class AgentLoop {
 
     const provider =
       this.provider ?? this.providerRegistry.getOrCreate(this.config.activeProvider, this.config.providers[this.config.activeProvider]);
-    const model = this.config.defaultModel ?? 'claude-sonnet-4-5';
+    const model = this.model ?? this.config.defaultModel ?? 'claude-sonnet-4-5';
 
     for (let step = 1; step <= this.maxSteps; step++) {
       if (this.signal?.aborted) return this.finish('aborted', 'Task aborted via AbortSignal');
@@ -137,7 +145,7 @@ export class AgentLoop {
   /** Adjacent read-only calls run concurrently; everything else stays sequential and in order. */
   private async runTools(toolCalls: ToolCall[]): Promise<void> {
     const run = (tc: ToolCall) =>
-      this.toolRegistry.executeTool(tc.name, tc.arguments, { workspaceRoot: this.config.workspaceRoot });
+      this.toolRegistry.executeTool(tc.name, tc.arguments, { workspaceRoot: this.config.workspaceRoot, toolCallId: tc.id });
     const parallelSafe = (tc: ToolCall) => !!this.toolRegistry.getTool(tc.name)?.isReadOnly;
     const started: Promise<ToolResult>[] = [];
 
@@ -150,7 +158,7 @@ export class AgentLoop {
       this.eventBus.emit('tool_call_end', result);
 
       const target = tc.arguments['path'];
-      if ((tc.name === 'write' || tc.name === 'edit') && typeof target === 'string' && !result.isError) {
+      if ((tc.name === 'write_file' || tc.name === 'edit') && typeof target === 'string' && !result.isError) {
         this.sessionManager.trackActiveFiles([target]);
       }
       // A model re-issuing the identical call is stuck; say so in the result it will read next.
