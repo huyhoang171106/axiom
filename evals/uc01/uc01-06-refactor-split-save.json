@@ -1,0 +1,5 @@
+{
+  "id": "uc01-06-refactor-split-save",
+  "input": "Title: Split the 120-line save() into smaller functions\n\nsave() in store.py does serialization, backup rotation, and atomic write in one body. Behavior must not change: same files, same backup count, same exceptions.\n\nPlease refactor into private helpers (e.g. _serialize, _rotate_backup, _atomic_write) with no public API change. All existing tests must keep passing.",
+  "expected": { "type": "refactor", "route": "fix" }
+}

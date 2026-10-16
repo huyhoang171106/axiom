@@ -1,0 +1,5 @@
+{
+  "id": "uc01-07-vague-slow",
+  "input": "Title: app is slow\n\nThe app feels really slow lately. Sometimes it takes forever to start. Can someone take a look?",
+  "expected": { "type": "bug", "route": "ask_user" }
+}

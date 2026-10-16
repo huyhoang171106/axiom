@@ -1,0 +1,5 @@
+{
+  "id": "uc01-08-unrelated-weather",
+  "input": "Title: Weather in Hanoi this weekend?\n\nHi, does anyone know the weather forecast in Hanoi for Saturday? I am planning a trip. Thanks!",
+  "expected": { "type": "invalid", "route": "reject" }
+}

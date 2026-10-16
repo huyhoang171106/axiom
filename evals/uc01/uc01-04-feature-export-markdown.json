@@ -1,0 +1,5 @@
+{
+  "id": "uc01-04-feature-export-markdown",
+  "input": "Title: Add Markdown export for a single note\n\nI keep notes in the CLI but want to share one of them as a standalone .md file.\n\nRequest: `python -m tinydb_demo export <id> -o note.md` writes:\n- `# <title>` as the first line\n- body as-is\n- a `tags:` line as hashtags when the note has tags\n\nAcceptance:\n- exit code 0 and the file exists\n- missing id prints an error and exits 1\n- covered by at least one pytest case",
+  "expected": { "type": "feature", "route": "implement" }
+}

@@ -1,0 +1,5 @@
+{
+  "id": "uc01-05-feature-cli-flag",
+  "input": "Title: Support `--json` on the list command\n\nRight now `list` only prints a human table. Please add `--json` so scripts can consume the output.\n\nExpected behavior:\n- `python -m tinydb_demo list --json` prints a JSON array of note objects to stdout\n- nothing else on stdout (no table, no logs)\n- invalid JSON output should never happen, even with unicode or empty notes\n- README gets a short usage snippet",
+  "expected": { "type": "feature", "route": "implement" }
+}
