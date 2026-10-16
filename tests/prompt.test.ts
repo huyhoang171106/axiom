@@ -7,6 +7,8 @@ import { buildSystemPrompt } from '../src/core/prompt.js';
 import { loadProjectRules } from '../src/core/project-rules.js';
 import { skillsIndex, skillsIndexFrom } from '../src/core/skills.js';
 import { ToolRegistry } from '../src/tools/registry.js';
+import { runTriage } from '../src/agents/triage.js';
+import { MockProvider } from '../src/llm/providers/mock.js';
 
 function tempDir(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -35,6 +37,28 @@ test('skillsIndexFrom keeps only the index, never the skill body', () => {
   const index = skillsIndexFrom(dir);
   assert.ok(!index.includes('## Steps'));
   assert.ok(!index.includes('# Skill:'));
+});
+
+test('empty metadata does not consume lines from the skill body', () => {
+  const dir = tempDir('axiom-skills-');
+  const skillDir = path.join(dir, 'empty');
+  fs.mkdirSync(skillDir);
+  fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '- **name:**\n- **description:**\n\n## Steps\nDo work\n');
+  assert.equal(skillsIndexFrom(dir), '- empty (skills/empty/SKILL.md)');
+});
+
+test('skill files that are symlinks are not listed', (t) => {
+  const dir = tempDir('axiom-skills-');
+  const skillDir = path.join(dir, 'linked');
+  fs.mkdirSync(skillDir);
+  const target = path.join(dir, 'target.md');
+  fs.writeFileSync(target, '- **name:** linked\n');
+  try { fs.symlinkSync(target, path.join(skillDir, 'SKILL.md'), 'file'); }
+  catch (error) {
+    if (process.platform === 'win32' && (error as NodeJS.ErrnoException).code === 'EPERM') return t.skip('Symlink privileges unavailable');
+    throw error;
+  }
+  assert.equal(skillsIndexFrom(dir), '');
 });
 
 test('skillsIndexFrom falls back to the directory name when metadata is missing', () => {
@@ -77,6 +101,22 @@ test('indexed bundled skill can be read through policy from a separate workspace
   assert.equal(denied.isError, true);
 });
 
+test('triage can read the indexed skill before submitting a ticket', async () => {
+  const root = tempDir('axiom-workspace-');
+  const skillPath = skillsIndex().match(/\(([^()]*)\)$/)?.[1];
+  assert.ok(skillPath);
+  const provider = new MockProvider('mock', [
+    { toolCalls: [{ id: 'read', name: 'read_file', arguments: { path: skillPath } }] },
+    { toolCalls: [{ id: 'submit', name: 'submit_issue_ticket', arguments: { ticket: {
+      type: 'question', priority: 'P3 - question', affected_files: [], reproduction_steps: [],
+      acceptance_criteria: ['Answer the question'], missing_info: [], route: 'answer',
+    } } }] },
+  ]);
+  const result = await runTriage({ issue: 'How do I run tests?', workspaceRoot: root, provider });
+  assert.equal(result.ticket.type, 'question');
+  assert.ok(provider.callHistory[1].messages.some((message) => message.role === 'tool' && message.toolCallId === 'read' && message.content.includes('## Steps')));
+});
+
 test('loadProjectRules returns the AGENTS.md of the workspace', () => {
   const root = tempDir('axiom-workspace-');
   fs.writeFileSync(path.join(root, 'AGENTS.md'), '# Rules\nAlways be nice.\n');
@@ -85,6 +125,24 @@ test('loadProjectRules returns the AGENTS.md of the workspace', () => {
 
 test('loadProjectRules returns empty when the workspace has no AGENTS.md', () => {
   assert.equal(loadProjectRules(tempDir('axiom-workspace-')), '');
+});
+
+test('project rules refuse symlinks outside the workspace and to secret files', (t) => {
+  const root = tempDir('axiom-workspace-');
+  const outside = path.join(tempDir('axiom-outside-'), 'rules.md');
+  fs.writeFileSync(outside, 'outside');
+  const link = path.join(root, 'AGENTS.md');
+  try { fs.symlinkSync(outside, link, 'file'); }
+  catch (error) {
+    if (process.platform === 'win32' && (error as NodeJS.ErrnoException).code === 'EPERM') return t.skip('Symlink privileges unavailable');
+    throw error;
+  }
+  assert.throws(() => loadProjectRules(root), /outside the workspace or to a secret file/);
+  fs.unlinkSync(link);
+  const secret = path.join(root, '.env');
+  fs.writeFileSync(secret, 'not a credential');
+  fs.symlinkSync(secret, link, 'file');
+  assert.throws(() => loadProjectRules(root), /outside the workspace or to a secret file/);
 });
 
 test('buildSystemPrompt joins base, the bundled skill index and the target repo rules', () => {
@@ -99,7 +157,7 @@ test('buildSystemPrompt joins base, the bundled skill index and the target repo 
 test('buildSystemPrompt adds no blank section when the workspace has no rules', () => {
   const workspace = tempDir('axiom-workspace-');
   const prompt = buildSystemPrompt('Base only', workspace);
-  assert.ok(prompt.startsWith('Base only\n\n- issue-triage: '));
+  assert.ok(prompt.startsWith('Base only\n\nAvailable skills: use read_file'));
   assert.ok(!prompt.includes('\n\n\n'));
   assert.ok(!prompt.endsWith('\n'));
 });

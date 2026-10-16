@@ -25,13 +25,15 @@ export function skillsIndexFrom(dir: string, absolutePaths = false): string {
     if (!entry.isDirectory()) continue;
     let text: string;
     try {
-      text = fs.readFileSync(path.join(dir, entry.name, 'SKILL.md'), 'utf8');
+      const skillPath = path.join(dir, entry.name, 'SKILL.md');
+      if (!fs.lstatSync(skillPath).isFile()) continue;
+      text = fs.readFileSync(skillPath, 'utf8');
     } catch (error) {
       if (isEnoent(error)) continue;
       throw error;
     }
-    const name = text.match(/^-\s*\*\*name:\*\*\s*(.+)$/m)?.[1]?.trim() || entry.name;
-    const description = text.match(/^-\s*\*\*description:\*\*\s*(.+)$/m)?.[1]?.trim() ?? '';
+    const name = text.match(/^-[\t ]*\*\*name:\*\*[\t ]*([^\r\n]*)/m)?.[1]?.trim() || entry.name;
+    const description = text.match(/^-[\t ]*\*\*description:\*\*[\t ]*([^\r\n]*)/m)?.[1]?.trim() ?? '';
     const label = description ? `${name}: ${description}` : name;
     const skillPath = absolutePaths ? path.join(dir, entry.name, 'SKILL.md') : `skills/${entry.name}/SKILL.md`;
     lines.push({ name, line: `- ${label} (${skillPath})` });
