@@ -3,7 +3,7 @@
 import type { LLMProviderType } from '../../core/types.js';
 import type { ModelInfo } from '../catalog/index.js';
 import { BaseLLMProvider, type ChatParams, type ChatResult } from '../base-provider.js';
-import { buildResponsesBody, requestResponses } from './responses-shared.js';
+import { buildResponsesBody, hasHeader, requestResponses } from './responses-shared.js';
 
 export class OpenAIResponsesProvider extends BaseLLMProvider {
   readonly name: LLMProviderType;
@@ -22,7 +22,7 @@ export class OpenAIResponsesProvider extends BaseLLMProvider {
       headers: {
         ...this.info.headers,
         // A catalog header wins over the stored credential, so gateways can pin their own auth.
-        ...(this.credential && !this.info.headers?.authorization && { authorization: `Bearer ${this.credential}` }),
+        ...(this.credential && !hasHeader(this.info.headers, 'authorization') && { authorization: `Bearer ${this.credential}` }),
       },
       body: buildResponsesBody(model, messages, tools, { temperature, maxTokens }),
       provider: this.name,

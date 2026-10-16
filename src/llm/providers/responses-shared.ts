@@ -8,6 +8,10 @@ import { ProviderError, SseFrameCounter, sseErrorFrame, throwHttpError } from '.
 import type { ModelInfo } from '../catalog/index.js';
 import { wireUsage } from '../wire-usage.js';
 
+export function hasHeader(headers: Record<string, string> | undefined, name: string): boolean {
+  return Object.keys(headers ?? {}).some((key) => key.toLowerCase() === name.toLowerCase());
+}
+
 export interface ResponsesBodyOptions {
   temperature?: number;
   maxTokens?: number;

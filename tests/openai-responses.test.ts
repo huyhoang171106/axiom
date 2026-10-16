@@ -139,6 +139,8 @@ test('a catalog authorization header wins over the stored credential', async () 
       messages: [{ role: 'user', content: 'x' }],
     });
     assert.equal(srv.seen[0].headers.authorization, 'Bearer gateway-token');
+    await new OpenAIResponsesProvider(info(srv.url, { Authorization: 'Bearer gateway-token' }), 'key-1').chat({ model: 'm', messages: [{ role: 'user', content: 'x' }] });
+    assert.equal(srv.seen[1].headers.authorization, 'Bearer gateway-token');
   } finally {
     await srv.close();
   }

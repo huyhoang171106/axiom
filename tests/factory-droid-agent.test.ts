@@ -71,6 +71,14 @@ test('returns tool calls and replays them as function_call items', async () => {
   }
 });
 
+test('mixed-case catalog authorization overrides the stored credential', async () => {
+  const srv = await startFakeServer((_req, res) => res.writeHead(200).end(sse({ type: 'response.output_text.delta', delta: 'ok' }, completed)));
+  try {
+    await new FactoryDroidAgentProvider(info(srv.url, { Authorization: 'Bearer pinned' }), 'stored').chat({ model: 'm', messages: [{ role: 'user', content: 'x' }] });
+    assert.equal(srv.seen[0].headers.authorization, 'Bearer pinned');
+  } finally { await srv.close(); }
+});
+
 test('a revoked token and a broken stream both become ProviderError', async () => {
   const denied = await startFakeServer((_req, res) => res.writeHead(401, { 'content-type': 'application/json' }).end('{"error":{"message":"token expired"}}'));
   const broken = await startFakeServer((_req, res) => res.writeHead(200).end(sse({ type: 'response.output_text.delta', delta: 'par' }, { type: 'error', message: 'route unavailable' })));

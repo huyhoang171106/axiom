@@ -3,10 +3,10 @@
 import type { LLMProviderType } from '../../core/types.js';
 import type { ModelInfo } from '../catalog/index.js';
 import { BaseLLMProvider, type ChatParams, type ChatResult } from '../base-provider.js';
-import { buildResponsesBody, requestResponses } from './responses-shared.js';
+import { buildResponsesBody, hasHeader, requestResponses } from './responses-shared.js';
 
 /**
- * `chatgpt-account-id` is the `sub` of the JWT's `https://api.openai.com/auth` claim. The backend
+ * `chatgpt-account-id` is the `chatgpt_account_id` of the JWT's `https://api.openai.com/auth` claim. The backend
  * answers 401 without it, and a non-JWT credential (gateway token) simply omits the header.
  */
 function accountIdFromCredential(token: string): string | undefined {
@@ -14,8 +14,8 @@ function accountIdFromCredential(token: string): string | undefined {
   if (parts.length !== 3) return undefined;
   try {
     const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as Record<string, unknown>;
-    const claim = payload['https://api.openai.com/auth'] as { sub?: unknown } | undefined;
-    return typeof claim?.sub === 'string' ? claim.sub : undefined;
+    const claim = payload['https://api.openai.com/auth'] as { chatgpt_account_id?: unknown } | undefined;
+    return typeof claim?.chatgpt_account_id === 'string' ? claim.chatgpt_account_id : undefined;
   } catch {
     return undefined;
   }
@@ -38,8 +38,8 @@ export class OpenAICodexResponsesProvider extends BaseLLMProvider {
       url: `${this.info.baseUrl.replace(/\/+$/, '')}/responses`,
       headers: {
         ...this.info.headers,
-        ...(this.credential && !this.info.headers?.authorization && { authorization: `Bearer ${this.credential}` }),
-        ...(accountId && !this.info.headers?.['chatgpt-account-id'] && { 'chatgpt-account-id': accountId }),
+        ...(this.credential && !hasHeader(this.info.headers, 'authorization') && { authorization: `Bearer ${this.credential}` }),
+        ...(accountId && !hasHeader(this.info.headers, 'chatgpt-account-id') && { 'chatgpt-account-id': accountId }),
       },
       // The Codex backend rejects sampling params, so temperature is dropped here, not forwarded.
       body: buildResponsesBody(model, messages, tools, { maxTokens, allowTemperature: false }),

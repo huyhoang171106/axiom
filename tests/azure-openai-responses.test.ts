@@ -40,6 +40,10 @@ test('a catalog api-key header wins over the stored credential', async () => {
     };
     await new AzureOpenAIResponsesProvider(info, 'azure-key').chat({ model: 'gpt-5.5', messages: [{ role: 'user', content: 'x' }] });
     assert.equal(srv.seen[0].headers['api-key'], 'pinned-key');
+    await new AzureOpenAIResponsesProvider({ ...info, headers: { 'Api-Key': 'pinned-key' } }, 'azure-key').chat({ model: 'm', messages: [{ role: 'user', content: 'x' }] });
+    assert.equal(srv.seen[1].headers['api-key'], 'pinned-key');
+    await new AzureOpenAIResponsesProvider({ ...info, headers: { Authorization: 'Bearer pinned' } }, 'azure-key').chat({ model: 'm', messages: [{ role: 'user', content: 'x' }] });
+    assert.equal(srv.seen[2].headers['api-key'], undefined);
   } finally {
     await srv.close();
   }

@@ -23,7 +23,7 @@ test('sends the account id from the JWT claim and streams the answer', async () 
     res.writeHead(200).end(sse({ type: 'response.output_text.delta', delta: 'hi' }, completed));
   });
   try {
-    const token = jwt({ 'https://api.openai.com/auth': { sub: 'acct-1' } });
+    const token = jwt({ 'https://api.openai.com/auth': { chatgpt_account_id: 'acct-1', sub: 'user-1' } });
     const r = await new OpenAICodexResponsesProvider(info(srv.url), token).chat({
       model: 'gpt-5.5-codex',
       messages: [{ role: 'user', content: 'x' }],
@@ -44,6 +44,16 @@ test('sends the account id from the JWT claim and streams the answer', async () 
   } finally {
     await srv.close();
   }
+});
+
+test('mixed-case catalog headers override credential and account ID', async () => {
+  const srv = await startFakeServer((_req, res) => res.writeHead(200).end(sse({ type: 'response.output_text.delta', delta: 'ok' }, completed)));
+  try {
+    const token = jwt({ 'https://api.openai.com/auth': { chatgpt_account_id: 'acct-1' } });
+    await new OpenAICodexResponsesProvider({ ...info(srv.url), headers: { Authorization: 'Bearer pinned', 'ChatGPT-Account-ID': 'pinned-account' } }, token).chat({ model: 'm', messages: [{ role: 'user', content: 'x' }] });
+    assert.equal(srv.seen[0].headers.authorization, 'Bearer pinned');
+    assert.equal(srv.seen[0].headers['chatgpt-account-id'], 'pinned-account');
+  } finally { await srv.close(); }
 });
 
 test('a non-JWT credential omits the account header instead of failing', async () => {
