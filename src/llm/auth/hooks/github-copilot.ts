@@ -6,7 +6,6 @@ import { hookSleep, type LoginContext, type StoredCredential } from '../engines/
 const REQUEST_TIMEOUT_MS = 15_000;
 const DEFAULT_INTERVAL_MS = 5_000;
 const DEFAULT_EXPIRES_SECONDS = 900;
-const TEN_YEARS_MS = 10 * 365.25 * 24 * 60 * 60 * 1000;
 
 interface CopilotLogin {
   clientId: string;
@@ -142,7 +141,7 @@ export async function login(ctx: LoginContext): Promise<StoredCredential> {
     await sleep(Math.min(intervalMs, remaining));
     if (Date.now() >= deadline) break;
 
-    const result = await requestJson<{ access_token?: unknown; error?: unknown; error_description?: unknown; interval?: unknown }>(
+    const result = await requestJson<{ access_token?: unknown; refresh_token?: unknown; expires_in?: unknown; error?: unknown; error_description?: unknown; interval?: unknown }>(
       expand(cfg.tokenUrl, origin),
       {
         method: 'POST',
@@ -158,13 +157,23 @@ export async function login(ctx: LoginContext): Promise<StoredCredential> {
       throw new Error(`GitHub Copilot device polling failed (${result.status}); run /login github-copilot again`);
     }
 
-    if (typeof result.body?.access_token === 'string') {
-      const token = result.body.access_token;
+    if (typeof result.body?.access_token === 'string' && result.body.access_token.length > 0) {
+      const refreshToken = result.body.refresh_token;
+      const tokenExpires = result.body.expires_in;
+      if (refreshToken !== undefined || tokenExpires !== undefined) {
+        if (typeof refreshToken !== 'string' || !refreshToken || typeof tokenExpires !== 'number' || !Number.isFinite(tokenExpires) || tokenExpires <= 0) {
+          throw new Error('GitHub Copilot returned incomplete expiring credentials; run /login github-copilot again');
+        }
+        // Credential chung chưa lưu domain; không gửi refresh token Enterprise nhầm sang github.com.
+        if (origin !== cfg.defaultOrigin) {
+          throw new Error('GitHub Enterprise expiring credentials need the login domain preserved; use a non-expiring credential until supported');
+        }
+      }
       return {
         type: 'oauth',
-        access: token,
-        refresh: token,
-        expires: Date.now() + TEN_YEARS_MS,
+        access: result.body.access_token,
+        ...(typeof refreshToken === 'string' ? { refresh: refreshToken } : {}),
+        ...(typeof tokenExpires === 'number' ? { expires: Date.now() + tokenExpires * 1000 } : {}),
       };
     }
 
@@ -187,14 +196,26 @@ export async function login(ctx: LoginContext): Promise<StoredCredential> {
   throw new Error(`GitHub Copilot: ${reason}; run /login github-copilot again`);
 }
 
-export async function refresh(cred: StoredCredential, _provider: ProviderEntry): Promise<StoredCredential> {
+export async function refresh(cred: StoredCredential, provider: ProviderEntry): Promise<StoredCredential> {
   if (cred.type !== 'oauth') throw new Error('GitHub Copilot: stored credential is not oauth');
-  const token = cred.refresh ?? cred.access;
+  if (!cred.refresh || cred.refresh === cred.access) throw new Error('GitHub Copilot has no refresh token; run /login github-copilot again');
+  const cfg = config(provider);
+  const result = await requestJson<{ access_token?: unknown; refresh_token?: unknown; expires_in?: unknown; error?: unknown }>(
+    expand(cfg.tokenUrl, cfg.defaultOrigin),
+    { method: 'POST', headers: { ...cfg.headers, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ client_id: clientIdFor(cfg, cfg.defaultOrigin), grant_type: 'refresh_token', refresh_token: cred.refresh }) },
+  );
+  const access = result.body?.access_token;
+  const refreshToken = result.body?.refresh_token;
+  const expiresIn = result.body?.expires_in;
+  if (!result.ok || result.body?.error || typeof access !== 'string' || !access || typeof refreshToken !== 'string' || !refreshToken || typeof expiresIn !== 'number' || !Number.isFinite(expiresIn) || expiresIn <= 0) {
+    throw new Error('GitHub Copilot token refresh failed; run /login github-copilot again');
+  }
   return {
     type: 'oauth',
-    access: token,
-    refresh: token,
-    expires: Date.now() + TEN_YEARS_MS,
+    access,
+    refresh: refreshToken,
+    expires: Date.now() + expiresIn * 1000,
     ...(cred.email ? { email: cred.email } : {}),
   };
 }

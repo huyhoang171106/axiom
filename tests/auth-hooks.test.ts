@@ -211,8 +211,8 @@ test('github-copilot slow_down increases the poll wait and uses the enterprise c
     const cred = await copilot.login({ provider: copilotProvider(srv.url), ui: fake.ui, sleep: fake.sleep });
     if (cred.type !== 'oauth') assert.fail('expected an oauth credential');
     assert.equal(cred.access, 'gho_token');
-    assert.equal(cred.refresh, 'gho_token');
-    assert.ok(cred.expires && cred.expires > Date.now() + 9 * 365 * 24 * 60 * 60 * 1000);
+    assert.equal(cred.refresh, undefined);
+    assert.equal(cred.expires, undefined);
     assert.equal(polls, 2);
     assert.equal(fake.asked.length, 1);
     assert.deepEqual(fake.sleeps, [0, 5000]);
@@ -253,6 +253,56 @@ test('github-copilot stops with a clear error when the device code expires', asy
   } finally {
     await srv.close();
   }
+});
+
+test('github-copilot keeps and rotates expiring device credentials', async () => {
+  const srv = await startFakeServer((req, res) => {
+    if (req.url === '/login/device/code') {
+      res.writeHead(200).end(JSON.stringify({ device_code: 'device', user_code: 'code', verification_uri: 'https://example.test/device', interval: 0, expires_in: 30 }));
+    } else {
+      const body = formBody(req);
+      const refreshing = body.get('grant_type') === 'refresh_token';
+      res.writeHead(200).end(JSON.stringify({ access_token: refreshing ? 'access-2' : 'access-1', refresh_token: refreshing ? 'refresh-2' : 'refresh-1', expires_in: 3600 }));
+    }
+  });
+  try {
+    const cfg = copilotProvider(srv.url);
+    cfg.login = { ...cfg.login!, defaultOrigin: srv.url };
+    const fake = fakeUi(['']);
+    const cred = await copilot.login({ provider: cfg, ui: fake.ui, sleep: fake.sleep });
+    if (cred.type !== 'oauth') assert.fail('expected oauth');
+    assert.equal(cred.refresh, 'refresh-1');
+    assert.ok(cred.expires && cred.expires > Date.now() + 3_000_000);
+    const next = await copilot.refresh(cred, cfg);
+    if (next.type !== 'oauth') assert.fail('expected oauth');
+    assert.equal(next.access, 'access-2');
+    assert.equal(next.refresh, 'refresh-2');
+    const sent = formBody(srv.seen[srv.seen.length - 1]);
+    assert.equal(sent.get('grant_type'), 'refresh_token');
+    assert.equal(sent.get('refresh_token'), 'refresh-1');
+    assert.equal(sent.get('client_id'), 'enterprise-client');
+  } finally { await srv.close(); }
+});
+
+test('github-copilot refuses expiring enterprise credentials when the origin cannot be saved', async () => {
+  const srv = await startFakeServer((req, res) => {
+    if (req.url === '/login/device/code') res.writeHead(200).end(JSON.stringify({ device_code: 'device', user_code: 'code', verification_uri: 'https://example.test/device', interval: 0, expires_in: 30 }));
+    else res.writeHead(200).end(JSON.stringify({ access_token: 'access', refresh_token: 'refresh', expires_in: 3600 }));
+  });
+  try {
+    const fake = fakeUi([srv.url]);
+    await assert.rejects(copilot.login({ provider: copilotProvider(srv.url), ui: fake.ui, sleep: fake.sleep }), /login domain preserved/);
+    await assert.rejects(copilot.refresh({ type: 'oauth', access: 'old', refresh: 'old' }, copilotProvider(srv.url)), /no refresh token/);
+  } finally { await srv.close(); }
+});
+
+test('github-copilot refresh failures request login again', async () => {
+  const srv = await startFakeServer((_req, res) => res.writeHead(200).end(JSON.stringify({ error: 'bad_refresh_token' })));
+  try {
+    const cfg = copilotProvider(srv.url);
+    cfg.login = { ...cfg.login!, defaultOrigin: srv.url };
+    await assert.rejects(copilot.refresh({ type: 'oauth', access: 'old', refresh: 'refresh' }, cfg), /run \/login github-copilot again/);
+  } finally { await srv.close(); }
 });
 
 test('cursor polls 404 then completes with a matching PKCE challenge', async () => {
