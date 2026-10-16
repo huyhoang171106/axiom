@@ -31,6 +31,8 @@ export const issueTicketSchema = z.object({
 
 export type IssueTicket = z.infer<typeof issueTicketSchema>;
 
+export class TriageSchemaError extends Error {}
+
 /** First attempt plus two schema retries; past this the model is not trusted to converge. */
 const MAX_SUBMIT_ATTEMPTS = 3;
 
@@ -136,6 +138,7 @@ export interface TriageOptions {
   model?: string;
   maxSteps?: number;
   signal?: AbortSignal;
+  onToolCall?: (name: string) => void;
 }
 
 export async function runTriage(opts: TriageOptions): Promise<TriageResult> {
@@ -157,6 +160,8 @@ export async function runTriage(opts: TriageOptions): Promise<TriageResult> {
   const registry = new ToolRegistry(['read_file', 'search_code', submitTool.name]);
   registry.registerTool(submitTool);
 
+  const eventBus = new EventBus();
+  if (opts.onToolCall) eventBus.on('tool_call_start', (call) => opts.onToolCall?.(call.name));
   const agent = new AgentLoop({
     config: { ...DEFAULT_CONFIG, workspaceRoot: opts.workspaceRoot },
     provider: opts.provider,
@@ -167,7 +172,7 @@ export async function runTriage(opts: TriageOptions): Promise<TriageResult> {
       autoSave: false,
     }),
     costTracker: new CostTracker(),
-    eventBus: new EventBus(),
+    eventBus,
     systemPrompt: buildSystemPrompt(TRIAGE_SYSTEM_PROMPT, opts.workspaceRoot),
     model: opts.model,
     maxSteps: opts.maxSteps ?? 12,
@@ -178,7 +183,7 @@ export async function runTriage(opts: TriageOptions): Promise<TriageResult> {
 
   if (accepted) return validateTicket(accepted, opts.workspaceRoot);
   if (submitTool.attempts >= MAX_SUBMIT_ATTEMPTS) {
-    throw new Error(
+    throw new TriageSchemaError(
       `Triage failed: the submitted ticket did not match the IssueTicket schema after ${MAX_SUBMIT_ATTEMPTS} attempts (${submitTool.lastError})`
     );
   }

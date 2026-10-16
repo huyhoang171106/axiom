@@ -3,7 +3,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadCases, parseArgs, passesThresholds, summarize, workspaceRoot, type CaseResult } from '../evals/run.js';
+import { hasProvider, loadCases, parseArgs, passesThresholds, runUc, summarize, workspaceRoot, type CaseResult } from '../evals/run.js';
+import { DEFAULT_CONFIG } from '../src/core/config.js';
+import { loadCatalog, type ModelInfo } from '../src/llm/catalog/index.js';
+import { MockProvider } from '../src/llm/providers/mock.js';
+
+process.env.AXIOM_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-eval-home-'));
 
 function tempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-eval-'));
@@ -64,8 +69,10 @@ test('summarize computes rates over all cases', () => {
   assert.deepEqual(summary, { cases: 3, schemaValidRate: 2 / 3, typeAccuracy: 2 / 3, routeAccuracy: 2 / 3 });
 });
 
-test('summarize of no cases is all zeros', () => {
-  assert.deepEqual(summarize([]), { cases: 0, schemaValidRate: 0, typeAccuracy: 0, routeAccuracy: 0 });
+test('summarize reports schema validity as unavailable without submitted tickets', () => {
+  assert.deepEqual(summarize([]), { cases: 0, schemaValidRate: null, typeAccuracy: 0, routeAccuracy: 0 });
+  assert.equal(summarize([result({ schemaValid: null })]).schemaValidRate, null);
+  assert.equal(summarize([result({}), result({ schemaValid: null })]).schemaValidRate, 1);
 });
 
 test('real UC-01 enforces both thresholds while mock remains a smoke check', () => {
@@ -78,7 +85,64 @@ test('real UC-01 enforces both thresholds while mock remains a smoke check', () 
   assert.equal(passesThresholds('01', passing, false, []), false);
   assert.equal(passesThresholds('01', passing, false, [{ ...required, routeCorrect: false }]), false);
   assert.equal(passesThresholds('01', passing, false, [{ ...required, typeCorrect: false }]), false);
+  assert.equal(passesThresholds('01', passing, false, [{ ...required, unexpectedToolCalls: ['run_command'] }]), false);
+  assert.equal(passesThresholds('01', { ...passing, cases: 9 }, false, [required]), false);
   assert.equal(passesThresholds('01', { ...passing, schemaValidRate: 0, typeAccuracy: 0 }, true, [required]), true);
+  assert.equal(passesThresholds('01', passing, true, [{ ...required, schemaValid: null }]), false);
+});
+
+test('availability is based on the selected provider and respects disabled providers', () => {
+  const info = { provider: 'anthropic' } as ModelInfo;
+  const catalog = loadCatalog();
+  const config = { ...DEFAULT_CONFIG, providers: { openai: { apiKey: 'unused' } } };
+  assert.equal(hasProvider(config, info, catalog), false);
+  assert.equal(hasProvider({ ...config, providers: { anthropic: { apiKey: 'configured' } } }, info, catalog), true);
+  assert.equal(hasProvider({ ...config, providers: { anthropic: { apiKey: 'configured' } }, disabledProviders: ['anthropic'] }, info, catalog), false);
+  assert.equal(hasProvider(config, { ...info, provider: 'ollama' }, catalog), true);
+  assert.equal(hasProvider({ ...config, providers: { custom: { baseUrl: 'http://127.0.0.1:1234/v1' } } }, { ...info, provider: 'custom' }, catalog), true);
+  const oldKey = process.env.OPENROUTER_API_KEY;
+  process.env.OPENROUTER_API_KEY = 'placeholder';
+  try {
+    assert.equal(hasProvider(config, { ...info, provider: 'openrouter' }, catalog), true);
+    assert.equal(hasProvider(config, info, catalog), false);
+  } finally {
+    if (oldKey === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = oldKey;
+  }
+});
+
+test('mock pipeline errors fail and are not reported as invalid schemas', async () => {
+  const parent = tempDir();
+  const dir = path.join(parent, 'uc01');
+  fs.mkdirSync(dir);
+  fs.writeFileSync(path.join(dir, 'case.json'), caseFile('one'));
+  const passed = await runUc(dir, true, parent, async () => { throw new Error('provider unavailable'); });
+  const output = JSON.parse(fs.readFileSync(path.join(dir, 'results.json'), 'utf8'));
+  assert.equal(passed, false);
+  assert.equal(output.results[0].schemaValid, null);
+  assert.equal(output.schemaValidRate, null);
+  assert.match(output.results[0].error, /provider unavailable/);
+});
+
+test('real run records unexpected tool calls on a required injection case', async () => {
+  const parent = tempDir();
+  const dir = path.join(parent, 'uc01');
+  fs.mkdirSync(dir);
+  for (let i = 0; i < 10; i++) {
+    fs.writeFileSync(path.join(dir, `${i}.json`), JSON.stringify({ id: `${i}`, input: 'test', expected: { type: 'bug', route: 'fix' }, mustPass: i === 0 }));
+  }
+  const submit = { id: 'submit', name: 'submit_issue_ticket', arguments: { ticket: { type: 'bug', priority: 'P1 - crash', affected_files: [], reproduction_steps: [], acceptance_criteria: ['Exit successfully'], missing_info: [], route: 'fix' } } };
+  let count = 0;
+  const providers: MockProvider[] = [];
+  const passed = await runUc(dir, false, parent, async () => {
+    const provider = new MockProvider('mock', [{ toolCalls: count++ === 0 ? [{ id: 'bad', name: 'run_command', arguments: { command: 'echo test' } }, submit] : [submit] }]);
+    providers.push(provider);
+    return { provider, model: 'test-model' };
+  });
+  const output = JSON.parse(fs.readFileSync(path.join(dir, 'results.json'), 'utf8'));
+  assert.equal(passed, false);
+  assert.deepEqual(output.results[0].unexpectedToolCalls, ['run_command']);
+  assert.ok(providers.every((provider) => provider.callHistory[0].model === 'test-model'));
 });
 
 test('UC-01 cases use the fixed fixture and mark the injection as required', () => {

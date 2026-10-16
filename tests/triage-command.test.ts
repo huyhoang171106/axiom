@@ -1,10 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import type { IssueTicket } from '../src/agents/triage.js';
 import { formatIssueTicket, triageCommand } from '../src/commands/triage.js';
 import type { CommandContext, CommandUI } from '../src/commands/types.js';
 import { DEFAULT_CONFIG } from '../src/core/config.js';
 import type { ModelInfo } from '../src/llm/catalog/index.js';
+import { defaultCommandRouter } from '../src/commands/index.js';
+
+process.env.AXIOM_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-command-home-'));
 
 const ticket = (over: Partial<IssueTicket> = {}): IssueTicket => ({
   type: 'bug',
@@ -50,6 +56,45 @@ test('empty args ask for the issue through ctx.ui', async () => {
   const { ctx, questions } = makeCtx({ activeProvider: 'mock', onAsk: () => 'crash on save' });
   await assert.rejects(triageCommand.run('   ', ctx), /never called submit_issue_ticket/);
   assert.deepEqual(questions, ['Issue: ']);
+});
+
+test('empty issue after prompting is rejected before running triage', async () => {
+  const { ctx } = makeCtx({ activeProvider: 'mock', onAsk: () => '   ' });
+  await assert.rejects(triageCommand.run('', ctx), /Issue cannot be empty/);
+});
+
+test('registered triage command returns a formatted ticket from the provider', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-command-'));
+  const configPath = path.join(root, 'config.json');
+  fs.writeFileSync(configPath, JSON.stringify({ activeProvider: 'ollama', defaultModel: 'test-model', providers: { ollama: { baseUrl: 'http://localhost:11434/v1' } } }));
+  const oldConfigPath = process.env.AXIOM_CONFIG_PATH;
+  const oldFetch = globalThis.fetch;
+  process.env.AXIOM_CONFIG_PATH = configPath;
+  let request: { model?: string; messages?: Array<{ role: string; content: string }> } = {};
+  globalThis.fetch = async (_input, init) => {
+    request = JSON.parse(String(init?.body));
+    const args = JSON.stringify({ ticket: ticket({ affected_files: [], missing_info: ['Which command fails?'], route: 'ask_user' }) });
+    const chunk = { choices: [{ delta: { tool_calls: [{ index: 0, id: 'submit', function: { name: 'submit_issue_ticket', arguments: args } }] } }], usage: { prompt_tokens: 1, completion_tokens: 1 } };
+    return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+  };
+  try {
+    const { ctx } = makeCtx({ activeProvider: 'ollama' });
+    ctx.workspaceRoot = root;
+    ctx.config = { ...ctx.config, defaultModel: 'test-model' };
+    const command = defaultCommandRouter.get('triage');
+    assert.equal(command, triageCommand);
+    const result = await command.run('app crashes', ctx);
+    assert.ok(result);
+    assert.equal(result.kind, 'issue-ticket');
+    assert.match(result.text, /Route: ask_user/);
+    assert.match(result.text, /Which command fails\?/);
+    assert.equal(request.model, 'test-model');
+    assert.ok(request.messages?.some((message) => message.role === 'user' && message.content === 'app crashes'));
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (oldConfigPath === undefined) delete process.env.AXIOM_CONFIG_PATH;
+    else process.env.AXIOM_CONFIG_PATH = oldConfigPath;
+  }
 });
 
 test('formatIssueTicket renders every field, drops empty sections, keeps warnings', () => {

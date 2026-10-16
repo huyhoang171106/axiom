@@ -26,7 +26,8 @@ export const triageCommand: Command = {
   summary: 'Turn an issue into an IssueTicket',
   usage: '/triage <issue text>',
   async run(args, ctx): Promise<CommandResult> {
-    const issue = args.trim() || (await ctx.ui.ask('Issue: '));
+    const issue = args.trim() || (await ctx.ui.ask('Issue: ')).trim();
+    if (!issue) throw new Error('Issue cannot be empty. Provide issue text to /triage.');
     const info = resolveModel('@smol', loadCatalog(), ctx.config);
     const provider = await createProviderFor(info);
     const { ticket, warnings } = await runTriage({
