@@ -1,5 +1,5 @@
 {
   "id": "uc01-02-bug-test-fail",
-  "input": "Title: test_search_is_case_sensitive after the tokenizer change\n\nThe suite fails on main since commit 3f2a1c1:\n\n    def test_search_is_case_sensitive(tmp_path):\n        store = Store(tmp_path / 'db.json')\n        store.add({'title': 'Hello World'})\n>       assert len(store.search('hello')) == 1\nE       assert 0 == 1\nE        +  where 0 = len(<bound method Store.search of <Store db=...>>('hello'))\n\ntests/test_search.py:17: AssertionError\n\n3 other search tests fail the same way. They passed before the tokenizer rewrite.",
+  "input": "Title: Case-insensitive search test fails\n\nRunning `python -m pytest tests/test_search.py` fails:\n\nTraceback (most recent call last):\n  File \"tests/test_search.py\", line 7, in test_search_is_case_insensitive\n    assert len(store.search('hello')) == 1\nAssertionError: assert 0 == 1\n\nThe note title is `Hello World`; searching for `hello` should find it.",
   "expected": { "type": "bug", "route": "fix" }
 }

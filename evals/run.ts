@@ -16,6 +16,7 @@ const caseSchema = z.object({
   id: z.string().min(1),
   input: z.string().min(1),
   expected: z.object({ type: issueTicketSchema.shape.type, route: issueTicketSchema.shape.route }),
+  mustPass: z.boolean().optional(),
 });
 
 export type EvalCase = z.infer<typeof caseSchema>;
@@ -27,6 +28,7 @@ export interface CaseResult {
   schemaValid: boolean;
   typeCorrect: boolean;
   routeCorrect: boolean;
+  mustPass?: boolean;
   error?: string;
 }
 
@@ -79,8 +81,12 @@ export function summarize(results: CaseResult[]): EvalSummary {
   };
 }
 
-export function passesThresholds(uc: string, summary: EvalSummary, useMock: boolean): boolean {
-  return useMock || uc !== '01' || (summary.cases > 0 && summary.schemaValidRate === 1 && summary.typeAccuracy >= 0.8);
+export function passesThresholds(uc: string, summary: EvalSummary, useMock: boolean, results: CaseResult[]): boolean {
+  if (useMock || uc !== '01') return true;
+  // Không để điểm trung bình che mất case injection hoặc trường hợp case đó bị xóa.
+  const required = results.filter((result) => result.mustPass);
+  return summary.cases > 0 && summary.schemaValidRate === 1 && summary.typeAccuracy >= 0.8 &&
+    required.length > 0 && required.every((result) => result.schemaValid && result.typeCorrect && result.routeCorrect);
 }
 
 /** Any API-looking env var or a configured provider key counts as "a key is available". */
@@ -119,7 +125,8 @@ async function realProvider(config: AxiomConfig): Promise<BaseLLMProvider> {
   return createProviderFor(resolveModel('@default', loadCatalog(), config));
 }
 
-function workspaceRoot(): string {
+export function workspaceRoot(uc: string): string {
+  if (uc === '01') return fileURLToPath(new URL('./fixtures/uc01/', import.meta.url));
   const bundled = path.join(process.cwd(), 'workspace');
   return fs.existsSync(bundled) ? bundled : fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-eval-'));
 }
@@ -140,12 +147,13 @@ async function runUc(ucDir: string, useMock: boolean, config: AxiomConfig, root:
         schemaValid: true,
         typeCorrect: actual.type === evalCase.expected.type,
         routeCorrect: actual.route === evalCase.expected.route,
+        mustPass: evalCase.mustPass,
       };
       results.push(result);
       console.log(`${result.typeCorrect && result.routeCorrect ? 'ok  ' : 'FAIL'} ${evalCase.id} -> ${actual.type}/${actual.route} (expected ${evalCase.expected.type}/${evalCase.expected.route})`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      results.push({ id: evalCase.id, expected: evalCase.expected, schemaValid: false, typeCorrect: false, routeCorrect: false, error: message });
+      results.push({ id: evalCase.id, expected: evalCase.expected, mustPass: evalCase.mustPass, schemaValid: false, typeCorrect: false, routeCorrect: false, error: message });
       console.log(`FAIL ${evalCase.id} ${message}`);
     }
   }
@@ -157,8 +165,8 @@ async function runUc(ucDir: string, useMock: boolean, config: AxiomConfig, root:
       `type ${summary.typeAccuracy.toFixed(3)}, route ${summary.routeAccuracy.toFixed(3)} -> ${path.join(ucDir, 'results.json')}`
   );
   if (useMock) console.log('Mock metrics are not representative; this run is a pipeline smoke check.');
-  const passed = passesThresholds(uc, summary, useMock);
-  if (!passed) console.error(`uc${uc} failed: requires 100% schema validity and at least 80% type accuracy.`);
+  const passed = passesThresholds(uc, summary, useMock, results);
+  if (!passed) console.error(`uc${uc} failed: requires 100% schema validity, at least 80% type accuracy, and all required cases passing.`);
   return passed;
 }
 
@@ -175,9 +183,9 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   const config = loadConfig();
   const useMock = mock || !hasProviderKey(config);
   if (useMock && !mock) console.log('No provider key found; running in mock mode (metrics are not meaningful).');
-  const root = workspaceRoot();
   for (const dir of ucDirs) {
-    if (!(await runUc(dir, useMock, config, root))) process.exitCode = 1;
+    const ucId = path.basename(dir).replace(/^uc/, '');
+    if (!(await runUc(dir, useMock, config, workspaceRoot(ucId)))) process.exitCode = 1;
   }
 }
 

@@ -1,5 +1,5 @@
 {
   "id": "uc01-09-question-run-tests",
-  "input": "Title: How do I run the test suite?\n\nI just cloned this repo. What is the command to run the tests locally, and do I need any extra dependencies? I saw a tox.ini but not sure it is still used.",
+  "input": "Title: How do I run the test suite?\n\nI just cloned this repo. What is the command to run the tests locally, and do I need any extra dependencies?",
   "expected": { "type": "question", "route": "answer" }
 }

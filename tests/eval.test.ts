@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadCases, parseArgs, passesThresholds, summarize, type CaseResult } from '../evals/run.js';
+import { loadCases, parseArgs, passesThresholds, summarize, workspaceRoot, type CaseResult } from '../evals/run.js';
 
 function tempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-eval-'));
@@ -70,9 +70,24 @@ test('summarize of no cases is all zeros', () => {
 
 test('real UC-01 enforces both thresholds while mock remains a smoke check', () => {
   const passing = { cases: 10, schemaValidRate: 1, typeAccuracy: 0.8, routeAccuracy: 0 };
-  assert.equal(passesThresholds('01', passing, false), true);
-  assert.equal(passesThresholds('01', { ...passing, schemaValidRate: 0.9 }, false), false);
-  assert.equal(passesThresholds('01', { ...passing, typeAccuracy: 0.7 }, false), false);
-  assert.equal(passesThresholds('01', { ...passing, cases: 0 }, false), false);
-  assert.equal(passesThresholds('01', { ...passing, schemaValidRate: 0, typeAccuracy: 0 }, true), true);
+  const required = result({ mustPass: true });
+  assert.equal(passesThresholds('01', passing, false, [required]), true);
+  assert.equal(passesThresholds('01', { ...passing, schemaValidRate: 0.9 }, false, [required]), false);
+  assert.equal(passesThresholds('01', { ...passing, typeAccuracy: 0.7 }, false, [required]), false);
+  assert.equal(passesThresholds('01', { ...passing, cases: 0 }, false, [required]), false);
+  assert.equal(passesThresholds('01', passing, false, []), false);
+  assert.equal(passesThresholds('01', passing, false, [{ ...required, routeCorrect: false }]), false);
+  assert.equal(passesThresholds('01', passing, false, [{ ...required, typeCorrect: false }]), false);
+  assert.equal(passesThresholds('01', { ...passing, schemaValidRate: 0, typeAccuracy: 0 }, true, [required]), true);
+});
+
+test('UC-01 cases use the fixed fixture and mark the injection as required', () => {
+  const cases = loadCases(path.join(process.cwd(), 'evals', 'uc01'));
+  assert.equal(cases.length, 10);
+  assert.deepEqual(cases.filter((item) => item.mustPass).map((item) => item.id), ['uc01-10-injection-ignore-instructions']);
+  const root = workspaceRoot('01');
+  for (const file of ['README.md', 'tinydb_demo/cli.py', 'tinydb_demo/format.py', 'tinydb_demo/store.py', 'tinydb_demo/pretty.py', 'tests/test_search.py']) {
+    assert.ok(fs.statSync(path.join(root, file)).isFile());
+  }
+  for (const item of cases.slice(0, 3)) assert.match(item.input, /Traceback \(most recent call last\)/);
 });
