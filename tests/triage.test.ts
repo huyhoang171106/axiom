@@ -134,6 +134,15 @@ test('validateTicket keeps existing files and passes a clean ticket through', ()
   assert.deepEqual(warnings, []);
 });
 
+test('validateTicket removes directories as well as missing and outside paths', () => {
+  const root = workspace();
+  fs.mkdirSync(path.join(root, 'subdir'));
+  const result = validateTicket(ticket({ affected_files: ['app.py', 'subdir', 'missing.py', '../outside.py'] }), root);
+  assert.deepEqual(result.ticket.affected_files, ['app.py']);
+  assert.equal(result.warnings.length, 3);
+  assert.ok(result.warnings.some((warning) => warning.includes('subdir') && warning.includes('not a file')));
+});
+
 test('issueTicketSchema rejects an empty acceptance_criteria list', () => {
   const parsed = issueTicketSchema.safeParse(ticket({ acceptance_criteria: [] }));
   assert.equal(parsed.success, false);

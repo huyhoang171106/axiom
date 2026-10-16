@@ -2,7 +2,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { BUNDLED_SKILLS_DIR } from '../tools/bundled-skills.js';
 
 function isEnoent(error: unknown): boolean {
   return (error as NodeJS.ErrnoException).code === 'ENOENT';
@@ -12,7 +12,7 @@ function isEnoent(error: unknown): boolean {
  * One line per skill: name, description and the path to read. The prompt carries only the index;
  * the agent read_file's the skill itself when it decides to use it.
  */
-export function skillsIndexFrom(dir: string): string {
+export function skillsIndexFrom(dir: string, absolutePaths = false): string {
   let entries: fs.Dirent[];
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -33,7 +33,8 @@ export function skillsIndexFrom(dir: string): string {
     const name = text.match(/^-\s*\*\*name:\*\*\s*(.+)$/m)?.[1]?.trim() || entry.name;
     const description = text.match(/^-\s*\*\*description:\*\*\s*(.+)$/m)?.[1]?.trim() ?? '';
     const label = description ? `${name}: ${description}` : name;
-    lines.push({ name, line: `- ${label} (skills/${entry.name}/SKILL.md)` });
+    const skillPath = absolutePaths ? path.join(dir, entry.name, 'SKILL.md') : `skills/${entry.name}/SKILL.md`;
+    lines.push({ name, line: `- ${label} (${skillPath})` });
   }
   lines.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   return lines.map((l) => l.line).join('\n');
@@ -41,5 +42,5 @@ export function skillsIndexFrom(dir: string): string {
 
 /** Bundled skills live in the repo's `skills/`, at the same depth under `src/` and `dist/`. */
 export function skillsIndex(): string {
-  return skillsIndexFrom(fileURLToPath(new URL('../../skills/', import.meta.url)));
+  return skillsIndexFrom(BUNDLED_SKILLS_DIR, true);
 }

@@ -6,6 +6,7 @@ import path from 'node:path';
 import { buildSystemPrompt } from '../src/core/prompt.js';
 import { loadProjectRules } from '../src/core/project-rules.js';
 import { skillsIndex, skillsIndexFrom } from '../src/core/skills.js';
+import { ToolRegistry } from '../src/tools/registry.js';
 
 function tempDir(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -58,7 +59,22 @@ test('skillsIndexFrom returns empty for a missing dir', () => {
 test('skillsIndex reads the bundled skills shipped with the harness', () => {
   const index = skillsIndex();
   assert.match(index, /issue-triage/);
-  assert.match(index, /skills\/issue-triage\/SKILL\.md/);
+  assert.ok(index.includes(path.join('skills', 'issue-triage', 'SKILL.md')));
+});
+
+test('indexed bundled skill can be read through policy from a separate workspace', async () => {
+  const root = tempDir('axiom-workspace-');
+  const skillPath = skillsIndex().match(/\(([^()]*)\)$/)?.[1];
+  assert.ok(skillPath && path.isAbsolute(skillPath));
+  const registry = new ToolRegistry(['read_file']);
+  const result = await registry.executeTool('read_file', { path: skillPath }, { workspaceRoot: root });
+  assert.equal(result.isError, false);
+  assert.match(result.output, /issue-triage/);
+  const other = await registry.executeTool('read_file', { path: path.join(path.dirname(skillPath), '..', '..', 'AGENTS.md') }, { workspaceRoot: root });
+  assert.equal(other.isError, true);
+  const write = new ToolRegistry();
+  const denied = await write.executeTool('write_file', { path: skillPath, content: 'changed' }, { workspaceRoot: root });
+  assert.equal(denied.isError, true);
 });
 
 test('loadProjectRules returns the AGENTS.md of the workspace', () => {
@@ -76,7 +92,7 @@ test('buildSystemPrompt joins base, the bundled skill index and the target repo 
   fs.writeFileSync(path.join(workspace, 'AGENTS.md'), 'Target rules');
   const prompt = buildSystemPrompt('You are a coding agent.', workspace);
   assert.ok(prompt.startsWith('You are a coding agent.\n\n'));
-  assert.match(prompt, /- issue-triage: .+ \(skills\/issue-triage\/SKILL\.md\)/);
+  assert.ok(prompt.includes(path.join('skills', 'issue-triage', 'SKILL.md')));
   assert.ok(prompt.endsWith('\n\nTarget rules'));
 });
 

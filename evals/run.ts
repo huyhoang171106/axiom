@@ -79,6 +79,10 @@ export function summarize(results: CaseResult[]): EvalSummary {
   };
 }
 
+export function passesThresholds(uc: string, summary: EvalSummary, useMock: boolean): boolean {
+  return useMock || uc !== '01' || (summary.cases > 0 && summary.schemaValidRate === 1 && summary.typeAccuracy >= 0.8);
+}
+
 /** Any API-looking env var or a configured provider key counts as "a key is available". */
 function hasProviderKey(config: AxiomConfig): boolean {
   if (Object.values(config.providers).some((provider) => provider?.apiKey)) return true;
@@ -120,7 +124,7 @@ function workspaceRoot(): string {
   return fs.existsSync(bundled) ? bundled : fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-eval-'));
 }
 
-async function runUc(ucDir: string, useMock: boolean, config: AxiomConfig, root: string): Promise<void> {
+async function runUc(ucDir: string, useMock: boolean, config: AxiomConfig, root: string): Promise<boolean> {
   const uc = path.basename(ucDir).replace(/^uc/, '');
   const cases = loadCases(ucDir);
   const results: CaseResult[] = [];
@@ -152,6 +156,10 @@ async function runUc(ucDir: string, useMock: boolean, config: AxiomConfig, root:
     `uc${uc}${useMock ? ' (mock)' : ''}: ${summary.cases} cases, schema ${summary.schemaValidRate.toFixed(3)}, ` +
       `type ${summary.typeAccuracy.toFixed(3)}, route ${summary.routeAccuracy.toFixed(3)} -> ${path.join(ucDir, 'results.json')}`
   );
+  if (useMock) console.log('Mock metrics are not representative; this run is a pipeline smoke check.');
+  const passed = passesThresholds(uc, summary, useMock);
+  if (!passed) console.error(`uc${uc} failed: requires 100% schema validity and at least 80% type accuracy.`);
+  return passed;
 }
 
 export async function main(argv = process.argv.slice(2)): Promise<void> {
@@ -168,7 +176,9 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   const useMock = mock || !hasProviderKey(config);
   if (useMock && !mock) console.log('No provider key found; running in mock mode (metrics are not meaningful).');
   const root = workspaceRoot();
-  for (const dir of ucDirs) await runUc(dir, useMock, config, root);
+  for (const dir of ucDirs) {
+    if (!(await runUc(dir, useMock, config, root))) process.exitCode = 1;
+  }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

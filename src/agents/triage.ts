@@ -11,7 +11,6 @@ import { SessionManager } from '../core/session.js';
 import type { BaseLLMProvider } from '../llm/base-provider.js';
 import { CostTracker } from '../llm/cost-tracker.js';
 import { BaseTool } from '../tools/base-tool.js';
-import { escapesWorkspace } from '../tools/permissions.js';
 import { ToolRegistry } from '../tools/registry.js';
 
 export const issueTicketSchema = z.object({
@@ -94,13 +93,20 @@ export interface TriageResult {
 export function validateTicket(ticket: IssueTicket, workspaceRoot: string): TriageResult {
   const warnings: string[] = [];
   const affectedFiles: string[] = [];
+  const root = fs.realpathSync(workspaceRoot);
   for (const file of ticket.affected_files) {
-    if (escapesWorkspace(file, workspaceRoot)) {
+    const target = path.resolve(workspaceRoot, file);
+    const relative = path.relative(root, fs.existsSync(target) ? fs.realpathSync(target) : target);
+    if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
       warnings.push(`affected_files: "${file}" is outside the workspace and was removed`);
       continue;
     }
-    if (!fs.existsSync(path.resolve(workspaceRoot, file))) {
+    if (!fs.existsSync(target)) {
       warnings.push(`affected_files: "${file}" does not exist in the repository and was removed`);
+      continue;
+    }
+    if (!fs.statSync(target).isFile()) {
+      warnings.push(`affected_files: "${file}" is not a file and was removed`);
       continue;
     }
     affectedFiles.push(file);

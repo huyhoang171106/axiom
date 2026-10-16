@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadCases, parseArgs, summarize, type CaseResult } from '../evals/run.js';
+import { loadCases, parseArgs, passesThresholds, summarize, type CaseResult } from '../evals/run.js';
 
 function tempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-eval-'));
@@ -66,4 +66,13 @@ test('summarize computes rates over all cases', () => {
 
 test('summarize of no cases is all zeros', () => {
   assert.deepEqual(summarize([]), { cases: 0, schemaValidRate: 0, typeAccuracy: 0, routeAccuracy: 0 });
+});
+
+test('real UC-01 enforces both thresholds while mock remains a smoke check', () => {
+  const passing = { cases: 10, schemaValidRate: 1, typeAccuracy: 0.8, routeAccuracy: 0 };
+  assert.equal(passesThresholds('01', passing, false), true);
+  assert.equal(passesThresholds('01', { ...passing, schemaValidRate: 0.9 }, false), false);
+  assert.equal(passesThresholds('01', { ...passing, typeAccuracy: 0.7 }, false), false);
+  assert.equal(passesThresholds('01', { ...passing, cases: 0 }, false), false);
+  assert.equal(passesThresholds('01', { ...passing, schemaValidRate: 0, typeAccuracy: 0 }, true), true);
 });
