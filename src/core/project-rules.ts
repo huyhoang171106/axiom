@@ -1,6 +1,14 @@
-// src/core/project-rules.ts - Target repo AGENTS.md for the system prompt; stub until A2
+// src/core/project-rules.ts - Target repo AGENTS.md for the system prompt
 
-// TODO(A2): read AGENTS.md under workspaceRoot, '' when it is missing.
+import fs from 'node:fs';
+import path from 'node:path';
+
+/** The target repo's own rules for the system prompt; '' when the repo has no AGENTS.md. */
 export function loadProjectRules(workspaceRoot: string): string {
-  return '';
+  try {
+    return fs.readFileSync(path.join(workspaceRoot, 'AGENTS.md'), 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return '';
+    throw error;
+  }
 }
