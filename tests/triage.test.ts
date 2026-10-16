@@ -80,7 +80,38 @@ test('missing_info forces the route to ask_user with a warning', async () => {
   ]);
   const result = await runTriage({ issue: 'it is broken somehow', workspaceRoot: root, provider });
   assert.equal(result.ticket.route, 'ask_user');
+  assert.deepEqual(result.ticket.missing_info, ['Could you clarify: exact command?']);
   assert.ok(result.warnings.some((w) => w.includes('ask_user')));
+});
+
+test('submission cannot succeed after three invalid tickets in one model turn', async () => {
+  const invalid = { ...ticket(), acceptance_criteria: [] };
+  const provider = new MockProvider('mock', [{ toolCalls: [
+    submitCall(invalid, 'one'), submitCall(invalid, 'two'), submitCall(invalid, 'three'), submitCall(ticket(), 'four'),
+  ] }]);
+  await assert.rejects(runTriage({ issue: 'crash', workspaceRoot: workspace(), provider }), /after 3 attempts/);
+});
+
+test('the first accepted ticket cannot be replaced by another submission in the same turn', async () => {
+  const provider = new MockProvider('mock', [{ toolCalls: [
+    submitCall(ticket(), 'one'), submitCall(ticket({ type: 'feature', route: 'implement' }), 'two'),
+  ] }]);
+  const result = await runTriage({ issue: 'crash', workspaceRoot: workspace(), provider });
+  assert.equal(result.ticket.type, 'bug');
+});
+
+test('blank criteria and missing details and priority without a reason are rejected', () => {
+  assert.equal(issueTicketSchema.safeParse(ticket({ priority: 'P1' })).success, false);
+  assert.equal(issueTicketSchema.safeParse(ticket({ priority: 'P1 - ' })).success, false);
+  assert.equal(issueTicketSchema.safeParse(ticket({ acceptance_criteria: ['   '] })).success, false);
+  assert.equal(issueTicketSchema.safeParse(ticket({ missing_info: [''] })).success, false);
+  assert.equal(issueTicketSchema.safeParse(ticket({ priority: 'P1 - crash', missing_info: ['Which command?'] })).success, true);
+});
+
+test('existing clarifying questions remain unchanged', () => {
+  const result = validateTicket(ticket({ missing_info: ['Which command fails?'] }), workspace());
+  assert.deepEqual(result.ticket.missing_info, ['Which command fails?']);
+  assert.equal(result.ticket.route, 'ask_user');
 });
 
 test('a schema error is sent back to the model and the retry succeeds', async () => {
