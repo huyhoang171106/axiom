@@ -1,8 +1,9 @@
-// src/llm/providers/openai-responses.ts - `openai-responses` wire (OpenAI Responses API); stub until A6
+// src/llm/providers/openai-responses.ts - `openai-responses` wire (OpenAI Responses API)
 
 import type { LLMProviderType } from '../../core/types.js';
 import type { ModelInfo } from '../catalog/index.js';
 import { BaseLLMProvider, type ChatParams, type ChatResult } from '../base-provider.js';
+import { buildResponsesBody, requestResponses } from './responses-shared.js';
 
 export class OpenAIResponsesProvider extends BaseLLMProvider {
   readonly name: LLMProviderType;
@@ -15,8 +16,21 @@ export class OpenAIResponsesProvider extends BaseLLMProvider {
     this.name = info.provider;
   }
 
-  // TODO(A6): implement the wire.
-  async chat(params: ChatParams): Promise<ChatResult> {
-    throw new Error(`${this.name}: wire openai-responses is not implemented yet (A6)`);
+  async chat({ model, messages, tools, temperature, maxTokens, onToken, onThinking, signal }: ChatParams): Promise<ChatResult> {
+    return requestResponses({
+      url: `${this.info.baseUrl.replace(/\/+$/, '')}/responses`,
+      headers: {
+        ...this.info.headers,
+        // A catalog header wins over the stored credential, so gateways can pin their own auth.
+        ...(this.credential && !this.info.headers?.authorization && { authorization: `Bearer ${this.credential}` }),
+      },
+      body: buildResponsesBody(model, messages, tools, { temperature, maxTokens }),
+      provider: this.name,
+      model,
+      info: this.info,
+      onToken,
+      onThinking,
+      signal,
+    });
   }
 }
