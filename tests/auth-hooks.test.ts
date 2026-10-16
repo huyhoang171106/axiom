@@ -166,6 +166,26 @@ test('openai-codex-device refresh rotates tokens and keeps the old refresh token
   }
 });
 
+test('openai-codex-device respects the polling interval and stops at the deadline', async () => {
+  const srv = await startFakeServer((req, res) => {
+    if (req.url === '/device') res.writeHead(200).end(JSON.stringify({ device_auth_id: 'device', user_code: 'code', interval: 900 }));
+    else res.writeHead(403).end('{}');
+  });
+  const originalNow = Date.now;
+  let now = originalNow();
+  Date.now = () => now;
+  const delays: number[] = [];
+  try {
+    const fake = fakeUi();
+    await assert.rejects(codex.login({ provider: codexProvider(srv.url), ui: fake.ui, sleep: async (ms) => { delays.push(ms); now += ms; } }), /timed out/);
+    assert.deepEqual(delays, [900_000]);
+    assert.equal(srv.seen.filter((request) => request.url === '/token').length, 1);
+  } finally {
+    Date.now = originalNow;
+    await srv.close();
+  }
+});
+
 test('github-copilot slow_down increases the poll wait and uses the enterprise client', async () => {
   let polls = 0;
   const srv = await startFakeServer((req, res) => {

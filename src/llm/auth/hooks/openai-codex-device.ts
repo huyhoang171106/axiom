@@ -5,8 +5,7 @@ import { hookSleep, type LoginContext, type StoredCredential } from '../engines/
 
 const REQUEST_TIMEOUT_MS = 15_000;
 const DEFAULT_INTERVAL_MS = 5_000;
-const MAX_FIRST_WAIT_MS = 5_000;
-const MAX_POLLS = 120;
+const DEVICE_TIMEOUT_MS = 15 * 60 * 1000;
 const JWT_PROFILE_CLAIM = 'https://api.openai.com/profile';
 
 interface CodexLogin {
@@ -124,15 +123,18 @@ export async function login(ctx: LoginContext): Promise<StoredCredential> {
   const pollMs = intervalMs(init.body?.interval);
   ctx.ui.print(`Open ${cfg.verificationUrl} and enter code ${userCode}`);
 
-  for (let poll = 0; poll < MAX_POLLS; poll++) {
-    await sleep(poll === 0 ? Math.min(pollMs, MAX_FIRST_WAIT_MS) : pollMs);
-
+  const deadline = Date.now() + DEVICE_TIMEOUT_MS;
+  while (Date.now() < deadline) {
     const result = await requestJson<{ authorization_code?: unknown; code_verifier?: unknown }>(cfg.tokenUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ device_auth_id: deviceAuthId, user_code: userCode }),
     });
-    if (result.status === 403 || result.status === 404) continue;
+    if (result.status === 403 || result.status === 404) {
+      const remaining = deadline - Date.now();
+      if (remaining > 0) await sleep(Math.min(pollMs, remaining));
+      continue;
+    }
     if (!result.ok) {
       throw new Error(`OpenAI Codex device polling failed (${result.status}); run /login openai-codex again`);
     }
@@ -145,7 +147,7 @@ export async function login(ctx: LoginContext): Promise<StoredCredential> {
     return exchange(cfg, code, verifier);
   }
 
-  throw new Error('OpenAI Codex device authorization expired; run /login openai-codex again');
+  throw new Error('OpenAI Codex device authorization timed out; run /login openai-codex again');
 }
 
 export async function refresh(cred: StoredCredential, provider: ProviderEntry): Promise<StoredCredential> {
