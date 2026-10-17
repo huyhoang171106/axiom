@@ -7,7 +7,6 @@ import type { AxiomConfig } from './types.js';
 
 export const DEFAULT_CONFIG: AxiomConfig = {
   activeProvider: 'anthropic',
-  defaultModel: 'claude-sonnet-4-5',
   providers: {},
   budgetLimitDollars: 5,
   autoVerify: false,
