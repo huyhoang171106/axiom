@@ -5,6 +5,7 @@ import { MODEL_ROLES } from '../core/types.js';
 import { registerSecret } from '../core/secrets.js';
 import { prepareCloud } from './auth/engines/cloud-fields.js';
 import { resolveCredential } from './auth/resolve.js';
+import { readAuth } from './auth/store.js';
 import type { BaseLLMProvider } from './base-provider.js';
 import { loadCatalog, type Catalog, type ModelInfo, type ProviderEntry } from './catalog/index.js';
 import { ProviderError } from './provider-error.js';
@@ -133,6 +134,13 @@ export async function createProviderFor(info: ModelInfo, opts?: { cliKey?: strin
   if (!credential && entry && needsCredential(entry)) {
     const hint = entry.env[0] ? ` or set ${entry.env[0]}` : '';
     throw new ProviderError(`${info.provider} is not connected. Run /login ${info.provider}${hint}.`, { provider: info.provider, model: info.id, code: 'missing_credentials' });
+  }
+  if (credential?.source === 'oauth') {
+    // Read after resolveCredential, so a refresh that just happened is what the wire sees.
+    const stored = readAuth()[info.provider];
+    if (stored?.type === 'oauth' && (stored.headers || stored.baseUrl)) {
+      return factory({ ...info, baseUrl: stored.baseUrl ?? info.baseUrl, headers: { ...info.headers, ...stored.headers } }, credential.value);
+    }
   }
   if (entry?.login?.type !== 'cloud-fields') return factory(info, credential?.value);
   const prepared = await prepareCloud(entry, info, credential?.value);

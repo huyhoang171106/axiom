@@ -13,7 +13,15 @@ const AUTH_FILE = 'auth.json';
 
 const credentialSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('api_key'), key: z.string() }),
-  z.object({ type: z.literal('oauth'), access: z.string(), refresh: z.string().optional(), expires: z.number().optional(), email: z.string().optional() }),
+  z.object({
+    type: z.literal('oauth'),
+    access: z.string(),
+    refresh: z.string().optional(),
+    expires: z.number().optional(),
+    email: z.string().optional(),
+    headers: z.record(z.string(), z.string()).optional(),
+    baseUrl: z.url().optional(),
+  }),
   z.object({ type: z.literal('fields'), values: z.record(z.string(), z.string()) }),
 ]);
 
