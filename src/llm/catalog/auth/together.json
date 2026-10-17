@@ -1,0 +1,14 @@
+{
+  "id": "together",
+  "name": "Together",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://api.together.xyz/settings/api-keys",
+    "prompt": "Dán Together API key",
+    "placeholder": "sk-...",
+    "validate": {
+      "kind": "url",
+      "url": "https://api.together.xyz/v1/models"
+    }
+  }
+}

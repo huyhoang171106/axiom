@@ -1,0 +1,14 @@
+{
+  "id": "coralbricks",
+  "name": "CoralBricks",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://www.coralbricks.ai/api-keys",
+    "prompt": "Dán CoralBricks API key",
+    "placeholder": "cb_...",
+    "validate": {
+      "kind": "url",
+      "url": "https://inference.coralbricks.ai/v1/models"
+    }
+  }
+}

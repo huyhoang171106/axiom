@@ -1,0 +1,15 @@
+{
+  "id": "local",
+  "defaultModel": "lfm2.5-230m",
+  "env": [],
+  "api": "local-inference",
+  "baseUrl": "(trong process)",
+  "available": false,
+  "reason": "cần runtime native (local) / chỉ macOS (apple)",
+  "seed": [
+    {
+      "id": "lfm2.5-230m",
+      "name": "lfm2.5-230m"
+    }
+  ]
+}

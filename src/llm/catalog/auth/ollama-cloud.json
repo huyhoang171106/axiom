@@ -1,0 +1,10 @@
+{
+  "id": "ollama-cloud",
+  "name": "Ollama Cloud",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://ollama.com/settings/keys",
+    "prompt": "Dán Ollama Cloud API key",
+    "placeholder": "ollama-cloud-api-key"
+  }
+}

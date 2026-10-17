@@ -1,0 +1,20 @@
+{
+  "id": "kimi-code",
+  "name": "Kimi Code",
+  "login": {
+    "type": "device-code",
+    "clientId": "17e5f671-d194-4dfb-9706-5516cb48c098",
+    "deviceUrl": "https://auth.kimi.com/api/oauth/device_authorization",
+    "tokenUrl": "https://auth.kimi.com/api/oauth/token",
+    "headers": {
+      "X-Msh-Platform": "kimi_cli"
+    },
+    "source": "https://github.com/can1357/oh-my-pi/blob/c3b645c/packages/catalog/src/compat/rules/auth/kimi-code.kdl"
+  },
+  "refresh": {
+    "tokenUrl": "https://auth.kimi.com/api/oauth/token",
+    "headers": {
+      "X-Msh-Platform": "kimi_cli"
+    }
+  }
+}

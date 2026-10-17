@@ -1,0 +1,78 @@
+{
+  "id": "yolo-auto",
+  "defaultModel": "qwen3.8-27b",
+  "env": [
+    "YOLO_AUTO_API_KEY"
+  ],
+  "api": "openai-completions",
+  "baseUrl": "https://yolo-auto.com/v1",
+  "discovery": {
+    "allowUnauthenticated": false
+  },
+  "seed": [
+    {
+      "id": "qwen3.8-27b",
+      "name": "Qwen3.8-27B",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 262144,
+      "maxTokens": 131072,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "yolo",
+      "name": "Yolo",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 262144,
+      "maxTokens": 131072,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "yolo-128k",
+      "name": "Yolo 128K",
+      "reasoning": false,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 131072,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "yolo-small",
+      "name": "Yolo Small",
+      "reasoning": false,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 262144,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    }
+  ]
+}

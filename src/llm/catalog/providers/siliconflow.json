@@ -1,0 +1,18 @@
+{
+  "id": "siliconflow",
+  "defaultModel": "zai-org/GLM-5.1",
+  "env": [
+    "SILICONFLOW_API_KEY"
+  ],
+  "api": "openai-completions",
+  "baseUrl": "https://api.siliconflow.com/v1",
+  "discovery": {
+    "allowUnauthenticated": false
+  },
+  "seed": [
+    {
+      "id": "zai-org/GLM-5.1",
+      "name": "zai-org/GLM-5.1"
+    }
+  ]
+}

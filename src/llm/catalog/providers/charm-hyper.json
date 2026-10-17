@@ -1,0 +1,19 @@
+{
+  "id": "charm-hyper",
+  "defaultModel": "glm-5.3",
+  "env": [
+    "CHARM_HYPER_API_KEY",
+    "HYPER_API_KEY"
+  ],
+  "api": "openai-completions",
+  "baseUrl": "https://hyper.charm.land/v1",
+  "discovery": {
+    "allowUnauthenticated": true
+  },
+  "seed": [
+    {
+      "id": "glm-5.3",
+      "name": "glm-5.3"
+    }
+  ]
+}

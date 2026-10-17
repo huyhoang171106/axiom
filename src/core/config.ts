@@ -1,13 +1,12 @@
-// src/core/config.ts - Config from ~/.axiom/config.json (or AXIOM_CONFIG_PATH), overridden by env API keys
+// src/core/config.ts - Config from <AXIOM_HOME>/config.json (or AXIOM_CONFIG_PATH), overridden by env API keys
 
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+import { axiomHome } from './paths.js';
 import type { AxiomConfig } from './types.js';
 
 export const DEFAULT_CONFIG: AxiomConfig = {
   activeProvider: 'anthropic',
-  defaultModel: 'claude-sonnet-4-5',
   providers: {},
   budgetLimitDollars: 5,
   autoVerify: false,
@@ -15,7 +14,23 @@ export const DEFAULT_CONFIG: AxiomConfig = {
   workspaceRoot: process.cwd(),
 };
 
-export function loadConfig(file = process.env.AXIOM_CONFIG_PATH || path.join(os.homedir(), '.axiom', 'config.json')): AxiomConfig {
+const configFile = (): string => process.env.AXIOM_CONFIG_PATH || path.join(axiomHome(), 'config.json');
+
+/** Merge `patch` into the saved file only, so defaults and env keys from loadConfig never get written to disk. */
+export function saveConfig(patch: Partial<AxiomConfig>, file = configFile()): void {
+  let saved: Record<string, unknown> = {};
+  if (fs.existsSync(file)) {
+    try {
+      saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch {
+      throw new Error(`${file} is not valid JSON. Fix it before changing settings from Axiom.`);
+    }
+  }
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `${JSON.stringify({ ...saved, ...patch }, null, 2)}\n`);
+}
+
+export function loadConfig(file = configFile()): AxiomConfig {
   let saved: Partial<AxiomConfig> = {};
   try {
     saved = JSON.parse(fs.readFileSync(file, 'utf8'));

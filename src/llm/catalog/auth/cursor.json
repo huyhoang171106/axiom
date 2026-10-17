@@ -1,0 +1,7 @@
+{
+  "id": "cursor",
+  "name": "Cursor (Claude, GPT, etc.)",
+  "login": {
+    "type": "hook"
+  }
+}

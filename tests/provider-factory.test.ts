@@ -43,3 +43,15 @@ test('openai-completions wire posts to <baseUrl>/chat/completions with a bearer 
     srv.close();
   }
 });
+
+test('openai-completions and anthropic-messages wires send the catalog headers of the model', async () => {
+  const srv = await fakeServer({ choices: [{ message: { content: 'ok' } }], content: [{ type: 'text', text: 'ok' }], usage: { prompt_tokens: 1, completion_tokens: 1, input_tokens: 1, output_tokens: 1 } });
+  try {
+    for (const api of ['openai-completions', 'anthropic-messages'] as const) {
+      await WIRES[api]({ ...info(api, srv.url), headers: { 'x-catalog': api } }, 'k').chat({ model: 'm', messages: [{ role: 'user', content: 'hi' }] });
+    }
+    assert.deepEqual(srv.seen.map((s) => s.headers['x-catalog']), ['openai-completions', 'anthropic-messages']);
+  } finally {
+    srv.close();
+  }
+});

@@ -1,0 +1,7 @@
+{
+  "id": "devin",
+  "name": "Devin",
+  "login": {
+    "type": "oauth-code"
+  }
+}

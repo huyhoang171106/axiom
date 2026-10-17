@@ -1,0 +1,14 @@
+{
+  "id": "vercel-ai-gateway",
+  "name": "Vercel AI Gateway",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai-gateway%2Fapi-keys&title=AI+Gateway+API+Keys",
+    "prompt": "Dán Vercel AI Gateway API key",
+    "placeholder": "vck_...",
+    "validate": {
+      "kind": "anthropic-messages",
+      "model": "anthropic/claude-opus-5"
+    }
+  }
+}

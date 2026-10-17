@@ -1,0 +1,15 @@
+{
+  "id": "qianfan",
+  "name": "Qianfan",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://console.bce.baidu.com/qianfan/ais/console/apiKey",
+    "prompt": "Dán Qianfan API key",
+    "placeholder": "bce-v3/ALTAK-...",
+    "validate": {
+      "kind": "chat-completions",
+      "model": "deepseek-v3.2",
+      "baseUrl": "https://qianfan.baidubce.com/v2"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "id": "google",
+  "name": "Google Gemini",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://aistudio.google.com/apikey",
+    "prompt": "Dán Google Gemini API key",
+    "validate": {
+      "kind": "url",
+      "url": "https://generativelanguage.googleapis.com/v1beta/models",
+      "header": "x-goog-api-key"
+    }
+  }
+}

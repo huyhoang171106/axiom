@@ -1,0 +1,14 @@
+{
+  "id": "nanogpt",
+  "name": "NanoGPT",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://nano-gpt.com/api",
+    "prompt": "Dán NanoGPT API key",
+    "placeholder": "sk-...",
+    "validate": {
+      "kind": "url",
+      "url": "https://nano-gpt.com/api/v1/models"
+    }
+  }
+}

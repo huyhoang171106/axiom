@@ -1,0 +1,16 @@
+{
+  "id": "muse-code",
+  "name": "Muse Code (Subscription)",
+  "login": {
+    "type": "device-code",
+    "clientId": "1031625952748946",
+    "deviceUrl": "https://auth.meta.com/oidc/device/authorization/",
+    "tokenUrl": "https://auth.meta.com/oidc/device/token/",
+    "headers": {
+      "x-api-version": "1.0.0"
+    },
+    "afterExchange": "muse-code",
+    "source": "https://github.com/can1357/oh-my-pi/blob/c3b645c/packages/catalog/src/compat/rules/auth/muse-code.kdl"
+  },
+  "refresh": "none"
+}

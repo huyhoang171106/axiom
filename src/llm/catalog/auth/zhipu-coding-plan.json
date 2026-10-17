@@ -1,0 +1,15 @@
+{
+  "id": "zhipu-coding-plan",
+  "name": "Zhipu Coding Plan (智谱)",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://bigmodel.cn/coding-plan/personal/overview",
+    "prompt": "Dán Zhipu Coding Plan (智谱) API key",
+    "placeholder": "<id>.<secret>",
+    "validate": {
+      "kind": "chat-completions",
+      "model": "glm-5.1",
+      "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4"
+    }
+  }
+}

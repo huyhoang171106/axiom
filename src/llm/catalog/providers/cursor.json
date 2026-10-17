@@ -1,0 +1,519 @@
+{
+  "id": "cursor",
+  "defaultModel": "claude-opus-5-high",
+  "env": [
+    "CURSOR_ACCESS_TOKEN"
+  ],
+  "api": "cursor-agent",
+  "baseUrl": "https://api2.cursor.sh",
+  "seed": [
+    {
+      "id": "claude-opus-5-high",
+      "name": "Claude Opus 5 1M",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 5,
+        "output": 25,
+        "cacheRead": 0.5,
+        "cacheWrite": 6.25
+      }
+    },
+    {
+      "id": "claude-4-sonnet",
+      "name": "Claude Sonnet 4",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 200000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 3,
+        "output": 15,
+        "cacheRead": 0.3,
+        "cacheWrite": 3.75
+      }
+    },
+    {
+      "id": "claude-4.5-opus-high",
+      "name": "Claude Opus 4.5",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 200000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 5,
+        "output": 25,
+        "cacheRead": 0.5,
+        "cacheWrite": 6.25
+      }
+    },
+    {
+      "id": "claude-4.5-sonnet",
+      "name": "Claude Sonnet 4.5",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 200000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 3,
+        "output": 15,
+        "cacheRead": 0.3,
+        "cacheWrite": 3.75
+      }
+    },
+    {
+      "id": "claude-4.6-opus-high",
+      "name": "Claude Opus 4.6 1M",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 5,
+        "output": 25,
+        "cacheRead": 0.5,
+        "cacheWrite": 6.25
+      }
+    },
+    {
+      "id": "claude-4.6-opus-max",
+      "name": "Claude Opus 4.6 1M Max",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 5,
+        "output": 25,
+        "cacheRead": 0.5,
+        "cacheWrite": 6.25
+      }
+    },
+    {
+      "id": "claude-4.6-sonnet-medium",
+      "name": "Claude Sonnet 4.6 1M",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 3,
+        "output": 15,
+        "cacheRead": 0.3,
+        "cacheWrite": 3.75
+      }
+    },
+    {
+      "id": "claude-fable-5-1-high",
+      "name": "Claude Fable 5.1 1M (NO ZDR)",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 10,
+        "output": 50,
+        "cacheRead": 0.25,
+        "cacheWrite": 12.5
+      }
+    },
+    {
+      "id": "claude-fable-5-1-low",
+      "name": "Claude Fable 5.1 1M Low (NO ZDR)",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 10,
+        "output": 50,
+        "cacheRead": 0.25,
+        "cacheWrite": 12.5
+      }
+    },
+    {
+      "id": "claude-fable-5-1-max",
+      "name": "Claude Fable 5.1 1M Max (NO ZDR)",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 10,
+        "output": 50,
+        "cacheRead": 0.25,
+        "cacheWrite": 12.5
+      }
+    },
+    {
+      "id": "claude-fable-5-1-medium",
+      "name": "Claude Fable 5.1 1M Medium (NO ZDR)",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 10,
+        "output": 50,
+        "cacheRead": 0.25,
+        "cacheWrite": 12.5
+      }
+    },
+    {
+      "id": "claude-fable-5-1-xhigh",
+      "name": "Claude Fable 5.1 1M Extra High (NO ZDR)",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 10,
+        "output": 50,
+        "cacheRead": 0.25,
+        "cacheWrite": 12.5
+      }
+    },
+    {
+      "id": "claude-fable-5-high",
+      "name": "Claude Fable 5 1M (NO ZDR)",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 10,
+        "output": 50,
+        "cacheRead": 1,
+        "cacheWrite": 12.5
+      }
+    },
+    {
+      "id": "claude-fable-5-low",
+      "name": "Claude Fable 5 1M Low (NO ZDR)",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 10,
+        "output": 50,
+        "cacheRead": 1,
+        "cacheWrite": 12.5
+      }
+    },
+    {
+      "id": "claude-fable-5-max",
+      "name": "Claude Fable 5 1M Max (NO ZDR)",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 10,
+        "output": 50,
+        "cacheRead": 1,
+        "cacheWrite": 12.5
+      }
+    },
+    {
+      "id": "claude-fable-5-medium",
+      "name": "Claude Fable 5 1M Medium (NO ZDR)",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 10,
+        "output": 50,
+        "cacheRead": 1,
+        "cacheWrite": 12.5
+      }
+    },
+    {
+      "id": "claude-fable-5-xhigh",
+      "name": "Claude Fable 5 1M Extra High (NO ZDR)",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 10,
+        "output": 50,
+        "cacheRead": 1,
+        "cacheWrite": 12.5
+      }
+    },
+    {
+      "id": "claude-opus-4-7-high",
+      "name": "Claude Opus 4.7 1M High",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 5,
+        "output": 25,
+        "cacheRead": 0.5,
+        "cacheWrite": 6.25
+      }
+    },
+    {
+      "id": "claude-opus-4-7-high-fast",
+      "name": "Claude Opus 4.7 1M High Fast",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 30,
+        "output": 150,
+        "cacheRead": 3,
+        "cacheWrite": 37.5
+      }
+    },
+    {
+      "id": "claude-opus-4-7-low",
+      "name": "Claude Opus 4.7 1M Low",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 5,
+        "output": 25,
+        "cacheRead": 0.5,
+        "cacheWrite": 6.25
+      }
+    },
+    {
+      "id": "claude-opus-4-7-low-fast",
+      "name": "Claude Opus 4.7 1M Low Fast",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 30,
+        "output": 150,
+        "cacheRead": 3,
+        "cacheWrite": 37.5
+      }
+    },
+    {
+      "id": "claude-opus-4-7-max",
+      "name": "Claude Opus 4.7 1M Max",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 5,
+        "output": 25,
+        "cacheRead": 0.5,
+        "cacheWrite": 6.25
+      }
+    },
+    {
+      "id": "claude-opus-4-7-max-fast",
+      "name": "Claude Opus 4.7 1M Max Fast",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 30,
+        "output": 150,
+        "cacheRead": 3,
+        "cacheWrite": 37.5
+      }
+    },
+    {
+      "id": "claude-opus-4-7-medium",
+      "name": "Claude Opus 4.7 1M Medium",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 5,
+        "output": 25,
+        "cacheRead": 0.5,
+        "cacheWrite": 6.25
+      }
+    },
+    {
+      "id": "claude-opus-4-7-medium-fast",
+      "name": "Claude Opus 4.7 1M Medium Fast",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 30,
+        "output": 150,
+        "cacheRead": 3,
+        "cacheWrite": 37.5
+      }
+    },
+    {
+      "id": "claude-opus-4-7-xhigh",
+      "name": "Claude Opus 4.7 1M",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 5,
+        "output": 25,
+        "cacheRead": 0.5,
+        "cacheWrite": 6.25
+      }
+    },
+    {
+      "id": "claude-opus-4-7-xhigh-fast",
+      "name": "Claude Opus 4.7 1M Fast",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 30,
+        "output": 150,
+        "cacheRead": 3,
+        "cacheWrite": 37.5
+      }
+    },
+    {
+      "id": "claude-opus-4-8-high",
+      "name": "Claude Opus 4.8 1M",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 5,
+        "output": 25,
+        "cacheRead": 0.5,
+        "cacheWrite": 6.25
+      }
+    },
+    {
+      "id": "claude-opus-4-8-high-fast",
+      "name": "Claude Opus 4.8 1M Fast",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 10,
+        "output": 50,
+        "cacheRead": 1,
+        "cacheWrite": 12.5
+      }
+    },
+    {
+      "id": "claude-opus-4-8-low",
+      "name": "Claude Opus 4.8 1M Low",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "cost": {
+        "input": 5,
+        "output": 25,
+        "cacheRead": 0.5,
+        "cacheWrite": 6.25
+      }
+    }
+  ]
+}

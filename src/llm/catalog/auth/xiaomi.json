@@ -1,0 +1,12 @@
+{
+  "id": "xiaomi",
+  "name": "Xiaomi MiMo",
+  "login": {
+    "type": "api-key",
+    "prompt": "Dán Xiaomi MiMo API key",
+    "validate": {
+      "kind": "chat-completions",
+      "model": "mimo-v2.6-flash"
+    }
+  }
+}

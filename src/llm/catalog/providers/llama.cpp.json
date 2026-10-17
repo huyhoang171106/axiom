@@ -1,0 +1,19 @@
+{
+  "id": "llama.cpp",
+  "defaultModel": "default",
+  "env": [
+    "LLAMA_CPP_API_KEY"
+  ],
+  "api": "openai-completions",
+  "baseUrl": "http://127.0.0.1:8080/v1",
+  "auth": "none",
+  "discovery": {
+    "allowUnauthenticated": true
+  },
+  "seed": [
+    {
+      "id": "default",
+      "name": "default"
+    }
+  ]
+}

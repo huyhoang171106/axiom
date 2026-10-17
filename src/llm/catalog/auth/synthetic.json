@@ -1,0 +1,14 @@
+{
+  "id": "synthetic",
+  "name": "Synthetic",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://dev.synthetic.new/docs/api/overview",
+    "prompt": "Dán Synthetic API key",
+    "placeholder": "sk-...",
+    "validate": {
+      "kind": "url",
+      "url": "https://api.synthetic.new/openai/v1/models"
+    }
+  }
+}

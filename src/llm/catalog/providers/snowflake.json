@@ -1,0 +1,276 @@
+{
+  "id": "snowflake",
+  "defaultModel": "claude-opus-5-5",
+  "env": [
+    "SNOWFLAKE_PAT"
+  ],
+  "api": "anthropic-messages",
+  "baseUrl": "https://snowflake-account.invalid/api/v2/cortex",
+  "seed": [
+    {
+      "id": "claude-opus-5-5",
+      "name": "Claude Opus 5.5",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 16384,
+      "cost": {
+        "input": 4,
+        "output": 20,
+        "cacheRead": 0.2,
+        "cacheWrite": 5
+      }
+    },
+    {
+      "id": "claude-haiku-4-5",
+      "name": "Claude Haiku 4.5",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 200000,
+      "maxTokens": 16384,
+      "cost": {
+        "input": 1,
+        "output": 5,
+        "cacheRead": 0.1,
+        "cacheWrite": 1.25
+      }
+    },
+    {
+      "id": "claude-opus-4-5",
+      "name": "Claude Opus 4.5",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 200000,
+      "maxTokens": 16384,
+      "cost": {
+        "input": 5,
+        "output": 25,
+        "cacheRead": 0.5,
+        "cacheWrite": 6.25
+      }
+    },
+    {
+      "id": "claude-opus-4-6",
+      "name": "Claude Opus 4.6",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 16384,
+      "cost": {
+        "input": 5,
+        "output": 25,
+        "cacheRead": 0.5,
+        "cacheWrite": 6.25
+      }
+    },
+    {
+      "id": "claude-opus-4-7",
+      "name": "Claude Opus 4.7",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 16384,
+      "cost": {
+        "input": 5,
+        "output": 25,
+        "cacheRead": 0.5,
+        "cacheWrite": 6.25
+      }
+    },
+    {
+      "id": "claude-opus-4-8",
+      "name": "Claude Opus 4.8",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 16384,
+      "cost": {
+        "input": 5,
+        "output": 25,
+        "cacheRead": 0.5,
+        "cacheWrite": 6.25
+      }
+    },
+    {
+      "id": "claude-opus-5",
+      "name": "Claude Opus 5",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 16384,
+      "cost": {
+        "input": 5,
+        "output": 25,
+        "cacheRead": 0.5,
+        "cacheWrite": 6.25
+      }
+    },
+    {
+      "id": "claude-sonnet-4-5",
+      "name": "Claude Sonnet 4.5",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 200000,
+      "maxTokens": 16384,
+      "cost": {
+        "input": 3,
+        "output": 15,
+        "cacheRead": 0.3,
+        "cacheWrite": 3.75
+      }
+    },
+    {
+      "id": "claude-sonnet-4-6",
+      "name": "Claude Sonnet 4.6",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 16384,
+      "cost": {
+        "input": 3,
+        "output": 15,
+        "cacheRead": 0.3,
+        "cacheWrite": 3.75
+      }
+    },
+    {
+      "id": "claude-sonnet-5",
+      "name": "Claude Sonnet 5",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 16384,
+      "cost": {
+        "input": 2,
+        "output": 10,
+        "cacheRead": 0.2,
+        "cacheWrite": 2.5
+      }
+    },
+    {
+      "id": "openai-gpt-4.1",
+      "name": "GPT-4.1",
+      "reasoning": false,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 128000,
+      "maxTokens": 16384,
+      "cost": {
+        "input": 2,
+        "output": 8,
+        "cacheRead": 0.5,
+        "cacheWrite": 0
+      },
+      "api": "openai-completions",
+      "baseUrl": "https://snowflake-account.invalid/api/v2/cortex/v1"
+    },
+    {
+      "id": "openai-gpt-5",
+      "name": "GPT-5",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 272000,
+      "maxTokens": 16384,
+      "cost": {
+        "input": 1.25,
+        "output": 10,
+        "cacheRead": 0.13,
+        "cacheWrite": 0
+      },
+      "api": "openai-completions",
+      "baseUrl": "https://snowflake-account.invalid/api/v2/cortex/v1"
+    },
+    {
+      "id": "openai-gpt-5-mini",
+      "name": "GPT-5 Mini",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 272000,
+      "maxTokens": 16384,
+      "cost": {
+        "input": 0.25,
+        "output": 2,
+        "cacheRead": 0.03,
+        "cacheWrite": 0
+      },
+      "api": "openai-completions",
+      "baseUrl": "https://snowflake-account.invalid/api/v2/cortex/v1"
+    },
+    {
+      "id": "openai-gpt-5-nano",
+      "name": "GPT-5 Nano",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 272000,
+      "maxTokens": 16384,
+      "cost": {
+        "input": 0.06,
+        "output": 0.44,
+        "cacheRead": 0.01,
+        "cacheWrite": 0
+      },
+      "api": "openai-completions",
+      "baseUrl": "https://snowflake-account.invalid/api/v2/cortex/v1"
+    },
+    {
+      "id": "openai-gpt-5.1",
+      "name": "GPT-5.1",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 272000,
+      "maxTokens": 16384,
+      "cost": {
+        "input": 1.25,
+        "output": 10,
+        "cacheRead": 0.13,
+        "cacheWrite": 0
+      },
+      "api": "openai-completions",
+      "baseUrl": "https://snowflake-account.invalid/api/v2/cortex/v1"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": "alibaba-coding-plan",
+  "name": "Alibaba Coding Plan",
+  "login": {
+    "type": "api-key",
+    "prompt": "Dán Alibaba Coding Plan API key",
+    "validate": {
+      "kind": "chat-completions",
+      "model": "qwen3.7-plus"
+    }
+  }
+}

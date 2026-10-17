@@ -1,0 +1,14 @@
+{
+  "id": "commandcode",
+  "name": "Command Code",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://commandcode.ai/studio",
+    "prompt": "Dán Command Code API key",
+    "placeholder": "user_...",
+    "validate": {
+      "kind": "url",
+      "url": "https://api.commandcode.ai/alpha/whoami"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "id": "wafer-serverless",
+  "name": "Wafer Serverless (pay-as-you-go)",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://app.wafer.ai/usage",
+    "prompt": "Dán Wafer Serverless (pay-as-you-go) API key",
+    "placeholder": "wfr_...",
+    "validate": {
+      "kind": "url",
+      "url": "https://pass.wafer.ai/v1/models"
+    }
+  }
+}

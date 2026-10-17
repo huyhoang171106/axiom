@@ -1,0 +1,37 @@
+{
+  "id": "amazon-bedrock",
+  "name": "Amazon Bedrock",
+  "login": {
+    "type": "cloud-fields",
+    "fields": [
+      {
+        "name": "AWS_BEARER_TOKEN_BEDROCK",
+        "prompt": "Bedrock API key (bearer token; skip to use access keys)",
+        "secret": true,
+        "optional": true
+      },
+      {
+        "name": "AWS_ACCESS_KEY_ID",
+        "prompt": "AWS access key ID",
+        "optional": true
+      },
+      {
+        "name": "AWS_SECRET_ACCESS_KEY",
+        "prompt": "AWS secret access key",
+        "secret": true,
+        "optional": true
+      },
+      {
+        "name": "AWS_SESSION_TOKEN",
+        "prompt": "AWS session token",
+        "secret": true,
+        "optional": true
+      },
+      {
+        "name": "AWS_REGION",
+        "prompt": "AWS region, e.g. us-east-1",
+        "optional": true
+      }
+    ]
+  }
+}

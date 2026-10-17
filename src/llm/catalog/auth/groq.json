@@ -1,0 +1,12 @@
+{
+  "id": "groq",
+  "name": "Groq",
+  "login": {
+    "type": "api-key",
+    "prompt": "Dán Groq API key",
+    "validate": {
+      "kind": "chat-completions",
+      "model": "openai/gpt-oss-120b"
+    }
+  }
+}

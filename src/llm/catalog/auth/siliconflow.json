@@ -1,0 +1,14 @@
+{
+  "id": "siliconflow",
+  "name": "SiliconFlow",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://cloud.siliconflow.com/account/ak",
+    "prompt": "Dán SiliconFlow API key",
+    "placeholder": "sk-...",
+    "validate": {
+      "kind": "url",
+      "url": "https://api.siliconflow.com/v1/models"
+    }
+  }
+}

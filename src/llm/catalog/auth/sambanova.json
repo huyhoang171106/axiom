@@ -1,0 +1,14 @@
+{
+  "id": "sambanova",
+  "name": "SambaNova",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://cloud.sambanova.ai/apis",
+    "prompt": "Dán SambaNova API key",
+    "placeholder": "...",
+    "validate": {
+      "kind": "url",
+      "url": "https://api.sambanova.ai/v1/models"
+    }
+  }
+}
