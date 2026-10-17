@@ -1,0 +1,7 @@
+{
+  "id": "amazon-bedrock",
+  "name": "Amazon Bedrock",
+  "login": {
+    "type": "cloud-fields"
+  }
+}

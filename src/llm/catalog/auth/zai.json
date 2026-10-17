@@ -1,0 +1,15 @@
+{
+  "id": "zai",
+  "name": "Z.AI (GLM Coding Plan)",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://z.ai/manage-apikey/apikey-list",
+    "prompt": "Dán Z.AI (GLM Coding Plan) API key",
+    "placeholder": "sk-...",
+    "validate": {
+      "kind": "chat-completions",
+      "model": "glm-5.2",
+      "baseUrl": "https://api.z.ai/api/coding/paas/v4"
+    }
+  }
+}

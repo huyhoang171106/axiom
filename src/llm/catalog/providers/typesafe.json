@@ -1,0 +1,17 @@
+{
+  "id": "typesafe",
+  "defaultModel": "jev-1.14.0",
+  "env": [
+    "TYPESAFE_API_KEY"
+  ],
+  "api": "typesafe",
+  "baseUrl": "https://api.typesafe.ai",
+  "available": false,
+  "reason": "không dùng cho chat",
+  "seed": [
+    {
+      "id": "jev-1.14.0",
+      "name": "jev-1.14.0"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "id": "singularityapi-tech",
+  "defaultModel": "deepseek-ai/DeepSeek-V4.1-Flash",
+  "env": [
+    "SINGULARITYAPI_TECH_API_KEY"
+  ],
+  "api": "openai-completions",
+  "baseUrl": "https://api.singularityapi.tech/v1",
+  "discovery": {
+    "allowUnauthenticated": false
+  },
+  "seed": [
+    {
+      "id": "deepseek-ai/DeepSeek-V4.1-Flash",
+      "name": "deepseek-ai/DeepSeek-V4.1-Flash"
+    }
+  ]
+}

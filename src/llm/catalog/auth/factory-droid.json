@@ -1,0 +1,7 @@
+{
+  "id": "factory-droid",
+  "name": "Factory Droid",
+  "login": {
+    "type": "device-code"
+  }
+}

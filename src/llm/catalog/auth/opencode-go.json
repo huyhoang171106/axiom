@@ -1,0 +1,14 @@
+{
+  "id": "opencode-go",
+  "name": "OpenCode Go",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://opencode.ai/auth",
+    "prompt": "Dán OpenCode Go API key",
+    "placeholder": "sk-...",
+    "validate": {
+      "kind": "chat-completions",
+      "model": "kimi-k2.7-code"
+    }
+  }
+}

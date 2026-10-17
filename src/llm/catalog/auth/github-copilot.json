@@ -1,0 +1,7 @@
+{
+  "id": "github-copilot",
+  "name": "GitHub Copilot",
+  "login": {
+    "type": "hook"
+  }
+}

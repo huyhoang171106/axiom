@@ -1,0 +1,7 @@
+{
+  "id": "snowflake",
+  "name": "Snowflake Cortex",
+  "login": {
+    "type": "cloud-fields"
+  }
+}

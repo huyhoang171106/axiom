@@ -1,0 +1,19 @@
+{
+  "id": "vllm",
+  "defaultModel": "gpt-oss-20b",
+  "env": [
+    "VLLM_API_KEY"
+  ],
+  "api": "openai-completions",
+  "baseUrl": "http://127.0.0.1:8000/v1",
+  "auth": "none",
+  "discovery": {
+    "allowUnauthenticated": true
+  },
+  "seed": [
+    {
+      "id": "gpt-oss-20b",
+      "name": "gpt-oss-20b"
+    }
+  ]
+}

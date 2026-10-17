@@ -1,0 +1,12 @@
+{
+  "id": "mistral",
+  "name": "Mistral",
+  "login": {
+    "type": "api-key",
+    "prompt": "Dán Mistral API key",
+    "validate": {
+      "kind": "chat-completions",
+      "model": "devstral-medium-latest"
+    }
+  }
+}

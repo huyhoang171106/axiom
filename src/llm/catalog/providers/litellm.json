@@ -1,0 +1,19 @@
+{
+  "id": "litellm",
+  "defaultModel": "claude-opus-5-5",
+  "env": [
+    "LITELLM_API_KEY"
+  ],
+  "api": "openai-completions",
+  "baseUrl": "http://localhost:4000/v1",
+  "auth": "none",
+  "discovery": {
+    "allowUnauthenticated": true
+  },
+  "seed": [
+    {
+      "id": "claude-opus-5-5",
+      "name": "claude-opus-5-5"
+    }
+  ]
+}

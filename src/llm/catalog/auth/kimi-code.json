@@ -1,0 +1,7 @@
+{
+  "id": "kimi-code",
+  "name": "Kimi Code",
+  "login": {
+    "type": "device-code"
+  }
+}

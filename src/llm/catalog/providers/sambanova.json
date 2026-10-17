@@ -1,0 +1,29 @@
+{
+  "id": "sambanova",
+  "defaultModel": "gpt-oss-120b",
+  "env": [
+    "SAMBANOVA_API_KEY"
+  ],
+  "api": "openai-completions",
+  "baseUrl": "https://api.sambanova.ai/v1",
+  "discovery": {
+    "allowUnauthenticated": false
+  },
+  "seed": [
+    {
+      "id": "gpt-oss-120b",
+      "name": "GPT OSS 120B",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 131072,
+      "cost": {
+        "input": 0.22,
+        "output": 0.59,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    }
+  ]
+}

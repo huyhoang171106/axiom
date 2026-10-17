@@ -1,0 +1,7 @@
+{
+  "id": "openai-codex-device",
+  "name": "ChatGPT Plus/Pro (Codex, headless/device)",
+  "login": {
+    "type": "hook"
+  }
+}

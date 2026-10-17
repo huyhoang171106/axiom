@@ -1,0 +1,14 @@
+{
+  "id": "sakana",
+  "name": "Sakana AI",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://console.sakana.ai/api-keys",
+    "prompt": "Dán Sakana AI API key",
+    "placeholder": "sk-...",
+    "validate": {
+      "kind": "url",
+      "url": "https://api.sakana.ai/v1/models"
+    }
+  }
+}

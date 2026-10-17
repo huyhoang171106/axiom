@@ -1,0 +1,7 @@
+{
+  "id": "xai-oauth",
+  "name": "xAI Grok OAuth (SuperGrok or X Premium+)",
+  "login": {
+    "type": "device-code"
+  }
+}

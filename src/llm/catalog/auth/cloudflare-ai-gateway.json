@@ -1,0 +1,7 @@
+{
+  "id": "cloudflare-ai-gateway",
+  "name": "Cloudflare AI Gateway",
+  "login": {
+    "type": "cloud-fields"
+  }
+}

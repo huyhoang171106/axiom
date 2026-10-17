@@ -1,0 +1,15 @@
+{
+  "id": "umans",
+  "name": "Umans AI Coding Plan",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://app.umans.ai/billing",
+    "prompt": "Dán Umans AI Coding Plan API key",
+    "placeholder": "sk-...",
+    "validate": {
+      "kind": "anthropic-messages",
+      "model": "umans-coder",
+      "baseUrl": "https://api.code.umans.ai"
+    }
+  }
+}

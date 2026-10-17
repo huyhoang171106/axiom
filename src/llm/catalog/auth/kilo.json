@@ -1,0 +1,12 @@
+{
+  "id": "kilo",
+  "name": "Kilo Gateway",
+  "login": {
+    "type": "api-key",
+    "prompt": "Dán Kilo Gateway API key",
+    "validate": {
+      "kind": "chat-completions",
+      "model": "anthropic/claude-opus-5"
+    }
+  }
+}

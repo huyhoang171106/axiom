@@ -1,0 +1,501 @@
+{
+  "id": "ollama-cloud",
+  "defaultModel": "gpt-oss:120b",
+  "env": [
+    "OLLAMA_CLOUD_API_KEY"
+  ],
+  "api": "ollama-chat",
+  "baseUrl": "https://ollama.com",
+  "seed": [
+    {
+      "id": "gpt-oss:120b",
+      "name": "gpt-oss:120b",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 131072,
+      "maxTokens": 32768,
+      "cost": {
+        "input": 0.15,
+        "output": 0.6,
+        "cacheRead": 0.014,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "beam",
+      "name": "Beam 1.0 501B A23B",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 1048576,
+      "maxTokens": 131072,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "clef:27b",
+      "name": "clef:27b",
+      "reasoning": false,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 65536,
+      "maxTokens": 8192,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "cogito-2.1:671b",
+      "name": "cogito-2.1:671b",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 163840,
+      "maxTokens": 32000,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "deepseek-v3.1:671b",
+      "name": "deepseek-v3.1:671b",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 163840,
+      "maxTokens": 163840,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "deepseek-v3.2",
+      "name": "DeepSeek V3.2",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 163840,
+      "maxTokens": 65536,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "deepseek-v4-flash",
+      "name": "deepseek-v4-flash",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "cost": {
+        "input": 0.22,
+        "output": 0.66,
+        "cacheRead": 0.007,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "deepseek-v4-flash:0731",
+      "name": "DeepSeek V4 Flash 0731",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "cost": {
+        "input": 0.22,
+        "output": 0.66,
+        "cacheRead": 0.007,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "deepseek-v4-flash:preview",
+      "name": "deepseek-v4-flash:preview",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "deepseek-v4-pro",
+      "name": "deepseek-v4-pro",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "cost": {
+        "input": 0.66,
+        "output": 1.98,
+        "cacheRead": 0.022,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "deepseek-v4-pro:0813",
+      "name": "DeepSeek V4 Pro 0813",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "cost": {
+        "input": 0.66,
+        "output": 1.98,
+        "cacheRead": 0.022,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "deepseek-v4-pro:preview",
+      "name": "deepseek-v4-pro:preview",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 524288,
+      "maxTokens": 65536,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "deepseek-v4.1-flash",
+      "name": "DeepSeek V4.1 Flash",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1048576,
+      "maxTokens": 384000,
+      "cost": {
+        "input": 0.15,
+        "output": 0.6,
+        "cacheRead": 0.003,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "deepseek-v4.1-flash:1017",
+      "name": "DeepSeek V4.1 Flash 1017",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1048576,
+      "maxTokens": 384000,
+      "cost": {
+        "input": 0.15,
+        "output": 0.6,
+        "cacheRead": 0.003,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "devstral-2:123b",
+      "name": "devstral-2:123b",
+      "reasoning": false,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 262144,
+      "maxTokens": 262144,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "devstral-small-2:24b",
+      "name": "devstral-small-2:24b",
+      "reasoning": false,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 262144,
+      "maxTokens": 262144,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "gemini-3-flash-preview",
+      "name": "Gemini 3 Flash Preview",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "gemma3:12b",
+      "name": "gemma3:12b",
+      "reasoning": false,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 131072,
+      "maxTokens": 8192,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "gemma3:27b",
+      "name": "gemma3:27b",
+      "reasoning": false,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 131072,
+      "maxTokens": 8192,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "gemma3:4b",
+      "name": "gemma3:4b",
+      "reasoning": false,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 131072,
+      "maxTokens": 8192,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "gemma4:31b",
+      "name": "gemma4:31b",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 262144,
+      "maxTokens": 262144,
+      "cost": {
+        "input": 0.14,
+        "output": 0.4,
+        "cacheRead": 0.05,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "glm-4.6",
+      "name": "GLM-4.6",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 202752,
+      "maxTokens": 131072,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "glm-4.7",
+      "name": "GLM-4.7",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 202752,
+      "maxTokens": 131072,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "glm-5",
+      "name": "GLM-5",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 202752,
+      "maxTokens": 131072,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "glm-5.1",
+      "name": "glm-5.1",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 202752,
+      "maxTokens": 131072,
+      "cost": {
+        "input": 1,
+        "output": 3.2,
+        "cacheRead": 0.2,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "glm-5.2",
+      "name": "GLM-5.2",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 976000,
+      "maxTokens": 131072,
+      "cost": {
+        "input": 1.4,
+        "output": 4.4,
+        "cacheRead": 0.26,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "glm-5.3",
+      "name": "GLM-5.3",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 1048576,
+      "maxTokens": 131072,
+      "cost": {
+        "input": 1.4,
+        "output": 4.4,
+        "cacheRead": 0.26,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "glm-5.3-flash",
+      "name": "GLM-5.3-Flash",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 1000000,
+      "maxTokens": 131072,
+      "cost": {
+        "input": 0.15,
+        "output": 0.5,
+        "cacheRead": 0.03,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "gpt-oss:20b",
+      "name": "gpt-oss:20b",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 131072,
+      "maxTokens": 32768,
+      "cost": {
+        "input": 0.07,
+        "output": 0.3,
+        "cacheRead": 0.035,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "kimi-k2-thinking",
+      "name": "Kimi K2 Thinking",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 262144,
+      "maxTokens": 262144,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    }
+  ]
+}

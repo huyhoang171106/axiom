@@ -1,0 +1,14 @@
+{
+  "id": "fireworks",
+  "name": "Fireworks",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://app.fireworks.ai/settings/users/api-keys",
+    "prompt": "Dán Fireworks API key",
+    "placeholder": "fw_...",
+    "validate": {
+      "kind": "url",
+      "url": "https://api.fireworks.ai/v1/accounts/fireworks/models?filter=supports_serverless%3Dtrue&pageSize=1"
+    }
+  }
+}

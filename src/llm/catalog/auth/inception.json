@@ -1,0 +1,15 @@
+{
+  "id": "inception",
+  "name": "Inception",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://platform.inceptionlabs.ai/dashboard/api-keys",
+    "prompt": "Dán Inception API key",
+    "placeholder": "sk_...",
+    "validate": {
+      "kind": "chat-completions",
+      "model": "mercury-3",
+      "baseUrl": "https://api.inceptionlabs.ai/v1"
+    }
+  }
+}

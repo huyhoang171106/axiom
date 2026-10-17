@@ -1,0 +1,7 @@
+{
+  "id": "google-vertex",
+  "name": "Google Vertex AI",
+  "login": {
+    "type": "cloud-fields"
+  }
+}

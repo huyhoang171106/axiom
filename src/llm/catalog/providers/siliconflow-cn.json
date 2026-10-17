@@ -1,0 +1,18 @@
+{
+  "id": "siliconflow-cn",
+  "defaultModel": "deepseek-ai/DeepSeek-V4-Pro",
+  "env": [
+    "SILICONFLOW_CN_API_KEY"
+  ],
+  "api": "openai-completions",
+  "baseUrl": "https://api.siliconflow.cn/v1",
+  "discovery": {
+    "allowUnauthenticated": false
+  },
+  "seed": [
+    {
+      "id": "deepseek-ai/DeepSeek-V4-Pro",
+      "name": "deepseek-ai/DeepSeek-V4-Pro"
+    }
+  ]
+}

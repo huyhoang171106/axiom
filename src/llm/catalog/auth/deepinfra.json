@@ -1,0 +1,15 @@
+{
+  "id": "deepinfra",
+  "name": "DeepInfra",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://deepinfra.com/dash/api_keys",
+    "prompt": "Dán DeepInfra API key",
+    "placeholder": "...",
+    "validate": {
+      "kind": "chat-completions",
+      "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+      "baseUrl": "https://api.deepinfra.com/v1/openai"
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "id": "azure",
+  "name": "Azure OpenAI",
+  "login": {
+    "type": "cloud-fields"
+  }
+}
