@@ -2,6 +2,22 @@
   "id": "cloudflare-ai-gateway",
   "name": "Cloudflare AI Gateway",
   "login": {
-    "type": "cloud-fields"
+    "type": "cloud-fields",
+    "hook": "cloudflare-ai-gateway",
+    "fields": [
+      {
+        "name": "CLOUDFLARE_AI_GATEWAY_API_KEY",
+        "prompt": "AI Gateway token (Run permission)",
+        "secret": true
+      },
+      {
+        "name": "CLOUDFLARE_ACCOUNT_ID",
+        "prompt": "Cloudflare account ID"
+      },
+      {
+        "name": "CLOUDFLARE_GATEWAY_ID",
+        "prompt": "Gateway ID"
+      }
+    ]
   }
 }

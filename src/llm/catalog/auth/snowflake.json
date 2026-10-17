@@ -2,6 +2,18 @@
   "id": "snowflake",
   "name": "Snowflake Cortex",
   "login": {
-    "type": "cloud-fields"
+    "type": "cloud-fields",
+    "hook": "snowflake",
+    "fields": [
+      {
+        "name": "SNOWFLAKE_ACCOUNT",
+        "prompt": "Account identifier (orgname-accountname) or account URL"
+      },
+      {
+        "name": "SNOWFLAKE_PAT",
+        "prompt": "Programmatic access token (PAT)",
+        "secret": true
+      }
+    ]
   }
 }

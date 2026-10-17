@@ -13,7 +13,7 @@ export type CredentialSource = 'cli' | 'models.json' | 'oauth' | 'login' | 'env'
 
 const COMMAND_TIMEOUT_MS = 5000;
 
-const loginFieldSchema = z.object({
+export const loginFieldSchema = z.object({
   name: z.string().regex(/^[A-Z][A-Z0-9_]*$/),
   prompt: z.string().min(1),
   secret: z.boolean().optional(),

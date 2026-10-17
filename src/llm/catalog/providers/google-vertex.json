@@ -3,7 +3,8 @@
   "defaultModel": "gemini-3.1-pro-preview",
   "env": [
     "GOOGLE_CLOUD_API_KEY",
-    "GOOGLE_APPLICATION_CREDENTIALS"
+    "GOOGLE_APPLICATION_CREDENTIALS",
+    "GOOGLE_CLOUD_PROJECT"
   ],
   "api": "google-vertex",
   "baseUrl": "https://{location}-aiplatform.googleapis.com",

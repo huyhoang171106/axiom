@@ -2,6 +2,30 @@
   "id": "google-vertex",
   "name": "Google Vertex AI",
   "login": {
-    "type": "cloud-fields"
+    "type": "cloud-fields",
+    "hook": "google-vertex",
+    "fields": [
+      {
+        "name": "GOOGLE_CLOUD_API_KEY",
+        "prompt": "Vertex AI API key (skip to use Application Default Credentials)",
+        "secret": true,
+        "optional": true
+      },
+      {
+        "name": "GOOGLE_APPLICATION_CREDENTIALS",
+        "prompt": "Path to a service account JSON file (skip for gcloud ADC)",
+        "optional": true
+      },
+      {
+        "name": "GOOGLE_CLOUD_PROJECT",
+        "prompt": "Google Cloud project ID",
+        "optional": true
+      },
+      {
+        "name": "GOOGLE_CLOUD_LOCATION",
+        "prompt": "Location, e.g. us-central1 (skip for global)",
+        "optional": true
+      }
+    ]
   }
 }

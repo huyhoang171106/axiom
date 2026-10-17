@@ -2,6 +2,8 @@
 
 import type { AxiomConfig, ModelRole } from '../core/types.js';
 import { MODEL_ROLES } from '../core/types.js';
+import { registerSecret } from '../core/secrets.js';
+import { prepareCloud } from './auth/engines/cloud-fields.js';
 import { resolveCredential } from './auth/resolve.js';
 import type { BaseLLMProvider } from './base-provider.js';
 import { loadCatalog, type Catalog, type ModelInfo, type ProviderEntry } from './catalog/index.js';
@@ -132,5 +134,8 @@ export async function createProviderFor(info: ModelInfo, opts?: { cliKey?: strin
     const hint = entry.env[0] ? ` or set ${entry.env[0]}` : '';
     throw new ProviderError(`${info.provider} is not connected. Run /login ${info.provider}${hint}.`, { provider: info.provider, model: info.id, code: 'missing_credentials' });
   }
-  return factory(info, credential?.value);
+  if (entry?.login?.type !== 'cloud-fields') return factory(info, credential?.value);
+  const prepared = await prepareCloud(entry, info, credential?.value);
+  if (prepared.credential) registerSecret(prepared.credential);
+  return factory(prepared.info, prepared.credential);
 }
