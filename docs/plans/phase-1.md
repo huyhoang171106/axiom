@@ -52,7 +52,7 @@ Thêm của nhóm: Axiom dùng được hằng ngày ("Bản dùng được") v�
 Quy tắc:
 - **Chỉ sửa file trong làn của mình.** File chung do D0 tạo; sau đó ai cũng chỉ điền thân file mình được giao. Phải sửa file chung thì chỉ thêm dòng (`CONVENTIONS.md` mục Git).
 - **Chữ ký trong guide và bảng D0 là hợp đồng.** Không ai đổi. Muốn đổi: ghi "Nhật ký quyết định" trong `DESIGN.md` và báo người dùng.
-- **Branch và PR (bắt buộc):** mỗi task một branch từ `main` (`b/b2-resolver`). Tự mở PR với auto-merge, CI xanh thì GitHub tự merge (squash), không chờ người review. Lệnh: `CONVENTIONS.md` mục Git.
+- **Branch và PR (bắt buộc):** mỗi task một branch từ `main` (`b/b2-resolver`). Tự mở PR với auto-merge, CI xanh thì GitHub tự merge (merge commit, giữ nguyên lịch sử commit), không chờ người review. Lệnh: `CONVENTIONS.md` mục Git.
 - Mỗi commit: `npm run lint && npm test` pass.
 
 ## D0 tạo sẵn
