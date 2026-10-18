@@ -95,8 +95,17 @@ export function passesThresholds(uc: string, summary: EvalSummary, useMock: bool
 export function hasProvider(config: AxiomConfig, info: ModelInfo, catalog: Catalog): boolean {
   if (config.disabledProviders?.includes(info.provider) || (config.enabledProviders && !config.enabledProviders.includes(info.provider))) return false;
   if (config.providers[info.provider]?.apiKey) return true;
+  const catalogProvider = catalog.providers().find((provider) => provider.id === info.provider);
+  if (catalogProvider) {
+    if (catalogProvider.auth === 'none') {
+      const selected = config.activeProvider === info.provider ||
+        (!!config.defaultModel && (config.defaultModel === info.id || config.defaultModel.startsWith(`${info.provider}/`))) ||
+        Object.values(config.modelRoles ?? {}).some((value) => value?.split(',').some((part) => part.trim().startsWith(`${info.provider}/`)));
+      if (!selected && !config.providers[info.provider]?.baseUrl) return false;
+    }
+    return catalog.isAvailable(info.provider);
+  }
   // B1/B2 còn là stub; dùng cấu hình hiện tại khi catalog chưa có provider.
-  if (catalog.providers().some((provider) => provider.id === info.provider)) return catalog.isAvailable(info.provider);
   const envName = `${info.provider.replace(/-/g, '_').toUpperCase()}_API_KEY`;
   const baseUrl = config.providers[info.provider]?.baseUrl ?? info.baseUrl;
   return !!process.env[envName] || info.provider === 'ollama' || /^https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::|\/|$)/i.test(baseUrl);

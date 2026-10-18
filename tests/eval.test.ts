@@ -98,7 +98,8 @@ test('availability is based on the selected provider and respects disabled provi
   assert.equal(hasProvider(config, info, catalog), false);
   assert.equal(hasProvider({ ...config, providers: { anthropic: { apiKey: 'configured' } } }, info, catalog), true);
   assert.equal(hasProvider({ ...config, providers: { anthropic: { apiKey: 'configured' } }, disabledProviders: ['anthropic'] }, info, catalog), false);
-  assert.equal(hasProvider(config, { ...info, provider: 'ollama' }, catalog), true);
+  assert.equal(hasProvider(config, { ...info, provider: 'ollama' }, catalog), false);
+  assert.equal(hasProvider({ ...config, defaultModel: 'ollama/gpt-oss:20b' }, { ...info, provider: 'ollama' }, catalog), true);
   assert.equal(hasProvider({ ...config, providers: { custom: { baseUrl: 'http://127.0.0.1:1234/v1' } } }, { ...info, provider: 'custom' }, catalog), true);
   const oldKey = process.env.OPENROUTER_API_KEY;
   process.env.OPENROUTER_API_KEY = 'placeholder';
