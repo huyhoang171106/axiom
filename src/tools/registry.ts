@@ -1,5 +1,6 @@
 // src/tools/registry.ts - ToolRegistry for managing and executing deterministic tools
 import crypto from 'node:crypto';
+import { redact } from '../core/secrets.js';
 import type { ToolDefinition, ToolResult } from '../core/types.js';
 import { BaseTool, type ToolExecutionContext, type ToolSummarizer } from './base-tool.js';
 import { BashTool } from './bash.js';
@@ -104,7 +105,8 @@ export class ToolRegistry {
       policy = gate.policy;
       if (gate.refusal) throw new Error(gate.refusal);
       args = gate.args;
-      const output = await tool.execute(args, context as ToolExecutionContext);
+      // Tool output goes to the model and the trace; a key a tool happened to print must not travel with it.
+      const output = redact(await tool.execute(args, context as ToolExecutionContext));
       const durationMs = Date.now() - startTime;
 
       return {
@@ -120,7 +122,8 @@ export class ToolRegistry {
       };
     } catch (err: unknown) {
       const durationMs = Date.now() - startTime;
-      const errorMessage = err instanceof Error ? err.message : String(err);
+      // A failed command carries its output in the error message too.
+      const errorMessage = redact(err instanceof Error ? err.message : String(err));
 
       return {
         toolCallId,
