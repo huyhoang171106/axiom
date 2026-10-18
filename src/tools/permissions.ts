@@ -217,6 +217,7 @@ export function isNonPublicHost(hostname: string): boolean {
 const PATH_TOOLS: Record<string, string> = {
   read_file: 'reads',
   list_dir: 'lists',
+  search_code: 'searches',
   search: 'searches',
   glob: 'globs',
   find: 'searches',
