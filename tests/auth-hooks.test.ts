@@ -8,6 +8,14 @@ import * as codex from '../src/llm/auth/hooks/openai-codex-device.js';
 import * as copilot from '../src/llm/auth/hooks/github-copilot.js';
 import * as cursor from '../src/llm/auth/hooks/cursor.js';
 import { startFakeServer, type SeenRequest } from './fake-server.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { loginCommand } from '../src/commands/login.js';
+import type { CommandContext } from '../src/commands/types.js';
+import { LOGIN_ENGINES } from '../src/llm/auth/engines/index.js';
+import { resolveCredential } from '../src/llm/auth/resolve.js';
+import { readAuth, saveCredential } from '../src/llm/auth/store.js';
 
 function fakeUi(answers: string[] = []) {
   const printed: string[] = [];
@@ -380,4 +388,43 @@ test('hook engine validates names and loads hooks lazily', async () => {
   const hook = await loadHook('cursor');
   assert.equal(typeof hook.login, 'function');
   assert.equal(typeof hook.refresh, 'function');
+});
+
+test('Codex device login stores credentials under the shared Codex provider', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-a7-'));
+  const previousHome = process.env.AXIOM_HOME;
+  const original = LOGIN_ENGINES.hook;
+  process.env.AXIOM_HOME = home;
+  LOGIN_ENGINES.hook = async () => ({ type: 'oauth', access: 'device-access', expires: Date.now() + 3600000 });
+  try {
+    await loginCommand.run('openai-codex-device', { ui: fakeUi().ui } as CommandContext);
+    assert.equal(readAuth(home)['openai-codex-device'], undefined);
+    assert.equal((await resolveCredential('openai-codex', { home, env: {} }))?.value, 'device-access');
+  } finally {
+    LOGIN_ENGINES.hook = original;
+    if (previousHome === undefined) delete process.env.AXIOM_HOME;
+    else process.env.AXIOM_HOME = previousHome;
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('credential resolution refreshes and saves Cursor and shared Codex hook tokens', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-a7-'));
+  const originalFetch = globalThis.fetch;
+  const urls: string[] = [];
+  globalThis.fetch = async (input) => {
+    urls.push(String(input));
+    return new Response(JSON.stringify({ access_token: 'new-token', refresh_token: 'new-refresh', expires_in: 3600 }), { status: 200 });
+  };
+  try {
+    for (const id of ['cursor', 'openai-codex']) {
+      saveCredential(id, { type: 'oauth', access: 'old-token', refresh: 'old-refresh', expires: Date.now() - 1 }, home);
+      assert.equal((await resolveCredential(id, { home, env: {} }))?.value, 'new-token');
+      assert.equal((readAuth(home)[id] as { refresh: string }).refresh, 'new-refresh');
+    }
+    assert.deepEqual(urls, ['https://api2.cursor.sh/oauth/token', 'https://auth.openai.com/oauth/token']);
+  } finally {
+    globalThis.fetch = originalFetch;
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
