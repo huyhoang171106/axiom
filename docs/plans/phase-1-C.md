@@ -4,7 +4,7 @@
 
 | # | Việc | Đầu ra kiểm được | Trạng thái |
 |---|---|---|---|
-| C1 | Làm được khi D0 chưa xong. Chọn và nhập target repo: Python 1k–10k LOC, có pytest, license MIT/BSD (ứng viên `tinydb`, `humanize`; đo `cloc`) | `workspace/<repo>`, tên/commit/license trong README | todo |
+| C1 | Làm được khi D0 chưa xong. Chọn và nhập target repo: Python 1k–10k LOC, có pytest, license MIT/BSD (ứng viên `tinydb`, `humanize`; đo `cloc`) | `workspace/<repo>`, tên/commit/license trong README | done |
 | C2 | Làm được khi D0 chưa xong. Tool `list_dir`, `search_code` (bọc `rg`, giới hạn kết quả), đăng ký trong `ToolRegistry` | `src/tools/list-dir.ts`, `src/tools/search-code.ts` + test | todo |
 | C3 | Điền `src/core/secrets.ts`; `spawn` trong `bash.ts` nhận `env: scrubEnv(process.env)` (giữ `PATH`, `HOME`, `LANG`, `TERM`); bỏ `env`/`printenv` khỏi `READ_ONLY_COMMANDS`; `executeTool` gọi `redact(output)` (bước 1) | Test: `printenv`, `echo $OPENROUTER_API_KEY` không lộ key | todo |
 | C4 | Seeded bugs ≥ 5/10 trên target repo: script tạo lỗi + issue mô tả triệu chứng + test giấu ngoài workspace | `evals/issues/bug-01..05/` | todo |
