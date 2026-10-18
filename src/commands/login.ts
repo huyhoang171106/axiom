@@ -54,7 +54,8 @@ export const loginCommand: Command = {
       return { kind: 'login', data: { provider: id, stored: false }, text };
     }
     const credential = await LOGIN_ENGINES[provider.login.type](provider, ctx.ui);
-    saveCredential(id, credential);
+    const storeAs = typeof provider.login.storeAs === 'string' ? provider.login.storeAs : id;
+    saveCredential(storeAs, credential);
     return { kind: 'login', data: { provider: id, stored: true }, text: `Connected ${provider.name}. Pick a model with /model.` };
   },
 };

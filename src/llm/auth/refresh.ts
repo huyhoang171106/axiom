@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { axiomHome } from '../../core/paths.js';
 import type { ProviderEntry } from '../catalog/index.js';
 import type { Credential } from './engines/index.js';
+import { loadHook } from './engines/hook.js';
+import { loadCatalog } from '../catalog/index.js';
 import { removeCredential, saveCredential } from './store.js';
 
 type OAuthCredential = Extract<Credential, { type: 'oauth' }>;
@@ -87,6 +89,18 @@ function relogin(provider: ProviderEntry): Error {
 /** The credential itself when it is not close to expiry; otherwise a refreshed, saved one. */
 export async function refreshIfNeeded(provider: ProviderEntry, credential: OAuthCredential, home = axiomHome()): Promise<OAuthCredential> {
   if (credential.expires === undefined || credential.expires - Date.now() > REFRESH_MARGIN_MS) return credential;
+  const hookProvider = provider.login?.type === 'hook' ? provider : loadCatalog(home).providers().find(
+    (entry) => entry.login?.type === 'hook' && entry.login.storeAs === provider.id,
+  );
+  const hookConfig = z.object({ hook: z.string().min(1) }).safeParse(hookProvider?.refresh);
+  if (hookProvider && hookConfig.success && credential.refresh) {
+    const hook = await loadHook(hookConfig.data.hook);
+    if (!hook.refresh) throw new Error(`${hookProvider.id}: refresh hook is missing; run /login ${hookProvider.id} again.`);
+    const refreshed = await hook.refresh(credential, hookProvider);
+    if (refreshed.type !== 'oauth') throw new Error(`${hookProvider.id}: refresh hook returned a non-oauth credential.`);
+    saveCredential(provider.id, refreshed, home);
+    return refreshed;
+  }
   const config = refreshConfigSchema.safeParse(provider.refresh);
   if (!config.success || !credential.refresh) {
     if (credential.expires > Date.now()) return credential; // Still valid for a few minutes and nothing to refresh with.
