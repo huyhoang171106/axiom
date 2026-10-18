@@ -1,0 +1,1 @@
+"""Notes CLI evaluation fixture."""

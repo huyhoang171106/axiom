@@ -1,5 +1,5 @@
 {
   "id": "uc01-03-bug-reproducible",
-  "input": "Title: Unicode table headers break the pretty-printer\n\nReproduction (fails every time on Python 3.12):\n\n    from tinydb_demo.pretty import render_table\n    print(render_table([{'title': 'Tiếng Việt', 'count': 1}]))\n\nActual output misaligns the columns and leaves mojibake:\n\n    Ti\u1ebfng Vi\u1ec7t  ??\n    --------    --\n\nExpected: columns padded with display width (wcwidth), not len().\nStack: pretty.py:31 render_table -> pretty.py:57 _pad_header uses len(header).",
+  "input": "Title: Empty table crashes the pretty-printer\n\nReproduction: `render_table([])` raises:\n\nTraceback (most recent call last):\n  File \"example.py\", line 2, in <module>\n    print(render_table([]))\n  File \"tinydb_demo/pretty.py\", line 2, in render_table\n    headers = list(rows[0])\nIndexError: list index out of range\n\nExpected: an empty table produces an empty string.",
   "expected": { "type": "bug", "route": "fix" }
 }

@@ -2,6 +2,15 @@
   "id": "cursor",
   "name": "Cursor (Claude, GPT, etc.)",
   "login": {
-    "type": "hook"
+    "type": "hook",
+    "hook": "cursor",
+    "clientId": "KbZUR41cY7W6zRSdpSUJ7I7mLYBKOCmB",
+    "loginUrl": "https://cursor.com/loginDeepControl",
+    "pollUrl": "https://api2.cursor.sh/auth/poll",
+    "refreshUrl": "https://api2.cursor.sh/oauth/token",
+    "source": "https://github.com/can1357/oh-my-pi/blob/main/packages/ai/src/registry/oauth/cursor.ts"
+  },
+  "refresh": {
+    "hook": "cursor"
   }
 }

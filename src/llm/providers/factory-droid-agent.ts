@@ -1,8 +1,16 @@
-// src/llm/providers/factory-droid-agent.ts - `factory-droid-agent` wire (Factory Droid); stub until A6
+// src/llm/providers/factory-droid-agent.ts - `factory-droid-agent` wire (Factory Droid proxy)
+//
+// The proxy multiplexes several upstream protocols; Axiom routes every model through the
+// OpenAI-compatible Responses endpoint. Catalog base URLs are the bare host
+// (`https://api.factory.ai`, providers.md section 6), so the wire appends the route itself.
 
 import type { LLMProviderType } from '../../core/types.js';
 import type { ModelInfo } from '../catalog/index.js';
 import { BaseLLMProvider, type ChatParams, type ChatResult } from '../base-provider.js';
+import { buildResponsesBody, hasHeader, requestResponses } from './responses-shared.js';
+
+/** Client identity the Factory API expects on every wire (observed CLI headers). */
+const CLIENT_VERSION = '0.237.0';
 
 export class FactoryDroidAgentProvider extends BaseLLMProvider {
   readonly name: LLMProviderType;
@@ -15,8 +23,26 @@ export class FactoryDroidAgentProvider extends BaseLLMProvider {
     this.name = info.provider;
   }
 
-  // TODO(A6): implement the wire.
-  async chat(params: ChatParams): Promise<ChatResult> {
-    throw new Error(`${this.name}: wire factory-droid-agent is not implemented yet (A6)`);
+  async chat({ model, messages, tools, maxTokens, onToken, onThinking, signal }: ChatParams): Promise<ChatResult> {
+    const base = this.info.baseUrl.replace(/\/+$/, '');
+    return requestResponses({
+      url: `${base}/api/llm/o/v1/responses`,
+      headers: {
+        ...this.info.headers,
+        ...(this.credential && !hasHeader(this.info.headers, 'authorization') && { authorization: `Bearer ${this.credential}` }),
+        'x-client-version': CLIENT_VERSION,
+        'x-factory-client': 'cli',
+        accept: 'application/json',
+      },
+      // The native Factory CLI sends no temperature on this route (reference parity), so a
+      // caller-set temperature is dropped rather than forwarded.
+      body: buildResponsesBody(model, messages, tools, { maxTokens, allowTemperature: false }),
+      provider: this.name,
+      model,
+      info: this.info,
+      onToken,
+      onThinking,
+      signal,
+    });
   }
 }

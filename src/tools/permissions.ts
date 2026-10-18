@@ -1,6 +1,7 @@
 // src/tools/permissions.ts - Policy engine: decides allow / ask / deny for every tool call, in code, before it runs
 import fs from 'node:fs';
 import path from 'node:path';
+import { isBundledSkillFile } from './bundled-skills.js';
 
 export type Verdict = 'allow' | 'ask' | 'deny';
 export interface PolicyDecision {
@@ -228,7 +229,7 @@ function needsApproval(name: string, args: Record<string, unknown>, workspaceRoo
   const verb = PATH_TOOLS[name];
   if (verb) {
     const raw = typeof args.path === 'string' ? args.path.trim() : '';
-    if (raw && escapesWorkspace(raw, workspaceRoot)) {
+    if (raw && escapesWorkspace(raw, workspaceRoot) && !(name === 'read_file' && isBundledSkillFile(raw))) {
       return `${verb} outside the workspace (${path.resolve(workspaceRoot, raw)})`;
     }
     return null;
@@ -282,7 +283,7 @@ export function decide(name: string, args: Record<string, unknown>, workspaceRoo
   if (PATH_TOOLS[name]) {
     const raw = typeof args.path === 'string' ? args.path.trim() : '';
     if (raw && isSecretPath(raw)) return { verdict: 'deny', reason: `secret file (${raw})` };
-    if (raw && escapesWorkspace(raw, workspaceRoot)) {
+    if (raw && escapesWorkspace(raw, workspaceRoot) && !(name === 'read_file' && isBundledSkillFile(raw))) {
       return { verdict: 'deny', reason: `outside the workspace (${path.resolve(workspaceRoot, raw)})` };
     }
   }

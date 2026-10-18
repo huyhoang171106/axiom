@@ -2,6 +2,19 @@
   "id": "openai-codex-device",
   "name": "ChatGPT Plus/Pro (Codex, headless/device)",
   "login": {
-    "type": "hook"
+    "type": "hook",
+    "hook": "openai-codex-device",
+    "clientId": "app_EMoamEEZ73f0CkXaXp7hrann",
+    "scopes": "openid profile email offline_access api.connectors.read api.connectors.invoke",
+    "deviceUrl": "https://auth.openai.com/api/accounts/deviceauth/usercode",
+    "tokenUrl": "https://auth.openai.com/api/accounts/deviceauth/token",
+    "exchangeUrl": "https://auth.openai.com/oauth/token",
+    "redirectUri": "https://auth.openai.com/deviceauth/callback",
+    "verificationUrl": "https://auth.openai.com/codex/device",
+    "storeAs": "openai-codex",
+    "source": "https://github.com/can1357/oh-my-pi/blob/main/packages/ai/src/registry/oauth/openai-codex.ts"
+  },
+  "refresh": {
+    "hook": "openai-codex-device"
   }
 }

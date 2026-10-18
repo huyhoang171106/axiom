@@ -2,6 +2,23 @@
   "id": "github-copilot",
   "name": "GitHub Copilot",
   "login": {
-    "type": "hook"
+    "type": "hook",
+    "hook": "github-copilot",
+    "clientId": "Ov23li8tweQw6odWQebz",
+    "enterpriseClientId": "Ov23ctDVkRmgkPke0Mmm",
+    "scopes": "read:user",
+    "defaultOrigin": "https://github.com",
+    "deviceUrl": "{origin}/login/device/code",
+    "tokenUrl": "{origin}/login/oauth/access_token",
+    "verificationUrl": "{origin}/login/device",
+    "headers": {
+      "Accept": "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+      "User-Agent": "copilot-developer-action/0.0.1"
+    },
+    "source": "https://github.com/can1357/oh-my-pi/blob/main/packages/ai/src/registry/oauth/github-copilot.ts"
+  },
+  "refresh": {
+    "hook": "github-copilot"
   }
 }

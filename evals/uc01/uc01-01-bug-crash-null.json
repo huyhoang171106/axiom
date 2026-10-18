@@ -1,5 +1,5 @@
 {
   "id": "uc01-01-bug-crash-null",
-  "input": "Title: TypeError crashing the CLI when a note has no tags\n\nSteps:\n1. Create a note without the tags field: db.insert({'title': 'hello', 'body': 'x'})\n2. Run `python -m tinydb_demo list --format tags`\n3. The process exits with a traceback:\n\nTraceback (most recent call last):\n  File \"/home/dev/tinydb_demo/tinydb_demo/cli.py\", line 88, in <module>\n    main()\n  File \"/home/dev/tinydb_demo/tinydb_demo/cli.py\", line 41, in main\n    print(format_tags(row))\n  File \"/home/dev/tinydb_demo/tinydb_demo/format.py\", line 12, in format_tags\n    return \", \".join(sorted(note['tags']))\nKeyError: 'tags'\n\nExpected: it should print an empty tag list instead of crashing.",
+  "input": "Title: KeyError crashing the CLI when a note has no tags\n\nSteps:\n1. Put a note without tags in notes.json: [{\"title\": \"hello\", \"body\": \"x\"}]\n2. Run `python -m tinydb_demo list --format tags`\n3. The process exits with a traceback:\n\nTraceback (most recent call last):\n  File \"tinydb_demo/cli.py\", line 13, in main\n    print(format_tags(note))\n  File \"tinydb_demo/format.py\", line 2, in format_tags\n    return ', '.join(sorted(note['tags']))\nKeyError: 'tags'\n\nExpected: it should print an empty tag list instead of crashing.",
   "expected": { "type": "bug", "route": "fix" }
 }
