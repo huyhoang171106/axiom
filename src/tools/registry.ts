@@ -6,6 +6,7 @@ import { BashTool } from './bash.js';
 import { ReadTool } from './read.js';
 import { WriteTool } from './write.js';
 import { EditTool } from './edit.js';
+import { ListDirTool } from './list-dir.js';
 import { decide, type Approver, type PolicyDecision } from './permissions.js';
 
 export class ToolRegistry {
@@ -29,7 +30,7 @@ export class ToolRegistry {
   /** `allowed` limits the registry to those tool names; omit it for the full standard set. */
   constructor(allowed?: readonly string[]) {
     this.allowed = allowed ? new Set(allowed) : undefined;
-    for (const tool of [new BashTool(), new ReadTool(), new WriteTool(), new EditTool()]) {
+    for (const tool of [new BashTool(), new ReadTool(), new WriteTool(), new EditTool(), new ListDirTool()]) {
       if (!this.allowed || this.allowed.has(tool.name)) this.registerTool(tool);
     }
   }
