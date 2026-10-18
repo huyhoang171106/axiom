@@ -1,6 +1,7 @@
 // src/tools/bash.ts - Deterministic execution tool for bash commands
 import { spawn } from 'node:child_process';
 import path from 'node:path';
+import { scrubEnv } from '../core/secrets.js';
 import { BaseTool, type ToolExecutionContext } from './base-tool.js';
 import {
   bwrapInvocation,
@@ -259,7 +260,8 @@ export class BashTool extends BaseTool {
 
     const { promise, resolve, reject } = Promise.withResolvers<string>();
 
-    const child = spawn(invocation.file, invocation.args, { cwd, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    // The agent's own keys must not be readable by `printenv` or `echo $X_API_KEY` in the command it runs.
+    const child = spawn(invocation.file, invocation.args, { cwd, detached: true, stdio: ['ignore', 'pipe', 'pipe'], env: scrubEnv(process.env) });
     if (child.pid) live.add(child.pid);
     let stdoutStr = '';
     let stderrStr = '';

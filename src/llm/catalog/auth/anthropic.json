@@ -1,0 +1,7 @@
+{
+  "id": "anthropic",
+  "name": "Anthropic (Claude Pro/Max)",
+  "login": {
+    "type": "oauth-code"
+  }
+}

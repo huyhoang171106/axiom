@@ -1,0 +1,12 @@
+{
+  "id": "openai",
+  "name": "OpenAI",
+  "login": {
+    "type": "api-key",
+    "prompt": "Dán OpenAI API key",
+    "validate": {
+      "kind": "url",
+      "url": "https://api.openai.com/v1/models"
+    }
+  }
+}

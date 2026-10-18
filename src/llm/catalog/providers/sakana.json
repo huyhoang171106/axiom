@@ -1,0 +1,57 @@
+{
+  "id": "sakana",
+  "defaultModel": "fugu",
+  "env": [
+    "SAKANA_API_KEY",
+    "FUGU_API_KEY"
+  ],
+  "api": "openai-responses",
+  "baseUrl": "https://api.sakana.ai/v1",
+  "seed": [
+    {
+      "id": "fugu",
+      "name": "Fugu",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 1000000,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "fugu-ultra",
+      "name": "Fugu Ultra",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 1000000,
+      "cost": {
+        "input": 5,
+        "output": 30,
+        "cacheRead": 0.5,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "fugu-ultra-20260615",
+      "name": "Fugu Ultra 20260615",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 1000000,
+      "cost": {
+        "input": 5,
+        "output": 30,
+        "cacheRead": 0.5,
+        "cacheWrite": 0
+      }
+    }
+  ]
+}

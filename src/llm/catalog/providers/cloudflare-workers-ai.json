@@ -1,0 +1,18 @@
+{
+  "id": "cloudflare-workers-ai",
+  "defaultModel": "@cf/cloudflare/clef",
+  "env": [
+    "CLOUDFLARE_API_TOKEN",
+    "CLOUDFLARE_AUTH_TOKEN"
+  ],
+  "api": "workers-ai-systemone",
+  "baseUrl": "https://api.cloudflare.com/client/v4/accounts/<account>/ai/run",
+  "available": false,
+  "reason": "không dùng cho chat",
+  "seed": [
+    {
+      "id": "@cf/cloudflare/clef",
+      "name": "@cf/cloudflare/clef"
+    }
+  ]
+}

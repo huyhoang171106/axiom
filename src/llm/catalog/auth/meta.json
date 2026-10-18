@@ -1,0 +1,14 @@
+{
+  "id": "meta",
+  "name": "Meta Model API",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://developer.meta.com/ai/",
+    "prompt": "Dán Meta Model API API key",
+    "placeholder": "Model API key",
+    "validate": {
+      "kind": "url",
+      "url": "https://api.meta.ai/v1/models"
+    }
+  }
+}

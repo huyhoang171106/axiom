@@ -180,3 +180,5 @@ Quy tắc của lớp: mỗi phase chỉ dùng kiến thức đã học đến t
 | 2026-10-29 | Code và test của A7 viết comment tiếng Việt | Yêu cầu của A; ngoại lệ `CONVENTIONS.md` mục 7, chỉ áp dụng các file A7 |
 | 2026-10-29 | Hook refresh nhận `refresh(cred, provider)` thay vì `refresh(cred)` ở `providers.md` mục 7.4 | Cần endpoint và clientId từ auth JSON; không hardcode URL/clientId trong TypeScript |
 | 2026-10-29 | `openai-codex-device` đặt `login.storeAs: "openai-codex"`; B3 đọc field này khi lưu | Device và browser login dùng chung một credential, mỗi provider chỉ có một tài khoản |
+| 2026-10-28 | `Credential` loại `oauth` thêm 2 trường tuỳ chọn `headers` và `baseUrl` (`src/llm/auth/engines/index.ts`); `createProviderFor` gộp chúng vào `ModelInfo` | Đăng nhập Factory trả org ID (header `X-Factory-Org-Id`) và host EU theo tài khoản; hợp đồng cũ không có chỗ lưu. Thêm trường tuỳ chọn nên code cũ không phải sửa |
+| 2026-10-28 | Đổi squash merge sang merge commit (cả Dependabot); tiêu đề merge commit lấy theo tiêu đề PR | Giữ đủ lịch sử commit của từng branch trên `main`; mọi commit trong branch giờ cũng phải đúng `type(scope): subject` |

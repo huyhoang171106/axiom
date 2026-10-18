@@ -1,0 +1,14 @@
+{
+  "id": "siliconflow-cn",
+  "name": "SiliconFlow (China)",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://cloud.siliconflow.cn/account/ak",
+    "prompt": "Dán SiliconFlow (China) API key",
+    "placeholder": "sk-...",
+    "validate": {
+      "kind": "url",
+      "url": "https://api.siliconflow.cn/v1/models"
+    }
+  }
+}

@@ -66,7 +66,7 @@ test('empty issue after prompting is rejected before running triage', async () =
 test('registered triage command returns a formatted ticket from the provider', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-command-'));
   const configPath = path.join(root, 'config.json');
-  fs.writeFileSync(configPath, JSON.stringify({ activeProvider: 'ollama', defaultModel: 'test-model', providers: { ollama: { baseUrl: 'http://localhost:11434/v1' } } }));
+  fs.writeFileSync(configPath, JSON.stringify({ activeProvider: 'ollama', defaultModel: 'ollama/gpt-oss:20b', providers: { ollama: { baseUrl: 'http://localhost:11434/v1' } } }));
   const oldConfigPath = process.env.AXIOM_CONFIG_PATH;
   const oldFetch = globalThis.fetch;
   process.env.AXIOM_CONFIG_PATH = configPath;
@@ -80,7 +80,7 @@ test('registered triage command returns a formatted ticket from the provider', a
   try {
     const { ctx } = makeCtx({ activeProvider: 'ollama' });
     ctx.workspaceRoot = root;
-    ctx.config = { ...ctx.config, defaultModel: 'test-model' };
+    ctx.config = { ...ctx.config, defaultModel: 'ollama/gpt-oss:20b' };
     const command = defaultCommandRouter.get('triage');
     assert.equal(command, triageCommand);
     const result = await command.run('app crashes', ctx);
@@ -88,7 +88,7 @@ test('registered triage command returns a formatted ticket from the provider', a
     assert.equal(result.kind, 'issue-ticket');
     assert.match(result.text, /Route: ask_user/);
     assert.match(result.text, /Which command fails\?/);
-    assert.equal(request.model, 'test-model');
+    assert.equal(request.model, 'gpt-oss:20b');
     assert.ok(request.messages?.some((message) => message.role === 'user' && message.content === 'app crashes'));
   } finally {
     globalThis.fetch = oldFetch;

@@ -1,0 +1,12 @@
+{
+  "id": "alibaba-token-plan",
+  "name": "QwenCloud Token Plan",
+  "login": {
+    "type": "api-key",
+    "prompt": "Dán QwenCloud Token Plan API key",
+    "validate": {
+      "kind": "chat-completions",
+      "model": "qwen3.7-plus"
+    }
+  }
+}

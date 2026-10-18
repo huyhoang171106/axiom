@@ -1,0 +1,7 @@
+{
+  "id": "openai-codex",
+  "name": "ChatGPT Plus/Pro (Codex Subscription)",
+  "login": {
+    "type": "oauth-code"
+  }
+}

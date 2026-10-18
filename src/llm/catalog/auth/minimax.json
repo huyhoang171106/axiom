@@ -1,0 +1,12 @@
+{
+  "id": "minimax",
+  "name": "MiniMax",
+  "login": {
+    "type": "api-key",
+    "prompt": "Dán MiniMax API key",
+    "validate": {
+      "kind": "anthropic-messages",
+      "model": "MiniMax-M3"
+    }
+  }
+}

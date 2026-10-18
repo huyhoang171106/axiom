@@ -1,0 +1,14 @@
+{
+  "id": "singularityapi-dev",
+  "name": "SingularityAPI",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://app.singularityapi.dev",
+    "prompt": "Dán SingularityAPI API key",
+    "placeholder": "sk-sapi-...",
+    "validate": {
+      "kind": "url",
+      "url": "https://api.singularityapi.dev/v1/models"
+    }
+  }
+}

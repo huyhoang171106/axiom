@@ -1,0 +1,15 @@
+{
+  "id": "firepass",
+  "name": "Fire Pass (Fireworks subscription)",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://app.fireworks.ai/settings/users/api-keys",
+    "prompt": "Dán Fire Pass (Fireworks subscription) API key",
+    "placeholder": "fpk_...",
+    "validate": {
+      "kind": "chat-completions",
+      "model": "accounts/fireworks/routers/glm-5p2-fast",
+      "baseUrl": "https://api.fireworks.ai/inference/v1"
+    }
+  }
+}

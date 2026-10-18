@@ -1,0 +1,7 @@
+{
+  "id": "openrouter",
+  "name": "OpenRouter",
+  "login": {
+    "type": "oauth-code"
+  }
+}

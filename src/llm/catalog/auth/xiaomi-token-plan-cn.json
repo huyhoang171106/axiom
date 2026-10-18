@@ -1,0 +1,15 @@
+{
+  "id": "xiaomi-token-plan-cn",
+  "name": "Xiaomi Token Plan (China)",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://platform.xiaomimimo.com/console/plan-manage",
+    "prompt": "Dán Xiaomi Token Plan (China) API key",
+    "placeholder": "tp-...",
+    "validate": {
+      "kind": "chat-completions",
+      "model": "mimo-v2.6-flash",
+      "baseUrl": "https://token-plan-cn.xiaomimimo.com/v1"
+    }
+  }
+}

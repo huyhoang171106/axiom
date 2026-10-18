@@ -1,0 +1,15 @@
+{
+  "id": "apple",
+  "defaultModel": "on-device",
+  "env": [],
+  "api": "apple-foundation-models",
+  "baseUrl": "(trên máy macOS)",
+  "available": false,
+  "reason": "cần runtime native (local) / chỉ macOS (apple)",
+  "seed": [
+    {
+      "id": "on-device",
+      "name": "on-device"
+    }
+  ]
+}

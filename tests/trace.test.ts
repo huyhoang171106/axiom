@@ -87,8 +87,7 @@ test('every run gets its own ID and file', () => {
   assert.ok(readTrace(a.runId).length === 1 && readTrace(b.runId).length === 1);
 });
 
-// redact() is a pass-through until C3 fills src/core/secrets.ts; this turns green with it.
-test('no registered secret value reaches the trace', { todo: 'needs redact() from C3' }, () => {
+test('no registered secret value reaches the trace', () => {
   // Built at runtime so no key-shaped literal sits in the repo for secret scanners to flag.
   const secret = `sk-test-${crypto.randomBytes(12).toString('hex')}`;
   registerSecret(secret);

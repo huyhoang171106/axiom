@@ -111,6 +111,8 @@ export class AnthropicProvider extends BaseLLMProvider {
       'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
       'anthropic-beta': 'prompt-caching-2024-07-31,output-128k-2025-02-19',
+      // Catalog headers (providers.md section 7.1) carry provider differences, so they go out last.
+      ...this.credentials?.headers,
     };
 
     const response = await fetch(url, {

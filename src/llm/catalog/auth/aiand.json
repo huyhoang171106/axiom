@@ -1,0 +1,14 @@
+{
+  "id": "aiand",
+  "name": "ai&",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://console.aiand.com/api-keys",
+    "prompt": "Dán ai& API key",
+    "placeholder": "sk-...",
+    "validate": {
+      "kind": "url",
+      "url": "https://api.aiand.com/v1/models"
+    }
+  }
+}

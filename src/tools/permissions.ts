@@ -38,9 +38,6 @@ const READ_ONLY_COMMANDS: Array<{ match: RegExp; deny?: RegExp }> = [
   { match: /^id$/ },
   { match: /^date(\s|$)/ },
   { match: /^echo(\s|$)/ },
-  // `env` with no operand only lists variables; `env <cmd>` executes its argument.
-  { match: /^env$/ },
-  { match: /^printenv(\s|$)/ },
   { match: /^df(\s|$)/ },
   { match: /^du(\s|$)/ },
   { match: /^ps(\s|$)/ },
@@ -217,6 +214,8 @@ export function isNonPublicHost(hostname: string): boolean {
 /** Path argument of every tool that reads or writes a path, with the word used in the prompt. */
 const PATH_TOOLS: Record<string, string> = {
   read_file: 'reads',
+  list_dir: 'lists',
+  search_code: 'searches',
   search: 'searches',
   glob: 'globs',
   find: 'searches',

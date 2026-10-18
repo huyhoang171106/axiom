@@ -1,11 +1,14 @@
 // src/tools/registry.ts - ToolRegistry for managing and executing deterministic tools
 import crypto from 'node:crypto';
+import { redact } from '../core/secrets.js';
 import type { ToolDefinition, ToolResult } from '../core/types.js';
 import { BaseTool, type ToolExecutionContext, type ToolSummarizer } from './base-tool.js';
 import { BashTool } from './bash.js';
 import { ReadTool } from './read.js';
 import { WriteTool } from './write.js';
 import { EditTool } from './edit.js';
+import { ListDirTool } from './list-dir.js';
+import { SearchCodeTool } from './search-code.js';
 import { decide, type Approver, type PolicyDecision } from './permissions.js';
 
 export class ToolRegistry {
@@ -29,7 +32,7 @@ export class ToolRegistry {
   /** `allowed` limits the registry to those tool names; omit it for the full standard set. */
   constructor(allowed?: readonly string[]) {
     this.allowed = allowed ? new Set(allowed) : undefined;
-    for (const tool of [new BashTool(), new ReadTool(), new WriteTool(), new EditTool()]) {
+    for (const tool of [new BashTool(), new ReadTool(), new WriteTool(), new EditTool(), new ListDirTool(), new SearchCodeTool()]) {
       if (!this.allowed || this.allowed.has(tool.name)) this.registerTool(tool);
     }
   }
@@ -102,7 +105,8 @@ export class ToolRegistry {
       policy = gate.policy;
       if (gate.refusal) throw new Error(gate.refusal);
       args = gate.args;
-      const output = await tool.execute(args, context as ToolExecutionContext);
+      // Tool output goes to the model and the trace; a key a tool happened to print must not travel with it.
+      const output = redact(await tool.execute(args, context as ToolExecutionContext));
       const durationMs = Date.now() - startTime;
 
       return {
@@ -118,7 +122,8 @@ export class ToolRegistry {
       };
     } catch (err: unknown) {
       const durationMs = Date.now() - startTime;
-      const errorMessage = err instanceof Error ? err.message : String(err);
+      // A failed command carries its output in the error message too.
+      const errorMessage = redact(err instanceof Error ? err.message : String(err));
 
       return {
         toolCallId,

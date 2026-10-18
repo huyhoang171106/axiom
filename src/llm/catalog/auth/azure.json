@@ -1,0 +1,25 @@
+{
+  "id": "azure",
+  "name": "Azure OpenAI",
+  "login": {
+    "type": "cloud-fields",
+    "hook": "azure",
+    "fields": [
+      {
+        "name": "AZURE_OPENAI_API_KEY",
+        "prompt": "Azure OpenAI API key",
+        "secret": true
+      },
+      {
+        "name": "AZURE_OPENAI_RESOURCE_NAME",
+        "prompt": "Resource name (<resource>.openai.azure.com)",
+        "optional": true
+      },
+      {
+        "name": "AZURE_OPENAI_BASE_URL",
+        "prompt": "Or the full base URL (https://.../openai/v1)",
+        "optional": true
+      }
+    ]
+  }
+}

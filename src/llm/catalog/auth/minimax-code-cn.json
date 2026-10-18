@@ -1,0 +1,15 @@
+{
+  "id": "minimax-code-cn",
+  "name": "MiniMax Token Plan (China)",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://platform.minimaxi.com/subscribe/token-plan",
+    "prompt": "Dán MiniMax Token Plan (China) API key",
+    "placeholder": "sk-...",
+    "validate": {
+      "kind": "anthropic-messages",
+      "model": "MiniMax-M3",
+      "baseUrl": "https://api.minimaxi.com/anthropic"
+    }
+  }
+}

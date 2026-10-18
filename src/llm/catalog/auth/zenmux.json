@@ -1,0 +1,14 @@
+{
+  "id": "zenmux",
+  "name": "ZenMux",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://zenmux.ai/settings/keys",
+    "prompt": "Dán ZenMux API key",
+    "placeholder": "sk-...",
+    "validate": {
+      "kind": "url",
+      "url": "https://zenmux.ai/api/v1/models"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "id": "gmi-cloud",
+  "name": "GMI Cloud",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://console.gmicloud.ai",
+    "prompt": "Dán GMI Cloud API key",
+    "placeholder": "eyJ...",
+    "validate": {
+      "kind": "url",
+      "url": "https://api.gmi-serving.com/v1/models"
+    }
+  }
+}

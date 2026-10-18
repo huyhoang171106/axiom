@@ -1,0 +1,15 @@
+{
+  "id": "novita",
+  "name": "Novita",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://novita.ai/settings/key-management",
+    "prompt": "Dán Novita API key",
+    "placeholder": "sk_...",
+    "validate": {
+      "kind": "chat-completions",
+      "model": "moonshotai/kimi-k2.7-code",
+      "baseUrl": "https://api.novita.ai/openai/v1"
+    }
+  }
+}

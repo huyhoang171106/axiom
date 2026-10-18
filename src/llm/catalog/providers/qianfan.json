@@ -1,0 +1,30 @@
+{
+  "id": "qianfan",
+  "defaultModel": "deepseek-v3.2",
+  "env": [
+    "QIANFAN_API_KEY"
+  ],
+  "api": "openai-completions",
+  "baseUrl": "https://qianfan.baidubce.com/v2",
+  "discovery": {
+    "allowUnauthenticated": false
+  },
+  "seed": [
+    {
+      "id": "deepseek-v3.2",
+      "name": "DeepSeek V3.2",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 98304,
+      "maxTokens": 32768,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      }
+    }
+  ]
+}

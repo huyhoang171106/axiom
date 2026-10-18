@@ -1,0 +1,15 @@
+{
+  "id": "huggingface",
+  "name": "Hugging Face Inference",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://huggingface.co/settings/tokens/new?ownUserPermissions=inference.serverless.write&tokenType=fineGrained",
+    "prompt": "Dán Hugging Face Inference API key",
+    "placeholder": "hf_...",
+    "validate": {
+      "kind": "chat-completions",
+      "model": "openai/gpt-oss-120b",
+      "baseUrl": "https://router.huggingface.co/v1"
+    }
+  }
+}

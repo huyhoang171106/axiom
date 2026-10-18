@@ -1,0 +1,15 @@
+{
+  "id": "nvidia",
+  "name": "NVIDIA",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://org.ngc.nvidia.com/setup/personal-keys",
+    "prompt": "Dán NVIDIA API key",
+    "placeholder": "nvapi-...",
+    "validate": {
+      "kind": "chat-completions",
+      "model": "nvidia/llama-3.1-nemotron-70b-instruct",
+      "baseUrl": "https://integrate.api.nvidia.com/v1"
+    }
+  }
+}

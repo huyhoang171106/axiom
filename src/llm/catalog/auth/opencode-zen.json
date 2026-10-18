@@ -1,0 +1,14 @@
+{
+  "id": "opencode-zen",
+  "name": "OpenCode Zen",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://opencode.ai/auth",
+    "prompt": "Dán OpenCode Zen API key",
+    "placeholder": "sk-...",
+    "validate": {
+      "kind": "chat-completions",
+      "model": "claude-opus-5"
+    }
+  }
+}

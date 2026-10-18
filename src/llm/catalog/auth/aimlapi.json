@@ -1,0 +1,12 @@
+{
+  "id": "aimlapi",
+  "name": "AIML API",
+  "login": {
+    "type": "api-key",
+    "prompt": "Dán AIML API API key",
+    "validate": {
+      "kind": "chat-completions",
+      "model": "gpt-5.5-2026-04-23"
+    }
+  }
+}

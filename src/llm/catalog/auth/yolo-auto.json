@@ -1,0 +1,14 @@
+{
+  "id": "yolo-auto",
+  "name": "Yolo-Auto",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://yolo-auto.com/app",
+    "prompt": "Dán Yolo-Auto API key",
+    "placeholder": "yolo_...",
+    "validate": {
+      "kind": "url",
+      "url": "https://yolo-auto.com/v1/models"
+    }
+  }
+}

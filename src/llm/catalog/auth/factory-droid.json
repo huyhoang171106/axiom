@@ -1,0 +1,15 @@
+{
+  "id": "factory-droid",
+  "name": "Factory Droid",
+  "login": {
+    "type": "device-code",
+    "clientId": "client_01HNM792M5G5G1A2THWPXKFMXB",
+    "deviceUrl": "https://api.workos.com/user_management/authorize/device",
+    "tokenUrl": "https://api.workos.com/user_management/authenticate",
+    "afterExchange": "factory-droid",
+    "source": "https://github.com/can1357/oh-my-pi/blob/c3b645c/packages/catalog/src/compat/rules/auth/factory-droid.kdl"
+  },
+  "refresh": {
+    "tokenUrl": "https://api.workos.com/user_management/authenticate"
+  }
+}

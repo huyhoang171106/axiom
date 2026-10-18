@@ -1,0 +1,15 @@
+{
+  "id": "qwen-portal",
+  "name": "Qwen Portal",
+  "login": {
+    "type": "api-key",
+    "authUrl": "https://chat.qwen.ai",
+    "prompt": "Dán Qwen Portal API key",
+    "placeholder": "sk-...",
+    "validate": {
+      "kind": "chat-completions",
+      "model": "coder-model",
+      "baseUrl": "https://portal.qwen.ai/v1"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "id": "xai-oauth",
+  "name": "xAI Grok OAuth (SuperGrok or X Premium+)",
+  "login": {
+    "type": "device-code",
+    "clientId": "b1a00492-073a-47ea-816f-4c329264a828",
+    "scopes": [
+      "openid",
+      "profile",
+      "email",
+      "offline_access",
+      "grok-cli:access",
+      "api:access"
+    ],
+    "deviceUrl": "https://auth.x.ai/oauth2/device/code",
+    "discoveryUrl": "https://auth.x.ai/.well-known/openid-configuration",
+    "userinfoUrl": "https://auth.x.ai/oauth2/userinfo",
+    "source": "https://github.com/can1357/oh-my-pi/blob/c3b645c/packages/catalog/src/compat/rules/auth/xai-oauth.kdl"
+  },
+  "refresh": {
+    "discoveryUrl": "https://auth.x.ai/.well-known/openid-configuration"
+  }
+}
