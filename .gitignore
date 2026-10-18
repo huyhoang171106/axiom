@@ -1,5 +1,14 @@
-node_modules
+node_modules/
 dist/
 *.log
+
+# Environment variables and secrets
 .env
+.env.*
+!.env.example
+
+# Python virtual environment
+.venv/
+
+# Evaluation results
 evals/**/results.json
