@@ -19,6 +19,8 @@ npm test
 
 Risky tool calls ask for approval; `--yes` disables the prompt.
 
+The `search_code` tool needs [ripgrep](https://github.com/BurntSushi/ripgrep#installation) (`rg`) on `PATH` (Windows: `winget install BurntSushi.ripgrep.MSVC`).
+
 Files under `~/.axiom` (`AXIOM_HOME` moves it), see `docs/guides/providers.md` section 8:
 
 | File | Holds |

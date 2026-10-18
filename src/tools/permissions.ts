@@ -216,6 +216,8 @@ export function isNonPublicHost(hostname: string): boolean {
 /** Path argument of every tool that reads or writes a path, with the word used in the prompt. */
 const PATH_TOOLS: Record<string, string> = {
   read_file: 'reads',
+  list_dir: 'lists',
+  search_code: 'searches',
   search: 'searches',
   glob: 'globs',
   find: 'searches',
