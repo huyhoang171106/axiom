@@ -28,6 +28,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+      # search_code wraps ripgrep; without it its tests are skipped instead of run.
+      - run: command -v rg || (sudo apt-get update && sudo apt-get install -y ripgrep)
       - run: npm test
       # Runs once D0 adds the `eval` script; mock provider, so no API key is needed.
       - run: npm run eval --if-present
