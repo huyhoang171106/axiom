@@ -2,6 +2,28 @@
   "id": "zai-coding-plan",
   "name": "Z.AI (GLM Coding Plan · Sign in)",
   "login": {
-    "type": "oauth-code"
-  }
+    "type": "oauth-code",
+    "clientId": "client_P8X5CMWmlaRO9gyO-KSqtg",
+    "authorizeUrl": "https://chat.z.ai/api/oauth/authorize",
+    "tokenUrl": "https://zcode.z.ai/api/v1/oauth/token",
+    "authorizeParams": {
+      "client_id": "{client_id}",
+      "response_type": "code",
+      "redirect_uri": "{redirect_uri}",
+      "state": "{state}"
+    },
+    "callback": { "manualOnly": true, "redirectUri": "zcode://zai-auth/callback" },
+    "tokenBody": "json",
+    "tokenParams": {
+      "provider": "zai",
+      "code": "{code}",
+      "redirect_uri": "{redirect_uri}",
+      "state": "{state}"
+    },
+    "credential": { "access": "data.zai.access_token" },
+    "afterExchange": "zai-coding-plan",
+    "instructions": "Sign in to Z.AI in your browser. Z.AI only redirects to the ZCode app (zcode://zai-auth/callback?code=…), so copy that link from the browser's prompt or its developer tools (Network tab) and paste it here. Axiom then creates an API key named \"axiom\" on your account.",
+    "source": "oh-my-pi (MIT) @ 9540b91: packages/catalog/src/compat/rules/auth/zai-coding-plan.kdl, packages/ai/src/registry/oauth/zai.ts"
+  },
+  "refresh": "none"
 }
