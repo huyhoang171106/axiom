@@ -5,6 +5,7 @@ import { defaultCommandRouter } from '../commands/index.js';
 import { Header } from './components/header.js';
 import { Transcript } from './components/transcript.js';
 import { Editor } from './components/editor.js';
+import { Footer } from './components/footer.js';
 import type { TuiStore } from './store.js';
 import type { TuiController } from './controller.js';
 
@@ -42,5 +43,6 @@ export function App({ store, controller, workspace, initial }: { store: TuiStore
       onChange={editor => store.update({ editor })} onSubmit={text => state.question ? store.answer(text) : void controller.submit(text)} />
     {!!matches.length && <Text>{matches.map(command => `/${command.name}`).join('  ')} · Tab để điền</Text>}
     <Text>{state.notice}</Text>
+    <Footer state={state} workspace={workspace} width={columns} />
   </Box>;
 }

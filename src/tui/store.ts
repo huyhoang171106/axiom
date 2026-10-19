@@ -5,6 +5,7 @@ import type { ExecutionState, TokenUsage, ToolCall, ToolResult } from '../core/t
 import type { ModelInfo } from '../llm/catalog/index.js';
 import type { ApprovalRequest, ApprovalDecision } from '../tools/permissions.js';
 import type { EditorState } from './editor.js';
+import { computeTelemetry, type GitStatus, type TurnTelemetry, type TurnTiming } from './layout.js';
 
 // Round up: 33 ms would allow more than 30 notifications in one second.
 const FRAME_MS = Math.ceil(1000 / 30);
@@ -23,6 +24,8 @@ export interface TuiTurn {
   readonly tools: readonly TuiToolRow[];
   readonly usage: Readonly<TokenUsage> | null;
   readonly error: string | null;
+  /** Set when a turn sent through `prepareTurn` finishes. */
+  readonly telemetry?: Readonly<TurnTelemetry>;
 }
 
 export interface TuiState {
@@ -44,6 +47,8 @@ export interface TuiState {
   readonly model: Readonly<ModelInfo> | null;
   readonly mode: 'read-only' | 'edit' | 'auto';
   readonly pendingApproval: Readonly<ApprovalRequest> | null;
+  /** Cached `git status` for the footer; null until known. */
+  readonly git: Readonly<GitStatus> | null;
 }
 
 function addUsage(total: Readonly<TokenUsage> | null, next: TokenUsage): TokenUsage {
@@ -64,7 +69,7 @@ export class TuiStore {
   private snapshot: TuiState = {
     editor: { text: '', cursor: 0 }, busy: false, expanded: false, notice: '', question: null, revision: 0,
     entries: [], live: null, status: 'idle', error: null,
-    usage: { latest: null, total: null }, model: null, mode: 'edit', pendingApproval: null,
+    usage: { latest: null, total: null }, model: null, mode: 'edit', pendingApproval: null, git: null,
   };
   private pending = this.snapshot;
   private readonly listeners = new Set<() => void>();
@@ -74,16 +79,23 @@ export class TuiStore {
   private thinkingBuffer = '';
   private nextTurnId = 1;
   private prompt = '';
+  private timing: TurnTiming | null = null;
+  private readonly toolStarts = new Map<string, number>();
   private approvalResolve?: (decision: ApprovalDecision) => void;
   private answerResolve?: (answer: string) => void;
   private answerReject?: (error: Error) => void;
 
-  public update(patch: Partial<Pick<TuiState, 'editor' | 'busy' | 'expanded' | 'notice' | 'model'>>): void {
+  public update(patch: Partial<Pick<TuiState, 'editor' | 'busy' | 'expanded' | 'notice' | 'model' | 'git'>>): void {
     this.pending = { ...this.pending, ...patch };
     this.schedule();
   }
 
-  public prepareTurn(prompt: string): void { this.prompt = prompt; }
+  /** Marks the send time of the next turn; TTFT and TPS are measured from here. */
+  public prepareTurn(prompt: string): void {
+    this.prompt = prompt;
+    this.timing = { sentAt: Date.now(), toolMs: 0 };
+    this.toolStarts.clear();
+  }
 
   public print(text: string, prompt?: string): void {
     const turn: TuiTurn = { id: this.nextTurnId++, prompt, text, thinking: '', tools: [], usage: null, error: null, status: 'completed' };
@@ -168,6 +180,7 @@ export class TuiStore {
     };
     on('stream_token', ({ delta }) => {
       if (!delta) return;
+      if (this.timing && this.timing.firstTokenAt === undefined) this.timing.firstTokenAt = Date.now();
       this.textBuffer += delta;
       this.schedule();
     });
@@ -185,9 +198,10 @@ export class TuiStore {
         // A terminal event without a live turn must not invent a transcript entry.
         if (live) {
           const error = to === 'failed' ? live.error ?? reason ?? null : live.error;
+          const telemetry = this.finishTiming(live);
           this.pending = {
             ...this.pending,
-            entries: [...this.pending.entries, { ...live, status: to, error }],
+            entries: [...this.pending.entries, { ...live, status: to, error, ...(telemetry ? { telemetry } : {}) }],
             live: null,
             error,
           };
@@ -202,6 +216,8 @@ export class TuiStore {
     });
     on('tool_call_start', (call) => {
       this.flushStream();
+      // Only tool time inside the generation window (after the first token) is excluded from TPS.
+      if (this.timing?.firstTokenAt !== undefined) this.toolStarts.set(call.id, Date.now());
       const live = this.pending.live ?? this.createTurn('executing');
       this.pending = {
         ...this.pending,
@@ -211,6 +227,11 @@ export class TuiStore {
     });
     on('tool_call_end', (result) => {
       this.flushStream();
+      const started = this.toolStarts.get(result.toolCallId);
+      if (started !== undefined && this.timing) {
+        this.timing.toolMs += Math.max(0, Date.now() - started);
+        this.toolStarts.delete(result.toolCallId);
+      }
       const live = this.pending.live;
       if (!live) return;
       const index = live.tools.findIndex((row) => row.call.id === result.toolCallId && row.result === null);
@@ -255,6 +276,14 @@ export class TuiStore {
     this.prompt = '';
     this.pending = { ...this.pending, live, status, error: null };
     return live;
+  }
+
+  private finishTiming(live: TuiTurn): TurnTelemetry | null {
+    const timing = this.timing;
+    this.timing = null;
+    this.toolStarts.clear();
+    if (!timing) return null;
+    return computeTelemetry({ ...timing, endAt: Date.now() }, live.usage?.completionTokens);
   }
 
   private flushStream(): void {

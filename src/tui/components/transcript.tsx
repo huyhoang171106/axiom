@@ -2,7 +2,7 @@
 import { Box, Static, Text } from 'ink';
 import type { TuiTurn, TuiState } from '../store.js';
 import { ToolRow } from './tool-row.js';
-import { truncate } from '../layout.js';
+import { formatTelemetryLine, truncate } from '../layout.js';
 import { createTheme } from '../theme.js';
 
 export function Turn({ turn, expanded, width }: { turn: TuiTurn; expanded: boolean; width: number }) {
@@ -13,6 +13,7 @@ export function Turn({ turn, expanded, width }: { turn: TuiTurn; expanded: boole
     {turn.tools.map((row, index) => <ToolRow key={`${row.call.id}-${index}`} row={row} expanded={expanded} width={width} />)}
     {turn.text && <Text>{turn.text}</Text>}
     {turn.error && <Text>{theme.error(`${theme.icons.error} ${turn.error}`)}</Text>}
+    {turn.telemetry && <Text>{theme.muted(truncate(formatTelemetryLine(turn.telemetry, turn.usage), width))}</Text>}
   </Box>;
 }
 

@@ -8,14 +8,16 @@ import { parseCommand, unknownCommandMessage } from '../commands/router.js';
 import { loadCatalog } from '../llm/catalog/index.js';
 import { resolveModel } from '../llm/model-resolver.js';
 import { TuiStore } from './store.js';
+import type { GitStatusCache } from './git-status.js';
 
 export class TuiController {
   private agent?: AgentLoop;
   private controller?: AbortController;
   private running = false;
   private lastInterrupt = -Infinity;
+  private detachGit?: () => void;
   public lastPrompt = '';
-  constructor(public readonly store: TuiStore, private readonly opts: { workspaceRoot: string; mock: boolean; exit(): void }) {}
+  constructor(public readonly store: TuiStore, private readonly opts: { workspaceRoot: string; mock: boolean; exit(): void; git?: GitStatusCache }) {}
   public async submit(input: string): Promise<void> {
     if (this.running || !input.trim()) return;
     this.running = true;
@@ -49,6 +51,8 @@ export class TuiController {
           if (controller.signal.aborted) return;
           this.agent = agent;
           this.store.attach(agent.eventBus);
+          this.detachGit?.();
+          this.detachGit = this.opts.git?.attach(agent.eventBus);
         }
         this.agent.toolRegistry.approver = request => new Promise(resolve => {
           if (controller.signal.aborted) resolve('deny');
