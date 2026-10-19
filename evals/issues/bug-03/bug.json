@@ -1,0 +1,11 @@
+{
+  "category": "needs-repro-test",
+  "fixFiles": ["tinydb/utils.py"],
+  "edits": [
+    {
+      "file": "tinydb/utils.py",
+      "find": "        value = self.cache.get(key)\n\n        if value is not None:\n",
+      "replace": "        value = self.cache.get(key)\n\n        if value:\n"
+    }
+  ]
+}

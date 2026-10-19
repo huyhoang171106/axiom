@@ -1,0 +1,16 @@
+{
+  "category": "two-files",
+  "fixFiles": ["tinydb/table.py", "tinydb/database.py"],
+  "edits": [
+    {
+      "file": "tinydb/table.py",
+      "find": "        self._update_table(lambda table: table.clear())\n\n        # Reset document ID counter\n        self._next_id = None\n",
+      "replace": "        self._update_table(lambda table: table.clear())\n"
+    },
+    {
+      "file": "tinydb/database.py",
+      "find": "        self.storage.write({})\n\n        # After that we need to remember to empty the ``_tables`` dict, so we'll\n        # create new table instances when a table is accessed again.\n        self._tables.clear()\n",
+      "replace": "        self.storage.write({})\n"
+    }
+  ]
+}
