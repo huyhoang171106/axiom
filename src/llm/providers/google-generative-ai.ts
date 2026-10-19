@@ -1,8 +1,16 @@
-// src/llm/providers/google-generative-ai.ts - `google-generative-ai` wire (Gemini API); stub until E6
+// src/llm/providers/google-generative-ai.ts - `google-generative-ai` wire (Google Gemini API)
 
 import type { LLMProviderType } from '../../core/types.js';
 import type { ModelInfo } from '../catalog/index.js';
 import { BaseLLMProvider, type ChatParams, type ChatResult } from '../base-provider.js';
+import { ProviderError } from '../provider-error.js';
+import { hasHeader } from './responses-shared.js';
+import { buildGeminiRequest, requestGemini, trimBase } from './google-shared.js';
+
+export function generativeAiUrl(baseUrl: string, model: string): string {
+  const cleanModel = encodeURIComponent(model.replace(/^models\//, ''));
+  return `${trimBase(baseUrl)}/models/${cleanModel}:streamGenerateContent?alt=sse`;
+}
 
 export class GoogleGenerativeAIProvider extends BaseLLMProvider {
   readonly name: LLMProviderType;
@@ -15,8 +23,28 @@ export class GoogleGenerativeAIProvider extends BaseLLMProvider {
     this.name = info.provider;
   }
 
-  // TODO(E6): implement the wire.
-  async chat(params: ChatParams): Promise<ChatResult> {
-    throw new Error(`${this.name}: wire google-generative-ai is not implemented yet (E6)`);
+  async chat({ model, messages, tools, temperature, maxTokens, onToken, onThinking, signal }: ChatParams): Promise<ChatResult> {
+    if (!this.credential && !hasHeader(this.info.headers, 'x-goog-api-key') && !hasHeader(this.info.headers, 'authorization')) {
+      throw new ProviderError(`${this.name} is not connected. Run /login ${this.name} or set GEMINI_API_KEY.`, {
+        provider: this.name,
+        model,
+        code: 'missing_credentials',
+      });
+    }
+    return requestGemini({
+      provider: this.name,
+      info: this.info,
+      model,
+      url: generativeAiUrl(this.info.baseUrl, model),
+      headers: {
+        ...this.info.headers,
+        ...(this.credential
+          && !hasHeader(this.info.headers, 'x-goog-api-key')
+          && !hasHeader(this.info.headers, 'authorization')
+          && { 'x-goog-api-key': this.credential }),
+      },
+      body: buildGeminiRequest(this.info, { messages, tools, temperature, maxTokens }),
+      params: { onToken, onThinking, signal },
+    });
   }
 }
