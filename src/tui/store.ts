@@ -3,7 +3,8 @@
 import type { AxiomEvents, EventBus } from '../core/event-bus.js';
 import type { ExecutionState, TokenUsage, ToolCall, ToolResult } from '../core/types.js';
 import type { ModelInfo } from '../llm/catalog/index.js';
-import type { ApprovalRequest } from '../tools/permissions.js';
+import type { ApprovalRequest, ApprovalDecision } from '../tools/permissions.js';
+import type { EditorState } from './editor.js';
 
 // Round up: 33 ms would allow more than 30 notifications in one second.
 const FRAME_MS = Math.ceil(1000 / 30);
@@ -25,6 +26,12 @@ export interface TuiTurn {
 }
 
 export interface TuiState {
+  readonly editor: EditorState;
+  readonly busy: boolean;
+  readonly expanded: boolean;
+  readonly notice: string;
+  readonly question: { text: string; secret: boolean } | null;
+  readonly revision: number;
   readonly entries: readonly TuiTurn[];
   readonly live: TuiTurn | null;
   readonly status: ExecutionState;
@@ -55,6 +62,7 @@ function addUsage(total: Readonly<TokenUsage> | null, next: TokenUsage): TokenUs
 
 export class TuiStore {
   private snapshot: TuiState = {
+    editor: { text: '', cursor: 0 }, busy: false, expanded: false, notice: '', question: null, revision: 0,
     entries: [], live: null, status: 'idle', error: null,
     usage: { latest: null, total: null }, model: null, mode: 'edit', pendingApproval: null,
   };
@@ -65,9 +73,84 @@ export class TuiStore {
   private textBuffer = '';
   private thinkingBuffer = '';
   private nextTurnId = 1;
+  private prompt = '';
+  private approvalResolve?: (decision: ApprovalDecision) => void;
+  private answerResolve?: (answer: string) => void;
+  private answerReject?: (error: Error) => void;
+
+  public update(patch: Partial<Pick<TuiState, 'editor' | 'busy' | 'expanded' | 'notice' | 'model'>>): void {
+    this.pending = { ...this.pending, ...patch };
+    this.schedule();
+  }
+
+  public prepareTurn(prompt: string): void { this.prompt = prompt; }
+
+  public print(text: string, prompt?: string): void {
+    const turn: TuiTurn = { id: this.nextTurnId++, prompt, text, thinking: '', tools: [], usage: null, error: null, status: 'completed' };
+    this.pending = { ...this.pending, entries: [...this.pending.entries, turn] };
+    this.schedule();
+  }
+
+  public clear(): void {
+    this.pending = { ...this.pending, entries: [], revision: this.pending.revision + 1 };
+    this.schedule();
+  }
+
+  public requestApproval(request: ApprovalRequest, resolve: (decision: ApprovalDecision) => void): void {
+    this.resolveApproval('deny');
+    this.approvalResolve = resolve;
+    this.pending = { ...this.pending, pendingApproval: structuredClone(request) };
+    this.schedule();
+  }
+
+  public resolveApproval(decision: ApprovalDecision): void {
+    const resolve = this.approvalResolve;
+    this.approvalResolve = undefined;
+    if (!resolve) return;
+    this.pending = { ...this.pending, pendingApproval: null };
+    this.schedule();
+    resolve(decision);
+  }
+
+  public ask(text: string, secret = false): Promise<string> {
+    return new Promise((resolve, reject) => {
+      this.answerResolve = resolve;
+      this.answerReject = reject;
+      this.pending = { ...this.pending, question: { text, secret }, editor: { text: '', cursor: 0 } };
+      this.schedule();
+    });
+  }
+
+  public answer(text: string): void {
+    const resolve = this.answerResolve;
+    this.answerResolve = undefined;
+    this.answerReject = undefined;
+    this.pending = { ...this.pending, question: null, editor: { text: '', cursor: 0 } };
+    this.schedule();
+    resolve?.(text);
+  }
+
+  public cancelInteraction(): void {
+    this.resolveApproval('deny');
+    const reject = this.answerReject;
+    this.answerResolve = undefined;
+    this.answerReject = undefined;
+    this.pending = { ...this.pending, question: null, editor: { text: '', cursor: 0 } };
+    this.schedule();
+    reject?.(new Error('Cancelled'));
+  }
+
+  public dispose(): void {
+    this.cancelInteraction();
+    this.detachBus?.();
+    if (this.timer !== undefined) clearTimeout(this.timer);
+    this.timer = undefined;
+    this.listeners.clear();
+  }
 
   // Bound functions can be passed directly to useSyncExternalStore.
   public getSnapshot = (): TuiState => this.snapshot;
+  public getEditor = (): EditorState => this.pending.editor;
 
   public subscribe = (fn: () => void): (() => void) => {
     const listener = () => fn();
@@ -167,8 +250,9 @@ export class TuiStore {
 
   private createTurn(status: ExecutionState): TuiTurn {
     const live: TuiTurn = {
-      id: this.nextTurnId++, status, text: '', thinking: '', tools: [], usage: null, error: null,
+      id: this.nextTurnId++, prompt: this.prompt || undefined, status, text: '', thinking: '', tools: [], usage: null, error: null,
     };
+    this.prompt = '';
     this.pending = { ...this.pending, live, status, error: null };
     return live;
   }
