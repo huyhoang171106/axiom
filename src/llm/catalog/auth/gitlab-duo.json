@@ -2,6 +2,32 @@
   "id": "gitlab-duo",
   "name": "GitLab Duo Non-Agentic",
   "login": {
-    "type": "oauth-code"
-  }
+    "type": "oauth-code",
+    "clientId": "da4edff2e6ebd2bc3208611e2768bc1c1dd7be791dc5ff26ca34ca9ee44f7d4b",
+    "authorizeUrl": "https://gitlab.com/oauth/authorize",
+    "tokenUrl": "https://gitlab.com/oauth/token",
+    "scopes": ["api"],
+    "authorizeParams": {
+      "response_type": "code",
+      "client_id": "{client_id}",
+      "redirect_uri": "{redirect_uri}",
+      "scope": "{scope}",
+      "state": "{state}",
+      "code_challenge": "{code_challenge}",
+      "code_challenge_method": "S256"
+    },
+    "callback": { "port": 8080, "path": "/callback", "redirectUri": "http://localhost:8080/callback" },
+    "tokenBody": "form",
+    "tokenParams": {
+      "grant_type": "authorization_code",
+      "client_id": "{client_id}",
+      "code": "{code}",
+      "code_verifier": "{code_verifier}",
+      "redirect_uri": "{redirect_uri}"
+    },
+    "credential": { "access": "access_token", "refresh": "refresh_token", "expires": "expires_in" },
+    "instructions": "Sign in to GitLab in your browser. If GitLab says the redirect URI is not valid, use a Personal Access Token in GITLAB_TOKEN instead.",
+    "source": "oh-my-pi catalog (MIT), packages/catalog/src/compat/rules/auth/gitlab-duo.kdl @ 9540b91"
+  },
+  "refresh": { "tokenUrl": "https://gitlab.com/oauth/token" }
 }

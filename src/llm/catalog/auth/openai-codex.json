@@ -2,6 +2,34 @@
   "id": "openai-codex",
   "name": "ChatGPT Plus/Pro (Codex Subscription)",
   "login": {
-    "type": "oauth-code"
-  }
+    "type": "oauth-code",
+    "clientId": "app_EMoamEEZ73f0CkXaXp7hrann",
+    "authorizeUrl": "https://auth.openai.com/oauth/authorize",
+    "tokenUrl": "https://auth.openai.com/oauth/token",
+    "scopes": ["openid", "profile", "email", "offline_access"],
+    "authorizeParams": {
+      "response_type": "code",
+      "client_id": "{client_id}",
+      "redirect_uri": "{redirect_uri}",
+      "scope": "{scope}",
+      "state": "{state}",
+      "code_challenge": "{code_challenge}",
+      "code_challenge_method": "S256",
+      "id_token_add_organizations": "true",
+      "codex_cli_simplified_flow": "true"
+    },
+    "callback": { "port": 1455, "path": "/auth/callback", "redirectUri": "http://localhost:1455/auth/callback" },
+    "tokenBody": "form",
+    "tokenParams": {
+      "grant_type": "authorization_code",
+      "client_id": "{client_id}",
+      "code": "{code}",
+      "code_verifier": "{code_verifier}",
+      "redirect_uri": "{redirect_uri}"
+    },
+    "credential": { "access": "access_token", "refresh": "refresh_token", "expires": "expires_in" },
+    "instructions": "Sign in to ChatGPT in your browser. Port 1455 must be free: OpenAI only accepts this exact redirect.",
+    "source": "oh-my-pi catalog (MIT), packages/catalog/src/compat/rules/auth/openai-codex.kdl @ 9540b91"
+  },
+  "refresh": { "tokenUrl": "https://auth.openai.com/oauth/token" }
 }

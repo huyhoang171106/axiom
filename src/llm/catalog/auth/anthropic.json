@@ -2,6 +2,34 @@
   "id": "anthropic",
   "name": "Anthropic (Claude Pro/Max)",
   "login": {
-    "type": "oauth-code"
-  }
+    "type": "oauth-code",
+    "clientId": "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
+    "authorizeUrl": "https://claude.ai/oauth/authorize",
+    "tokenUrl": "https://api.anthropic.com/v1/oauth/token",
+    "scopes": ["org:create_api_key", "user:profile", "user:inference"],
+    "authorizeParams": {
+      "code": "true",
+      "response_type": "code",
+      "client_id": "{client_id}",
+      "redirect_uri": "{redirect_uri}",
+      "scope": "{scope}",
+      "state": "{state}",
+      "code_challenge": "{code_challenge}",
+      "code_challenge_method": "S256"
+    },
+    "callback": { "port": 54545, "path": "/callback", "redirectUri": "http://localhost:54545/callback" },
+    "tokenBody": "json",
+    "tokenParams": {
+      "grant_type": "authorization_code",
+      "client_id": "{client_id}",
+      "code": "{code}",
+      "code_verifier": "{code_verifier}",
+      "redirect_uri": "{redirect_uri}",
+      "state": "{state}"
+    },
+    "credential": { "access": "access_token", "refresh": "refresh_token", "expires": "expires_in", "email": "account.email_address" },
+    "instructions": "Sign in to Claude in your browser. If the page shows a code instead of returning here, paste it (code#state).",
+    "source": "oh-my-pi catalog (MIT), packages/catalog/src/compat/rules/auth/anthropic.kdl @ 9540b91"
+  },
+  "refresh": { "tokenUrl": "https://api.anthropic.com/v1/oauth/token" }
 }
