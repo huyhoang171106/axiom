@@ -14,6 +14,7 @@ export interface TuiToolRow {
 }
 
 export interface TuiTurn {
+  readonly prompt?: string;
   readonly id: number;
   readonly status: ExecutionState;
   readonly text: string;
