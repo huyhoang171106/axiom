@@ -6,7 +6,14 @@ import type { AddressInfo } from 'node:net';
 import type { CommandUI } from '../src/commands/types.js';
 import type { ProviderEntry } from '../src/llm/catalog/index.js';
 import { loadCatalog } from '../src/llm/catalog/index.js';
-import { oauthCodeLogin, oauthLoginSchema, parsePasted, type OAuthDeps } from '../src/llm/auth/engines/oauth-code.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import type { CommandContext } from '../src/commands/types.js';
+import { loginCommand } from '../src/commands/login.js';
+import { resolveCredential } from '../src/llm/auth/resolve.js';
+import { readAuth } from '../src/llm/auth/store.js';
+import { defaultOAuthDeps, oauthCodeLogin, oauthLoginSchema, parsePasted, type OAuthDeps } from '../src/llm/auth/engines/oauth-code.js';
 
 interface TokenRequest {
   contentType: string;
@@ -198,4 +205,79 @@ test('the oauth-code providers set up so far have a valid login and a source', (
   }
   const fixedPort = oauthLoginSchema.parse(entries.find((p) => p.id === 'openai-codex')?.login).callback;
   assert.ok('port' in fixedPort && fixedPort.port === 1455);
+});
+
+/** Runs `/login <id>` with the real auth JSON: temp AXIOM_HOME, no browser, `fetch` answered locally. */
+async function loginThroughCommand(
+  t: { after(fn: () => void): void },
+  id: string,
+  paste: (authorize: URL) => string,
+  tokenBody: unknown,
+): Promise<{ home: string; authorize: URL; token: { url: string; init: RequestInit } }> {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-oauth-'));
+  const previous = { home: process.env.AXIOM_HOME, fetch: globalThis.fetch, open: defaultOAuthDeps.openBrowser };
+  process.env.AXIOM_HOME = home;
+  let authorize!: URL;
+  let token!: { url: string; init: RequestInit };
+  defaultOAuthDeps.openBrowser = (url) => (authorize = new URL(url));
+  globalThis.fetch = async (input, init) => {
+    token = { url: String(input), init: init ?? {} };
+    return new Response(JSON.stringify(tokenBody), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  t.after(() => {
+    globalThis.fetch = previous.fetch;
+    defaultOAuthDeps.openBrowser = previous.open;
+    if (previous.home === undefined) delete process.env.AXIOM_HOME;
+    else process.env.AXIOM_HOME = previous.home;
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+  const ctxUi: CommandUI = { print: () => {}, ask: async () => paste(authorize), confirm: async () => false };
+  const result = await loginCommand.run(id, { ui: ctxUi } as CommandContext);
+  assert.match(result?.text ?? '', /^Connected /);
+  return { home, authorize, token };
+}
+
+test('/login gitlab-duo-agent: paste-only redirect, form exchange with the real client, stored and resolvable', async (t) => {
+  const { home, authorize, token } = await loginThroughCommand(
+    t,
+    'gitlab-duo-agent',
+    (a) => `vscode://gitlab.gitlab-workflow/authentication?code=gl-code&state=${a.searchParams.get('state')}`,
+    { access_token: 'gl-access', refresh_token: 'gl-refresh', expires_in: 7200 },
+  );
+  assert.equal(authorize.origin + authorize.pathname, 'https://gitlab.com/oauth/authorize');
+  assert.equal(authorize.searchParams.get('redirect_uri'), 'vscode://gitlab.gitlab-workflow/authentication');
+  assert.equal(authorize.searchParams.get('code_challenge_method'), 'S256');
+  assert.equal(token.url, 'https://gitlab.com/oauth/token');
+  const form = new URLSearchParams(String(token.init.body));
+  assert.equal(form.get('client_id'), '36f2a70cddeb5a0889d4fd8295c241b7e9848e89cf9e599d0eed2d8e5350fbf5');
+  assert.equal(form.get('code'), 'gl-code');
+  assert.equal(form.get('redirect_uri'), 'vscode://gitlab.gitlab-workflow/authentication');
+  const stored = readAuth(home)['gitlab-duo-agent'];
+  assert.ok(stored?.type === 'oauth' && stored.access === 'gl-access' && stored.refresh === 'gl-refresh');
+  assert.equal((await resolveCredential('gitlab-duo-agent', { home, env: {} }))?.value, 'gl-access');
+});
+
+test('/login anthropic: pasted code#state, JSON exchange that carries the state, email from the account', async (t) => {
+  let state = '';
+  const { home, token } = await loginThroughCommand(
+    t,
+    'anthropic',
+    (a) => `an-code#${(state = a.searchParams.get('state')!)}`,
+    { access_token: 'an-access', refresh_token: 'an-refresh', expires_in: 3600, account: { email_address: 'me@example.test' } },
+  );
+  assert.equal(token.url, 'https://api.anthropic.com/v1/oauth/token');
+  assert.match(String((token.init.headers as Record<string, string>)['content-type']), /json/);
+  const body = JSON.parse(String(token.init.body)) as Record<string, string>;
+  assert.deepEqual([body.code, body.state, body.grant_type], ['an-code', state, 'authorization_code']);
+  const stored = readAuth(home).anthropic;
+  assert.ok(stored?.type === 'oauth' && stored.access === 'an-access' && stored.email === 'me@example.test');
+});
+
+test('a browser Codex login is refreshed by the device hook, so both must use the same client and endpoint', () => {
+  const entries = loadCatalog(undefined).providers();
+  const browserLogin = oauthLoginSchema.parse(entries.find((p) => p.id === 'openai-codex')?.login);
+  const device = entries.find((p) => p.id === 'openai-codex-device')?.login as Record<string, unknown>;
+  assert.equal(device.storeAs, 'openai-codex');
+  assert.equal(browserLogin.clientId, device.clientId);
+  assert.equal(browserLogin.tokenUrl, device.exchangeUrl);
 });

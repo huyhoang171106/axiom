@@ -56,7 +56,8 @@ function openBrowser(url: string): void {
     // No browser (SSH, container): the URL is printed and the user can paste the redirect back.
   }
 }
-const realDeps: OAuthDeps = { openBrowser, callbackTimeoutMs: CALLBACK_TIMEOUT_MS };
+/** What /login uses; tests that go through the command swap `openBrowser` so no real browser opens. */
+export const defaultOAuthDeps: OAuthDeps = { openBrowser, callbackTimeoutMs: CALLBACK_TIMEOUT_MS };
 
 function flowChanged(provider: ProviderEntry, detail: string): Error {
   return new Error(`The login flow of ${provider.id} has changed (${detail}). Use an API key, or update src/llm/catalog/auth/${provider.id}.json.`);
@@ -173,7 +174,7 @@ function toCredential(provider: ProviderEntry, login: OAuthLogin, body: unknown)
   };
 }
 
-export async function oauthCodeLogin(provider: ProviderEntry, ui: CommandUI, deps: OAuthDeps = realDeps): Promise<Credential> {
+export async function oauthCodeLogin(provider: ProviderEntry, ui: CommandUI, deps: OAuthDeps = defaultOAuthDeps): Promise<Credential> {
   const parsed = oauthLoginSchema.safeParse(provider.login);
   if (!parsed.success) throw new Error(`${provider.id}: browser sign-in is not set up in src/llm/catalog/auth/${provider.id}.json yet.`);
   const login = parsed.data;
