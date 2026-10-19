@@ -11,7 +11,10 @@ import { registerSecret } from '../../../core/secrets.js';
 import type { CommandUI } from '../../../commands/types.js';
 import type { ProviderEntry } from '../../catalog/index.js';
 import { jwtExpiry, withTimeout } from '../refresh.js';
+import type { AfterExchangeHook } from './device-code.js';
 import type { Credential, LoginEngine } from './index.js';
+
+type OAuthCredential = Extract<Credential, { type: 'oauth' }>;
 
 const params = z.record(z.string(), z.string());
 
@@ -33,6 +36,10 @@ export const oauthLoginSchema = z.object({
   headers: params.optional(),
   /** Dotted paths into the token response; `expires` is seconds from now, otherwise a JWT `exp` is used. */
   credential: z.object({ access: z.string().min(1), refresh: z.string().optional(), expires: z.string().optional(), email: z.string().optional() }).strict(),
+  /** `api_key`: `access` is a durable key (OpenRouter), stored and sent as an API key. */
+  result: z.literal('api_key').optional(),
+  /** `src/llm/auth/hooks/<afterExchange>.ts`, for providers that need more than the token (same hook as device-code). */
+  afterExchange: z.string().regex(/^[a-z0-9-]+$/).optional(),
   instructions: z.string().optional(),
   source: z.string().min(1),
 }).strict();
@@ -158,7 +165,7 @@ async function exchange(provider: ProviderEntry, login: OAuthLogin, form: Record
   }
 }
 
-function toCredential(provider: ProviderEntry, login: OAuthLogin, body: unknown): Credential {
+function toCredential(provider: ProviderEntry, login: OAuthLogin, body: unknown): OAuthCredential {
   const access = pick(body, login.credential.access);
   if (typeof access !== 'string' || !access) throw flowChanged(provider, `token response has no ${login.credential.access}`);
   const refresh = login.credential.refresh ? pick(body, login.credential.refresh) : undefined;
@@ -222,7 +229,12 @@ export async function oauthCodeLogin(provider: ProviderEntry, ui: CommandUI, dep
   const stateOk = returned.state === undefined ? !fromCallback : returned.state === state;
   if (checksState && !stateOk) throw new Error(`Sign-in to ${provider.id} was refused: the state does not match (possible forged redirect).`);
   const body = await exchange(provider, login, fill(login.tokenParams, { ...values, code: returned.code }));
-  return toCredential(provider, login, body);
+  const credential = toCredential(provider, login, body);
+  if (login.afterExchange) {
+    const hook = (await import(`../hooks/${login.afterExchange}.js`)) as AfterExchangeHook;
+    return hook.afterExchange(credential, body, provider);
+  }
+  return login.result === 'api_key' ? { type: 'api_key', key: credential.access } : credential;
 }
 
 export const oauthCodeEngine: LoginEngine = (provider, ui) => oauthCodeLogin(provider, ui);
