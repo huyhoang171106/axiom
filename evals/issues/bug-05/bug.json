@@ -1,0 +1,11 @@
+{
+  "category": "hang",
+  "fixFiles": ["tinydb/table.py"],
+  "edits": [
+    {
+      "file": "tinydb/table.py",
+      "find": "        max_id = max(self.document_id_class(i) for i in table.keys())\n        next_id = max_id + 1\n",
+      "replace": "        next_id = len(table) + 1\n        while str(next_id) in table:\n            next_id + 1\n"
+    }
+  ]
+}

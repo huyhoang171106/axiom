@@ -49,3 +49,11 @@ python -m venv .venv                     # then use .venv/bin/python, or .\.venv
 .venv/bin/python -m pip install "pytest~=9.0" "pytest-cov~=7.0" "pyyaml~=6.0"
 .venv/bin/python -m pytest -q
 ```
+
+Seeded bugs for UC-03 live in `evals/issues/bug-NN/` (`issue.md`, `bug.json`, hidden `test_hidden.py`). Python comes from `AXIOM_PYTHON`:
+
+```
+npx tsx evals/issues/bugs.ts seed bug-01 /tmp/bug-01    # buggy copy outside the repo, for the agent
+npx tsx evals/issues/bugs.ts grade bug-01 /tmp/bug-01   # run the hidden test (exit 0 = fixed)
+npx tsx evals/issues/bugs.ts check                      # each hidden test passes on the original, fails on its bug
+```

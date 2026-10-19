@@ -1,0 +1,7 @@
+{
+  "category": "one-file",
+  "fixFiles": ["tinydb/queries.py"],
+  "edits": [
+    { "file": "tinydb/queries.py", "find": "            lambda value: value <= rhs,\n", "replace": "            lambda value: value < rhs,\n" }
+  ]
+}
