@@ -196,7 +196,7 @@ test('parsePasted reads a URL, code#state and a bare code', () => {
 });
 
 test('the oauth-code providers set up so far have a valid login and a source', () => {
-  const ready = ['openai-codex', 'anthropic', 'devin', 'gitlab-duo', 'gitlab-duo-agent'];
+  const ready = ['openai-codex', 'anthropic', 'devin', 'gitlab-duo', 'gitlab-duo-agent', 'openrouter', 'zai-coding-plan'];
   const entries = loadCatalog(undefined).providers();
   for (const id of ready) {
     const entry = entries.find((p) => p.id === id);
@@ -212,17 +212,19 @@ async function loginThroughCommand(
   t: { after(fn: () => void): void },
   id: string,
   paste: (authorize: URL) => string,
-  tokenBody: unknown,
-): Promise<{ home: string; authorize: URL; token: { url: string; init: RequestInit } }> {
+  reply: unknown,
+): Promise<{ home: string; authorize: URL; token: { url: string; init: RequestInit }; calls: { url: string; init: RequestInit }[] }> {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-oauth-'));
   const previous = { home: process.env.AXIOM_HOME, fetch: globalThis.fetch, open: defaultOAuthDeps.openBrowser };
   process.env.AXIOM_HOME = home;
   let authorize!: URL;
-  let token!: { url: string; init: RequestInit };
+  const calls: { url: string; init: RequestInit }[] = [];
   defaultOAuthDeps.openBrowser = (url) => (authorize = new URL(url));
+  // `reply` is the token response, or per URL when the login makes more calls than the token exchange.
   globalThis.fetch = async (input, init) => {
-    token = { url: String(input), init: init ?? {} };
-    return new Response(JSON.stringify(tokenBody), { status: 200, headers: { 'content-type': 'application/json' } });
+    calls.push({ url: String(input), init: init ?? {} });
+    const body = typeof reply === 'function' ? (reply as (url: string, init: RequestInit) => unknown)(String(input), init ?? {}) : reply;
+    return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
   };
   t.after(() => {
     globalThis.fetch = previous.fetch;
@@ -234,7 +236,7 @@ async function loginThroughCommand(
   const ctxUi: CommandUI = { print: () => {}, ask: async () => paste(authorize), confirm: async () => false };
   const result = await loginCommand.run(id, { ui: ctxUi } as CommandContext);
   assert.match(result?.text ?? '', /^Connected /);
-  return { home, authorize, token };
+  return { home, authorize, token: calls[0], calls };
 }
 
 test('/login gitlab-duo-agent: paste-only redirect, form exchange with the real client, stored and resolvable', async (t) => {
@@ -280,4 +282,77 @@ test('a browser Codex login is refreshed by the device hook, so both must use th
   assert.equal(device.storeAs, 'openai-codex');
   assert.equal(browserLogin.clientId, device.clientId);
   assert.equal(browserLogin.tokenUrl, device.exchangeUrl);
+});
+
+test('/login openrouter: no client and no state, PKCE bound to the JSON exchange, the key is stored as an API key', async (t) => {
+  const { home, authorize, token } = await loginThroughCommand(t, 'openrouter', () => 'http://localhost:54549/callback?code=or-code', { key: 'sk-or-v1-test' });
+  assert.equal(authorize.origin + authorize.pathname, 'https://openrouter.ai/auth');
+  assert.equal(authorize.searchParams.get('callback_url'), 'http://localhost:54549/callback');
+  assert.ok(!authorize.searchParams.has('state') && !authorize.searchParams.has('client_id'));
+  assert.equal(token.url, 'https://openrouter.ai/api/v1/auth/keys');
+  const body = JSON.parse(String(token.init.body)) as Record<string, string>;
+  assert.equal(body.code, 'or-code');
+  assert.equal(crypto.createHash('sha256').update(body.code_verifier).digest('base64url'), authorize.searchParams.get('code_challenge'));
+  assert.deepEqual(readAuth(home).openrouter, { type: 'api_key', key: 'sk-or-v1-test' });
+  assert.equal((await resolveCredential('openrouter', { home, env: {} }))?.value, 'sk-or-v1-test');
+});
+
+/** Z.AI token endpoint and business API; `keys` is what the key list returns. */
+function zaiServer(keys: unknown) {
+  return (url: string, init: RequestInit): unknown => {
+    const path = new URL(url).pathname;
+    if (url === 'https://zcode.z.ai/api/v1/oauth/token') return { code: 0, msg: 'ok', data: { zai: { access_token: 'zai-oauth' }, user: { email: 'me@example.test' } } };
+    if (path === '/api/auth/z/login') return { code: 200, success: true, data: { access_token: 'zai-biz' } };
+    if (path === '/api/biz/customer/getCustomerInfo') {
+      return { code: 200, success: true, data: { organizations: [{ organizationId: 'org-0', projects: [] }, { organizationId: 'org-1', isDefault: true, projects: [{ projectId: 'proj-1', isDefault: true }] }] } };
+    }
+    if (path.endsWith('/api_keys')) return { code: 200, success: true, data: init.method === 'POST' ? { name: 'axiom', apiKey: 'new-id' } : keys };
+    if (path.includes('/api_keys/copy/')) return { code: 200, success: true, data: { secretKey: `secret-of-${path.split('/').pop()}` } };
+    return { code: 404, success: false, msg: `unexpected ${url}` };
+  };
+}
+
+test('/login zai-coding-plan: pasted zcode:// redirect, state checked, an `axiom` key is created and stored under zai-coding-plan', async (t) => {
+  let state = '';
+  const { home, authorize, token, calls } = await loginThroughCommand(
+    t,
+    'zai-coding-plan',
+    (a) => `zcode://zai-auth/callback?code=zai-code&state=${(state = a.searchParams.get('state')!)}`,
+    zaiServer({ list: [{ name: 'zcode-api-key', apiKey: 'zcode-id' }] }),
+  );
+  assert.equal(authorize.origin + authorize.pathname, 'https://chat.z.ai/api/oauth/authorize');
+  assert.equal(authorize.searchParams.get('redirect_uri'), 'zcode://zai-auth/callback');
+  assert.ok(!authorize.searchParams.has('code_challenge'), 'Z.AI uses no PKCE');
+  assert.deepEqual(JSON.parse(String(token.init.body)), { provider: 'zai', code: 'zai-code', redirect_uri: 'zcode://zai-auth/callback', state });
+  const biz = calls.slice(2);
+  assert.ok(biz.every((c) => (c.init.headers as Record<string, string>).authorization === 'Bearer zai-biz'), 'business calls use the business token');
+  const create = calls.find((c) => c.init.method === 'POST' && c.url.endsWith('/api_keys'));
+  assert.ok(create?.url.includes('/organization/org-1/projects/proj-1/'), 'the default organization and project');
+  assert.deepEqual(JSON.parse(String(create?.init.body)), { name: 'axiom' });
+  assert.deepEqual(readAuth(home)['zai-coding-plan'], { type: 'api_key', key: 'new-id.secret-of-new-id' });
+  assert.equal(readAuth(home).zai, undefined, 'the zai API-key login is left alone');
+});
+
+test('/login zai-coding-plan reuses an existing `axiom` key instead of creating another', async (t) => {
+  const { home, calls } = await loginThroughCommand(t, 'zai-coding-plan', (a) => `zai-code#${a.searchParams.get('state')}`, zaiServer([{ name: 'axiom', apiKey: 'old-id' }]));
+  assert.ok(!calls.some((c) => c.init.method === 'POST' && c.url.endsWith('/api_keys')));
+  assert.deepEqual(readAuth(home)['zai-coding-plan'], { type: 'api_key', key: 'old-id.secret-of-old-id' });
+});
+
+test('/login zai-coding-plan: a wrong state is refused before any call, a business API error is reported', async (t) => {
+  const entry = loadCatalog(undefined).providers().find((p) => p.id === 'zai-coding-plan')!;
+  const deps = { callbackTimeoutMs: 1_000, openBrowser: () => {} };
+  await assert.rejects(oauthCodeLogin(entry, ui('zcode://zai-auth/callback?code=c&state=forged'), deps), /state does not match/);
+
+  const previous = globalThis.fetch;
+  t.after(() => (globalThis.fetch = previous));
+  let authorize!: URL;
+  globalThis.fetch = async (input) => {
+    const reply = String(input).startsWith('https://zcode.z.ai/')
+      ? { code: 0, data: { zai: { access_token: 'zai-oauth' } } }
+      : { code: 401, success: false, msg: 'Coding Plan not active' };
+    return new Response(JSON.stringify(reply), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  const pasteRealState = ui(async () => `c#${authorize.searchParams.get('state')}`);
+  await assert.rejects(oauthCodeLogin(entry, pasteRealState, { ...deps, openBrowser: (url) => (authorize = new URL(url)) }), /business login failed: Coding Plan not active/);
 });
