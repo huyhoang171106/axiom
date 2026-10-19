@@ -2,6 +2,23 @@
   "id": "devin",
   "name": "Devin",
   "login": {
-    "type": "oauth-code"
-  }
+    "type": "oauth-code",
+    "authorizeUrl": "https://app.devin.ai/auth/cli/continue",
+    "tokenUrl": "https://api.devin.ai/auth/cli/token",
+    "authorizeParams": {
+      "response_type": "code",
+      "redirect_uri": "{redirect_uri}",
+      "state": "{state}",
+      "code_challenge": "{code_challenge}",
+      "code_challenge_method": "S256",
+      "prompt": "select_account"
+    },
+    "callback": { "port": 59653, "path": "/callback" },
+    "tokenBody": "json",
+    "tokenParams": { "code": "{code}", "code_verifier": "{code_verifier}" },
+    "credential": { "access": "token" },
+    "instructions": "Sign in to Devin in your browser.",
+    "source": "oh-my-pi catalog (MIT), packages/catalog/src/compat/rules/auth/devin.kdl @ 9540b91"
+  },
+  "refresh": "none"
 }
