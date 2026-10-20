@@ -132,4 +132,16 @@ for (const columns of [40, 60, 80, 120]) test(`components render within ${column
   );
   assert.match(selector, /gemini-3\.1-flash-lite/);
   assert.ok(selector.split('\n').every((line) => visibleWidth(line) <= columns));
+
+  const longStreamingTurn: TuiTurn = {
+    ...turn,
+    text: Array.from({ length: 25 }, (_, i) => `Line ${i + 1} of streaming response`).join('\n'),
+  };
+  const clippedLive = renderToString(
+    createElement(Turn, { turn: longStreamingTurn, expanded: false, width: columns, maxLines: 6 }),
+    { columns },
+  );
+  assert.match(clippedLive, /\+19 dòng phía trên/);
+  assert.ok(!clippedLive.includes('Line 1 of streaming response'));
+  assert.match(clippedLive, /Line 25 of streaming response/);
 });
