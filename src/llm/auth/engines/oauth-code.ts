@@ -11,6 +11,7 @@ import { registerSecret } from '../../../core/secrets.js';
 import type { CommandUI } from '../../../commands/types.js';
 import type { ProviderEntry } from '../../catalog/index.js';
 import { jwtExpiry, withTimeout } from '../refresh.js';
+import { readAxiomEnv } from '../store.js';
 import type { AfterExchangeHook } from './device-code.js';
 import type { Credential, LoginEngine } from './index.js';
 
@@ -21,6 +22,8 @@ const params = z.record(z.string(), z.string());
 export const oauthLoginSchema = z.object({
   type: z.literal('oauth-code'),
   clientId: z.string().min(1).optional(),
+  /** Env name (process or ~/.axiom/.env) of a client secret that may not live in the repo; fills `{client_secret}`. */
+  clientSecretEnv: z.string().regex(/^[A-Z][A-Z0-9_]*$/).optional(),
   authorizeUrl: z.url(),
   tokenUrl: z.url(),
   scopes: z.array(z.string().min(1)).optional(),
@@ -185,6 +188,12 @@ export async function oauthCodeLogin(provider: ProviderEntry, ui: CommandUI, dep
   const parsed = oauthLoginSchema.safeParse(provider.login);
   if (!parsed.success) throw new Error(`${provider.id}: browser sign-in is not set up in src/llm/catalog/auth/${provider.id}.json yet.`);
   const login = parsed.data;
+  const secretEnv = login.clientSecretEnv;
+  const clientSecret = secretEnv ? process.env[secretEnv] || readAxiomEnv()[secretEnv] : undefined;
+  if (secretEnv && !clientSecret) {
+    throw new Error(`${provider.id}: set ${secretEnv} (in the environment or ~/.axiom/.env) first; the README says where its value comes from.`);
+  }
+  if (clientSecret) registerSecret(clientSecret);
 
   const verifier = crypto.randomBytes(32).toString('base64url');
   const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
@@ -192,6 +201,7 @@ export async function oauthCodeLogin(provider: ProviderEntry, ui: CommandUI, dep
   const redirectUri = login.callback.redirectUri ?? ('port' in login.callback ? `http://127.0.0.1:${login.callback.port}${login.callback.path}` : '');
   const values = {
     client_id: login.clientId,
+    client_secret: clientSecret,
     redirect_uri: redirectUri,
     scope: login.scopes?.join(' '),
     state,
