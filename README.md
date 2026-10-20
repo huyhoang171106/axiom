@@ -31,6 +31,13 @@ Files under `~/.axiom` (`AXIOM_HOME` moves it), see `docs/guides/providers.md` s
 | `models-cache.json` | Model lists from discovery (24 h) |
 | `.env` | Provider keys as env vars; the project's `.env` is never read |
 
+`/login google-gemini-cli` and `/login google-antigravity` sign in with the Google OAuth clients of those apps. Google requires their client secret, which is public in the apps' code but kept out of this repo. Put it in `~/.axiom/.env`:
+
+| Provider | Variable | Value from |
+|---|---|---|
+| `google-gemini-cli` | `GEMINI_CLI_OAUTH_CLIENT_SECRET` | `OAUTH_CLIENT_SECRET` in [gemini-cli `oauth2.ts`](https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/code_assist/oauth2.ts) |
+| `google-antigravity` | `ANTIGRAVITY_OAUTH_CLIENT_SECRET` | `client-secret` (base64) in [oh-my-pi `google-antigravity.kdl`](https://github.com/can1357/oh-my-pi/blob/main/packages/catalog/src/compat/rules/auth/google-antigravity.kdl) |
+
 ## Target repo
 
 `workspace/tinydb/` is an unmodified snapshot (no `.git`) of the repo the agent works on.

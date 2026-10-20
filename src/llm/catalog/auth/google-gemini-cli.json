@@ -2,6 +2,38 @@
   "id": "google-gemini-cli",
   "name": "Google Cloud Code Assist (Gemini CLI)",
   "login": {
-    "type": "oauth-code"
-  }
+    "type": "oauth-code",
+    "clientId": "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com",
+    "clientSecretEnv": "GEMINI_CLI_OAUTH_CLIENT_SECRET",
+    "authorizeUrl": "https://accounts.google.com/o/oauth2/v2/auth",
+    "tokenUrl": "https://oauth2.googleapis.com/token",
+    "scopes": [
+      "https://www.googleapis.com/auth/cloud-platform",
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/userinfo.profile"
+    ],
+    "authorizeParams": {
+      "response_type": "code",
+      "client_id": "{client_id}",
+      "redirect_uri": "{redirect_uri}",
+      "scope": "{scope}",
+      "state": "{state}",
+      "access_type": "offline",
+      "prompt": "consent"
+    },
+    "callback": { "port": 8085, "path": "/oauth2callback" },
+    "tokenBody": "form",
+    "tokenParams": {
+      "grant_type": "authorization_code",
+      "client_id": "{client_id}",
+      "client_secret": "{client_secret}",
+      "code": "{code}",
+      "redirect_uri": "{redirect_uri}"
+    },
+    "credential": { "access": "access_token", "refresh": "refresh_token", "expires": "expires_in" },
+    "afterExchange": "google-code-assist",
+    "instructions": "Sign in with your Google account in your browser. Port 8085 must be free. A personal account gets the free Code Assist tier; a Workspace account needs GOOGLE_CLOUD_PROJECT.",
+    "source": "oh-my-pi catalog (MIT), packages/catalog/src/compat/rules/auth/google-gemini-cli.kdl @ 9540b91; client from https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/code_assist/oauth2.ts"
+  },
+  "refresh": { "tokenUrl": "https://oauth2.googleapis.com/token" }
 }
