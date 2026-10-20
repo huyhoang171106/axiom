@@ -1,4 +1,5 @@
 // src/tui/components/transcript.tsx - Static completed turns and a live streaming turn
+import type { ReactNode } from 'react';
 import { Box, Static, Text } from 'ink';
 import type { TuiTurn, TuiState } from '../store.js';
 import { ToolRow } from './tool-row.js';
@@ -17,9 +18,13 @@ export function Turn({ turn, expanded, width }: { turn: TuiTurn; expanded: boole
   </Box>;
 }
 
-export function Transcript({ state, expanded, width }: { state: TuiState; expanded: boolean; width: number }) {
+export function Transcript({ state, expanded, width, header }: { state: TuiState; expanded: boolean; width: number; header?: ReactNode }) {
+  // Ink writes out only one <Static> per app, so the header goes in as the first item of this one.
+  const items: ('header' | TuiTurn)[] = header ? ['header', ...state.entries] : [...state.entries];
   return <Box flexDirection="column">
-    <Static items={[...state.entries]}>{turn => <Turn key={turn.id} turn={turn} expanded={false} width={width} />}</Static>
+    <Static items={items}>{item => item === 'header'
+      ? <Box key="header">{header}</Box>
+      : <Turn key={item.id} turn={item} expanded={false} width={width} />}</Static>
     {expanded && state.entries.flatMap(turn => turn.tools.map((row, index) =>
       <ToolRow key={`${turn.id}-${index}`} row={row} expanded width={width} />))}
     {state.live && <Turn turn={state.live} expanded={expanded} width={width} />}
