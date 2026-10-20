@@ -42,7 +42,7 @@ test('TEST F: transient SelectMenu mounts in App, handles terminal resize and un
   const store = new TuiStore();
   const controller = { submit: async () => {}, interrupt() {}, abort() {}, lastPrompt: '' } as unknown as TuiController;
   const app = render(createElement(App, { store, controller, workspace: '/repo', initial: '' }),
-    { stdout: stdout as unknown as NodeJS.WriteStream, stdin: stdin as unknown as NodeJS.ReadStream, patchConsole: false, exitOnCtrlC: false });
+    { stdout: stdout as unknown as NodeJS.WriteStream, stdin: stdin as unknown as NodeJS.ReadStream, patchConsole: false, exitOnCtrlC: false, interactive: true });
 
   await new Promise(resolve => setTimeout(resolve, 60));
 
@@ -99,6 +99,7 @@ test('multi-turn chat -> /help -> /model -> /login -> /clear -> chat never dupli
       stdin: stdin as unknown as NodeJS.ReadStream,
       patchConsole: false,
       exitOnCtrlC: false,
+      interactive: true,
     });
 
     const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -208,6 +209,7 @@ test('multi-turn chat -> /help -> /model -> /login -> /clear -> chat never dupli
       stdin: fakeTty(90, 24) as unknown as NodeJS.ReadStream,
       patchConsole: false,
       exitOnCtrlC: false,
+      interactive: true,
     });
     await wait(60);
     assert.equal(countOccurrences(written2, 'Axiom v0.1'), 1);
