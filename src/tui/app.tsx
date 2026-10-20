@@ -1,6 +1,6 @@
 // src/tui/app.tsx - Ink composition and global terminal shortcuts
 import { useEffect, useSyncExternalStore } from 'react';
-import { Box, Static, Text, useInput, useWindowSize } from 'ink';
+import { Box, Text, useInput, useWindowSize } from 'ink';
 import { defaultCommandRouter } from '../commands/index.js';
 import { Header } from './components/header.js';
 import { Transcript } from './components/transcript.js';
@@ -32,8 +32,8 @@ export function App({ store, controller, workspace, initial }: { store: TuiStore
     }
   });
   return <Box flexDirection="column">
-    <Static items={['header']}>{item => <Header key={item} workspace={workspace} model={state.model ? `${state.model.provider}/${state.model.id}` : 'Dùng /login để kết nối'} />}</Static>
-    <Transcript key={state.revision} state={state} expanded={state.expanded} width={columns} />
+    <Transcript key={state.revision} state={state} expanded={state.expanded} width={columns}
+      header={<Header workspace={workspace} model={state.model ? `${state.model.provider}/${state.model.id}` : 'Dùng /login để kết nối'} />} />
     {state.pendingApproval && <Box borderStyle="round" flexDirection="column">
       <Text>Cần duyệt: {state.pendingApproval.name}</Text><Text>{JSON.stringify(state.pendingApproval.args)}</Text>
       <Text>{state.pendingApproval.reason}</Text><Text>[y] Duyệt   [n / Enter] Từ chối</Text>
