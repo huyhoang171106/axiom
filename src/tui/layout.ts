@@ -154,3 +154,53 @@ export function footerUsageText(total: { promptTokens: number; completionTokens:
   const detail = read === undefined ? '' : ` (U ${formatTokens(Math.max(0, total.promptTokens - read))} + R ${formatTokens(read)})`;
   return `↑${formatTokens(total.promptTokens)}${detail} ↓${formatTokens(total.completionTokens)} ${formatCost(total.costEstimate)}`;
 }
+
+/** Shortens a leading home directory to `~` for clean header/footer display. */
+export function compactHomePath(cwd: string, homedir?: string): string {
+  const norm = cwd.replace(/\\/g, '/');
+  const home = homedir?.replace(/\\/g, '/').replace(/\/+$/, '');
+  if (home && (norm === home || norm.startsWith(`${home}/`))) {
+    return `~${norm.slice(home.length)}`;
+  }
+  return norm;
+}
+
+/**
+ * Formats a user message as full-width pi-open-tui block lines (`▌ > ... ▐`)
+ * that never exceed `width` columns.
+ */
+export function formatUserPromptLines(
+  prompt: string,
+  width: number,
+  opts: { left?: string; right?: string } = {},
+): string[] {
+  const cols = Math.max(4, Math.floor(width));
+  const left = opts.left ?? '▌';
+  const right = opts.right ?? '▐';
+  const edgeWidth = visibleWidth(left) + visibleWidth(right) + 2;
+  const innerWidth = Math.max(1, cols - edgeWidth);
+  return prompt.split(/\r?\n/).map((line, idx) => {
+    const prefix = idx === 0 ? '> ' : '  ';
+    const body = truncate(`${prefix}${line}`, innerWidth);
+    const pad = ' '.repeat(Math.max(0, innerWidth - visibleWidth(body)));
+    return `${left} ${body}${pad} ${right}`;
+  });
+}
+
+/** Joins two fixed-width columns separated by `divider`, padded/truncated to `totalWidth`. */
+export function formatTwoColumnRow(
+  leftText: string,
+  rightText: string,
+  totalWidth: number,
+  divider = ' │ ',
+): string {
+  const divWidth = visibleWidth(divider);
+  const avail = Math.max(2, Math.floor(totalWidth) - divWidth);
+  const leftCols = Math.max(1, Math.floor(avail * 0.56));
+  const rightCols = Math.max(1, avail - leftCols);
+  const l = truncate(leftText, leftCols);
+  const lPad = ' '.repeat(Math.max(0, leftCols - visibleWidth(l)));
+  const r = truncate(rightText, rightCols);
+  const rPad = ' '.repeat(Math.max(0, rightCols - visibleWidth(r)));
+  return `${l}${lPad}${divider}${r}${rPad}`;
+}

@@ -6,17 +6,38 @@ import { createTheme } from '../theme.js';
 
 export function ToolRow({ row, expanded, width }: { row: TuiToolRow; expanded: boolean; width: number }) {
   const theme = createTheme();
-  const policy = row.result?.metadata?.policy;
-  const denied = typeof policy === 'object' && policy !== null &&
-    ('verdict' in policy && policy.verdict === 'deny' || 'approval' in policy && policy.approval === 'denied');
-  const icon = denied ? theme.icons.denied : !row.result ? theme.icons.running : row.result.isError ? theme.icons.error : theme.icons.success;
-  const main = row.call.arguments.path ?? row.call.arguments.command ?? JSON.stringify(row.call.arguments);
+  const policy = row.result?.metadata?.policy as Record<string, unknown> | undefined;
+  const denied =
+    typeof policy === 'object' &&
+    policy !== null &&
+    (policy.verdict === 'deny' || policy.approval === 'denied');
+  const main = String(row.call.arguments.path ?? row.call.arguments.command ?? JSON.stringify(row.call.arguments)).replace(/[\r\n]+/g, ' ');
   const duration = row.result?.metadata?.durationMs;
-  const suffix = typeof duration === 'number' ? ` (${(duration / 1000).toFixed(1)}s)` : '';
-  const summary = truncate(`${icon} ${row.call.name} ${String(main).replace(/[\r\n]+/g, ' ')}${suffix}`, width);
-  return <Box flexDirection="column">
-    <Text>{row.result?.isError ? theme.error(summary) : theme.muted(summary)}</Text>
-    {row.result?.isError && <Text>{theme.error(row.result.error ?? row.result.output)}</Text>}
-    {expanded && row.result && <Text>{row.result.output}</Text>}
-  </Box>;
+  const durationSuffix = typeof duration === 'number' ? `  (${(duration / 1000).toFixed(1)}s)` : '';
+
+  let summary: string;
+  if (denied) {
+    const reason = (typeof policy?.reason === 'string' && policy.reason) || row.result?.error || row.result?.output || 'policy';
+    summary = truncate(`${theme.icons.denied} ${row.call.name} ${main} — bị chặn: ${String(reason).replace(/[\r\n]+/g, ' ')}`, width);
+  } else if (!row.result) {
+    summary = truncate(`${theme.icons.running} ${row.call.name} ${main}`, width);
+  } else if (row.result.isError) {
+    const errText = String(row.result.error ?? row.result.output).split(/\r?\n/)[0] ?? 'error';
+    summary = truncate(`${theme.icons.running} ${row.call.name} ${main}  ${theme.icons.error} ${errText}${durationSuffix}`, width);
+  } else {
+    summary = truncate(`${theme.icons.running} ${row.call.name} ${main}  ${theme.icons.success}${durationSuffix}`, width);
+  }
+
+  const gutter = `  ${theme.icons.bar} `;
+  const expandedLines = expanded && row.result?.output ? row.result.output.split(/\r?\n/) : [];
+
+  return (
+    <Box flexDirection="column">
+      <Text>{denied || row.result?.isError ? theme.error(summary) : !row.result ? theme.accent(summary) : theme.muted(summary)}</Text>
+      {row.result?.isError && !denied && <Text>{theme.error(truncate(`  ${row.result.error ?? row.result.output}`, width))}</Text>}
+      {expandedLines.map((line, idx) => (
+        <Text key={idx}>{theme.muted(truncate(`${gutter}${line}`, width))}</Text>
+      ))}
+    </Box>
+  );
 }
