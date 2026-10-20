@@ -324,7 +324,20 @@ export class TuiStore {
       this.schedule();
     });
 
+    // Silence EventBus's default console.error listener while TUI owns error rendering.
+    const rawEmitter = (bus as unknown as {
+      emitter?: {
+        listeners(event: string): ((...args: unknown[]) => void)[];
+        off(event: string, fn: (...args: unknown[]) => void): void;
+        on(event: string, fn: (...args: unknown[]) => void): void;
+      };
+    }).emitter;
+    const mutedConsoleListeners =
+      rawEmitter?.listeners('error').filter((fn) => fn.toString().includes('console.error')) ?? [];
+    for (const fn of mutedConsoleListeners) rawEmitter?.off('error', fn);
+
     const detach = () => {
+      for (const fn of mutedConsoleListeners) rawEmitter?.on('error', fn);
       for (const off of offs) off();
       if (this.detachBus === detach) this.detachBus = undefined;
       // Already received events still publish on their scheduled frame, including the last tokens.

@@ -14,16 +14,18 @@ export const MENU_PAGE_SIZE = 8;
 export function SelectMenu(props: {
   menu: TuiMenuState;
   width?: number;
+  pageSize?: number;
   disabled?: boolean;
   getMenu?(): Readonly<TuiMenuState> | null;
   onChange(patch: { query?: string; selectedIndex?: number }): void;
   onSelect(value: string): void;
   onCancel(): void;
 }) {
+  const pageSize = Math.max(1, props.pageSize ?? MENU_PAGE_SIZE);
   useInput(
     (input, key) => {
       const current = props.getMenu?.() ?? props.menu;
-      const result = editMenuInput(current, input, key, MENU_PAGE_SIZE);
+      const result = editMenuInput(current, input, key, pageSize);
       if (result.cancel) {
         props.onCancel();
         return;
@@ -49,7 +51,7 @@ export function SelectMenu(props: {
   const cols = props.width ? Math.max(20, Math.floor(props.width)) : undefined;
   const innerWidth = cols ? Math.max(8, cols - 4) : 100;
   const filtered = filterMenuItems(props.menu.items, props.menu.query);
-  const win = windowMenuItems(filtered, props.menu.selectedIndex, MENU_PAGE_SIZE);
+  const win = windowMenuItems(filtered, props.menu.selectedIndex, pageSize);
   const cursorGlyph = theme.accent(theme.icons.cursor);
   const searchLine = props.menu.query
     ? `${theme.accent(theme.icons.prompt)} ${props.menu.query}${cursorGlyph}`
@@ -101,7 +103,7 @@ export function SelectMenu(props: {
       <Text>
         {truncate(
           theme.muted(
-            win.total > MENU_PAGE_SIZE
+            win.total > pageSize
               ? `↑↓ (${win.start + 1}–${win.end}/${win.total}) · Enter chọn · Esc hủy`
               : '↑↓ di chuyển · Enter chọn · Esc hủy',
           ),

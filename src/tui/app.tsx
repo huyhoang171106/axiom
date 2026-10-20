@@ -6,7 +6,7 @@ import { Header } from './components/header.js';
 import { Transcript } from './components/transcript.js';
 import { ApprovalDialog } from './components/approval-dialog.js';
 import { Editor } from './components/editor.js';
-import { SelectMenu } from './components/select-menu.js';
+import { MENU_PAGE_SIZE, SelectMenu } from './components/select-menu.js';
 import { Footer } from './components/footer.js';
 import { truncate } from './layout.js';
 import { createTheme } from './theme.js';
@@ -25,7 +25,10 @@ export function App({
   initial: string;
 }) {
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
-  const { columns } = useWindowSize();
+  const { columns, rows } = useWindowSize();
+  const safeRows = Math.max(12, rows || 24);
+  const maxLiveLines = Math.max(4, safeRows - 10);
+  const menuPageSize = Math.max(2, Math.min(MENU_PAGE_SIZE, safeRows - 9));
   const theme = createTheme();
   const matches =
     !state.menu && !state.question && /^\/\S*$/.test(state.editor.text)
@@ -102,10 +105,10 @@ export function App({
   return (
     <Box flexDirection="column">
       <Transcript
-        key={state.revision}
         state={state}
         expanded={state.expanded}
         width={columns}
+        maxLiveLines={maxLiveLines}
         header={<Header workspace={workspace} model={modelLabel} mode={state.mode} width={columns} />}
       />
       {state.pendingApproval && <ApprovalDialog approval={state.pendingApproval} width={columns} />}
@@ -114,6 +117,7 @@ export function App({
           menu={state.menu}
           getMenu={store.getMenu}
           width={columns}
+          pageSize={menuPageSize}
           disabled={!!state.pendingApproval}
           onChange={(patch) => store.updateMenu(patch)}
           onSelect={(value) => store.resolveMenu(value)}

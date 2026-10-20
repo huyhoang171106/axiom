@@ -416,6 +416,9 @@ export class TuiController {
             if (controller.signal.aborted) resolve('deny');
             else this.store.requestApproval(request, resolve);
           });
+        if (this.agent.stateMachine.getState() === 'completed') {
+          this.agent.stateMachine.reset();
+        }
         this.store.prepareTurn(input);
         const result = await this.agent.runTask(input, controller.signal);
         if (result.status === 'failed' && result.error) {
@@ -483,17 +486,26 @@ export class TuiController {
         const storeAs = typeof entry?.login?.storeAs === 'string' ? entry.login.storeAs : providerId;
         const picked = pickProviderModel(storeAs, catalog, config);
         if (picked) {
-          saveConfig({ defaultModel: `${picked.provider}/${picked.id}` });
+          const selector = `${picked.provider}/${picked.id}`;
+          saveConfig({
+            defaultModel: selector,
+            ...(config.modelRoles?.default ? { modelRoles: { ...config.modelRoles, default: selector } } : {}),
+          });
           this.store.update({
             model: picked,
-            notice: `Đã kết nối ${picked.provider}. Đang dùng model: ${picked.provider}/${picked.id}`,
+            notice: `Đã kết nối ${picked.provider}. Đang dùng model: ${selector}`,
           });
           return;
         }
       }
     }
     if (commandName === 'model' && data && typeof data === 'object' && 'provider' in data && 'id' in data) {
-      this.store.update({ model: data as ModelInfo });
+      const info = data as ModelInfo;
+      const selector = `${info.provider}/${info.id}`;
+      if (config.modelRoles?.default && config.modelRoles.default !== selector) {
+        saveConfig({ defaultModel: selector, modelRoles: { ...config.modelRoles, default: selector } });
+      }
+      this.store.update({ model: info });
       return;
     }
     const resolved = resolveActiveModel(catalog, loadConfig());

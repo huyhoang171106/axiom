@@ -1,15 +1,23 @@
 // src/tui/components/transcript.tsx - Static completed turns and a live streaming turn
-import type { ReactNode } from 'react';
+import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Box, Static, Text } from 'ink';
 import type { TuiTurn, TuiState } from '../store.js';
 import { ToolRow } from './tool-row.js';
 import { formatTelemetryLine, formatUserPromptLines, truncate } from '../layout.js';
 import { createTheme } from '../theme.js';
 
-function renderAssistantLines(text: string, theme: ReturnType<typeof createTheme>): ReactNode[] {
-  const lines = text.split(/\r?\n/);
+function renderAssistantLines(text: string, theme: ReturnType<typeof createTheme>, maxLines?: number): ReactNode[] {
+  const allLines = text.split(/\r?\n/);
+  const clippedCount =
+    maxLines !== undefined && maxLines > 0 && allLines.length > maxLines ? allLines.length - maxLines : 0;
+  const lines = clippedCount > 0 ? allLines.slice(-maxLines!) : allLines;
   let inFence = false;
-  return lines.map((line, idx) => {
+  if (clippedCount > 0) {
+    for (let i = 0; i < clippedCount; i++) {
+      if (allLines[i].trimStart().startsWith('```')) inFence = !inFence;
+    }
+  }
+  const rendered = lines.map((line, idx) => {
     if (line.trimStart().startsWith('```')) {
       inFence = !inFence;
       return <Text key={idx}>{theme.muted(line)}</Text>;
@@ -22,9 +30,23 @@ function renderAssistantLines(text: string, theme: ReturnType<typeof createTheme
     }
     return <Text key={idx}>{line}</Text>;
   });
+  if (clippedCount > 0) {
+    rendered.unshift(<Text key="clipped-hint">{theme.muted(`… (+${clippedCount} dòng phía trên)`)}</Text>);
+  }
+  return rendered;
 }
 
-export function Turn({ turn, expanded, width }: { turn: TuiTurn; expanded: boolean; width: number }) {
+export function Turn({
+  turn,
+  expanded,
+  width,
+  maxLines,
+}: {
+  turn: TuiTurn;
+  expanded: boolean;
+  width: number;
+  maxLines?: number;
+}) {
   const theme = createTheme();
   const cols = Math.max(20, Math.floor(width));
   const promptLines = turn.prompt
@@ -51,7 +73,7 @@ export function Turn({ turn, expanded, width }: { turn: TuiTurn; expanded: boole
       {turn.tools.map((row, index) => (
         <ToolRow key={`${row.call.id}-${index}`} row={row} expanded={expanded} width={cols} />
       ))}
-      {turn.text && <Box flexDirection="column">{renderAssistantLines(turn.text, theme)}</Box>}
+      {turn.text && <Box flexDirection="column">{renderAssistantLines(turn.text, theme, maxLines)}</Box>}
       {errorLines.map((line, idx) => (
         <Text key={`err-${idx}`}>
           {idx === 0
@@ -64,25 +86,49 @@ export function Turn({ turn, expanded, width }: { turn: TuiTurn; expanded: boole
   );
 }
 
-export function Transcript({ state, expanded, width, header }: { state: TuiState; expanded: boolean; width: number; header?: ReactNode }) {
-  // Ink writes out only one <Static> per app, so the header goes in as the first item of this one.
-  const items: ('header' | TuiTurn)[] = header ? ['header', ...state.entries] : [...state.entries];
+export function Transcript({
+  state,
+  expanded,
+  width,
+  maxLiveLines,
+  header,
+}: {
+  state: TuiState;
+  expanded: boolean;
+  width: number;
+  maxLiveLines?: number;
+  header?: ReactNode;
+}) {
+  const headerCommittedRef = useRef(false);
+  useLayoutEffect(() => {
+    if (header) headerCommittedRef.current = true;
+  }, [Boolean(header)]);
+
+  // Only include the startup header in revision 0; /clear increments revision so it never re-prints the welcome header.
+  const includeHeader = Boolean(header) && state.revision === 0;
+  const items = useMemo<('header' | TuiTurn)[]>(
+    () => (includeHeader ? ['header', ...state.entries] : [...state.entries]),
+    [includeHeader, state.entries],
+  );
+
   return (
     <Box flexDirection="column">
-      <Static items={items}>
-        {(item) =>
-          item === 'header' ? (
-            <Box key="header">{header}</Box>
-          ) : (
-            <Turn key={item.id} turn={item} expanded={false} width={width} />
-          )
-        }
+      <Static key={state.revision} items={items}>
+        {(item) => {
+          if (item === 'header') {
+            if (headerCommittedRef.current) return null;
+            return <Box key="header">{header}</Box>;
+          }
+          return <Turn key={item.id} turn={item} expanded={false} width={width} />;
+        }}
       </Static>
       {expanded &&
-        state.entries.flatMap((turn) =>
-          turn.tools.map((row, index) => <ToolRow key={`${turn.id}-${index}`} row={row} expanded width={width} />),
-        )}
-      {state.live && <Turn turn={state.live} expanded={expanded} width={width} />}
+        state.entries
+          .slice(-3)
+          .flatMap((turn) =>
+            turn.tools.map((row, index) => <ToolRow key={`${turn.id}-${index}`} row={row} expanded width={width} />),
+          )}
+      {state.live && <Turn turn={state.live} expanded={expanded} width={width} maxLines={maxLiveLines} />}
     </Box>
   );
 }
