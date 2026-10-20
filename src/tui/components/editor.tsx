@@ -8,6 +8,7 @@ export function Editor(props: {
   value: EditorState;
   disabled?: boolean;
   secret?: boolean;
+  allowEmptySubmit?: boolean;
   width?: number;
   getValue?(): EditorState;
   onChange(value: EditorState): void;
@@ -16,7 +17,10 @@ export function Editor(props: {
   useInput(
     (input, key) => {
       if (key.upArrow || key.downArrow || key.tab) return;
-      const result = editInput(props.getValue?.() ?? props.value, input, key);
+      const result = editInput(props.getValue?.() ?? props.value, input, key, {
+        allowEmptySubmit: props.allowEmptySubmit,
+        singleLine: props.secret,
+      });
       props.onChange(result.state);
       if (result.submit !== undefined) props.onSubmit(result.submit);
     },
@@ -31,7 +35,13 @@ export function Editor(props: {
   const prefixN = `${theme.muted(theme.icons.bar)} `;
 
   if (!props.value.text) {
-    const hint = props.disabled ? 'Đang xử lý…' : 'Nhập yêu cầu hoặc /help';
+    const hint = props.disabled
+      ? 'Đang xử lý…'
+      : props.secret
+        ? 'Dán key rồi bấm Enter (ký tự được ẩn)'
+        : props.allowEmptySubmit
+          ? 'Nhập câu trả lời hoặc bấm Enter để chọn mặc định'
+          : 'Nhập yêu cầu hoặc /help';
     const content = props.disabled
       ? `${prefix0}${theme.muted(hint)}`
       : `${prefix0}${cursorGlyph} ${theme.muted(hint)}`;
@@ -43,10 +53,11 @@ export function Editor(props: {
   }
 
   if (props.secret) {
-    const masked = '*'.repeat([...props.value.text].length);
+    const len = [...props.value.text].length;
+    const masked = '*'.repeat(Math.min(len, 48));
     return (
       <Box borderStyle="round" paddingX={1} flexDirection="column" {...(cols ? { width: cols } : {})}>
-        <Text>{truncate(`${prefix0}${masked}${cursorGlyph}`, innerWidth)}</Text>
+        <Text>{truncate(`${prefix0}${masked}${cursorGlyph} ${theme.muted(`(${len} chars)`)}`, innerWidth)}</Text>
       </Box>
     );
   }

@@ -9,6 +9,15 @@ test('Enter submits, while Alt+Enter and backslash Enter insert newlines', () =>
   assert.equal(editInput(state, '', { return: true, meta: true }).state.text, 'hello\n');
   assert.equal(editInput({ text: 'hello\\', cursor: 6 }, '', { return: true }).state.text, 'hello\n');
   assert.equal(editInput({ text: '  ', cursor: 2 }, '', { return: true }).submit, undefined);
+  assert.equal(editInput({ text: '', cursor: 0 }, '', { return: true }, { allowEmptySubmit: true }).submit, '');
+});
+
+test('singleLine mode strips bracketed paste markers and newlines from API keys', () => {
+  const empty = { text: '', cursor: 0 };
+  const pasted = editInput(empty, '\x1b[200~AIzaSyTestKey123\r\n\x1b[201~', {}, { singleLine: true });
+  assert.equal(pasted.state.text, 'AIzaSyTestKey123');
+  const bareMarkers = editInput(empty, '[200~sk-abc-123[201~', {}, { singleLine: true });
+  assert.equal(bareMarkers.state.text, 'sk-abc-123');
 });
 
 test('editing preserves graphemes, inserts at the cursor and ignores control shortcuts', () => {
