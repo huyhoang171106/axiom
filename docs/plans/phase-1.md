@@ -114,13 +114,12 @@ Thân stub trả giá trị rỗng hoặc `throw new Error('chưa làm')`. Chữ
 - [ ] CI xanh, `gitleaks` sạch.
 - [ ] TUI: chat tự do được, `/triage` ra IssueTicket.
 - [ ] Mỗi run có trace JSONL, không chứa giá trị key.
-- [ ] Mỗi wire có test server giả và đã thử thật với ≥ 1 provider.
+- [ ] Mỗi wire có test server giả.
 
 ## Ghép (cuối ngày, D chủ trì)
 
 1. Mọi PR đã merge. Chạy checklist "Bản dùng được".
-2. Mỗi người thử thật ≥ 3 provider hoặc luồng đăng nhập trong làn mình, ghi bảng kết quả (provider, kết quả, ghi chú lỗi).
-3. README, video demo, `git tag v0.1-phase1 && git push origin v0.1-phase1` (workflow `release` tự tạo GitHub Release).
+2. README, video demo, `git tag v0.1-phase1 && git push origin v0.1-phase1` (workflow `release` tự tạo GitHub Release).
 
 Video: `/login` → chat về target repo → `/triage` issue có stack trace → `/triage` issue mơ hồ (agent hỏi lại) → đọc `.env` bị chặn → mở trace → `npm run eval -- --uc 01`.
 

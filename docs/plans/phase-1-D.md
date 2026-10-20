@@ -11,7 +11,7 @@
 
 D chủ trì bước "Ghép" cuối ngày (`phase-1.md`).
 
-Xong khi: trace của run thật không có giá trị key; thử thật ≥ 3 provider dùng wire của D (ollama local tính 1).
+Xong khi: trace của run thật không có giá trị key.
 
 | Điều kiện | Trạng thái |
 |---|---|

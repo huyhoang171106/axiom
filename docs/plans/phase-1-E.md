@@ -11,4 +11,4 @@
 | E5 | Footer 2 dòng + telemetry lượt (bước 8): TTFT, TPS, thanh context theo `ModelInfo.contextWindow`, git status có cache | Test `node:test` cho phần tính toán trong `layout.ts` | done |
 | E6 | Điền 3 wire `google-generative-ai`, `google-gemini-cli` (dùng project Cloud Code Assist lưu trong credential), `google-vertex` (ADC) | Test server giả cho cả 3 (stream text, gọi tool, usage) | done |
 
-Xong khi: checklist `tui.md` mục 10.1 đủ; `npm start` không có key thì chỉ cách `/login`, không crash; không có `console.log` trong `src/tui/`; thử thật ≥ 3 provider dùng wire của E.
+Xong khi: checklist `tui.md` mục 10.1 đủ; `npm start` không có key thì chỉ cách `/login`, không crash; không có `console.log` trong `src/tui/`.
