@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { editInput } from '../src/tui/editor.js';
+import { editMenuInput, filterMenuItems, windowMenuItems, type TuiMenuState } from '../src/tui/select-menu.js';
 
 test('Enter submits, while Alt+Enter and backslash Enter insert newlines', () => {
   const state = { text: 'hello', cursor: 5 };
@@ -28,4 +29,47 @@ test('editing preserves graphemes, inserts at the cursor and ignores control sho
   assert.equal(editInput(state, 'c', { ctrl: true }).state, state);
   assert.equal(editInput(state, '', { leftArrow: true }).state.cursor, 0);
   assert.equal(editInput(state, '', { rightArrow: true }).state.cursor, 3);
+});
+
+test('SelectMenu filters with exact/prefix priority, navigates skipping disabled items, selects on Enter and cancels on Esc', () => {
+  const initial: TuiMenuState = {
+    kind: 'login',
+    title: 'Chọn provider',
+    query: '',
+    selectedIndex: 0,
+    items: [
+      { value: 'google-vertex', label: 'google-vertex (Vertex AI)', description: 'cloud' },
+      { value: 'google', label: 'google (Google AI Studio)', description: 'API key' },
+      { value: 'apple', label: 'apple (Apple)', description: 'unsupported', disabled: true },
+    ],
+  };
+
+  // Exact match 'google' ranks before prefix match 'google-vertex'.
+  const filtered = filterMenuItems(initial.items, 'google');
+  assert.deepEqual(filtered.map((i) => i.value), ['google', 'google-vertex']);
+
+  // Typing updates query and resets selectedIndex to 0.
+  const typed = editMenuInput(initial, 'google', {});
+  assert.equal(typed.state.query, 'google');
+  assert.equal(typed.state.selectedIndex, 0);
+
+  // Enter selects the top ranked match ('google').
+  const chosen = editMenuInput(typed.state, '', { return: true });
+  assert.equal(chosen.select, 'google');
+
+  // Down arrow from index 1 in unfiltered list skips disabled item at index 2 and wraps to 0.
+  const atOne = { ...initial, selectedIndex: 1 };
+  const afterDown = editMenuInput(atOne, '', { downArrow: true });
+  assert.equal(afterDown.state.selectedIndex, 0);
+
+  // Escape cancels without selecting.
+  const cancelled = editMenuInput(initial, '', { escape: true });
+  assert.equal(cancelled.cancel, true);
+  assert.equal(cancelled.select, undefined);
+
+  // Windowing keeps selectedIndex visible inside maxVisible.
+  const many = Array.from({ length: 20 }, (_, i) => ({ value: `m-${i}`, label: `Model ${i}` }));
+  const win = windowMenuItems(many, 15, 8);
+  assert.equal(win.slice.length, 8);
+  assert.ok(win.start <= 15 && win.end > 15);
 });

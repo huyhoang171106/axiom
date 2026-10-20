@@ -1,4 +1,4 @@
-// tests/tui-controller.test.ts - Commands and human decisions through the TUI contracts
+// tests/tui-controller.test.ts - Commands, transient selectors and human decisions through the TUI contracts
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,14 +7,37 @@ import path from 'node:path';
 import { TuiStore } from '../src/tui/store.js';
 import { TuiController, resolveActiveModel, enrichErrorMessage } from '../src/tui/controller.js';
 import { loadCatalog } from '../src/llm/catalog/index.js';
-import { saveCredential } from '../src/llm/auth/store.js';
+import { readAuth, saveCredential } from '../src/llm/auth/store.js';
 import { loadConfig } from '../src/core/config.js';
+import { startFakeServer } from './fake-server.js';
 
-test('approval resolves only on a decision and cancellation refuses pending work', async t => {
+function useTempHome(t: { after(fn: () => void): void }): string {
+  const prevHome = process.env.AXIOM_HOME;
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-tui-test-'));
+  process.env.AXIOM_HOME = tmpHome;
+  t.after(() => {
+    if (prevHome === undefined) delete process.env.AXIOM_HOME;
+    else process.env.AXIOM_HOME = prevHome;
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+  });
+  return tmpHome;
+}
+
+async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() > deadline) throw new Error('Timed out waiting for condition');
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
+
+test('approval resolves only on a decision and cancellation refuses pending work', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const store = new TuiStore();
   t.after(() => store.dispose());
-  const approval = new Promise(resolve => store.requestApproval({ name: 'run_command', args: { command: 'pip install x' }, reason: 'dependency' }, resolve));
+  const approval = new Promise((resolve) =>
+    store.requestApproval({ name: 'run_command', args: { command: 'pip install x' }, reason: 'dependency' }, resolve),
+  );
   t.mock.timers.tick(34);
   assert.equal(store.getSnapshot().pendingApproval?.name, 'run_command');
   store.cancelInteraction();
@@ -30,7 +53,7 @@ test('approval resolves only on a decision and cancellation refuses pending work
   await rejected;
 });
 
-test('help uses the shared router and Ctrl+C requires two presses within two seconds', async t => {
+test('help uses the shared router and Ctrl+C requires two presses within two seconds', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const store = new TuiStore();
   t.after(() => store.dispose());
@@ -50,16 +73,8 @@ test('help uses the shared router and Ctrl+C requires two presses within two sec
   assert.equal(exits, 1);
 });
 
-test('resolveActiveModel avoids unconfigured auth:none providers like litellm and selects logged-in provider', t => {
-  const prevHome = process.env.AXIOM_HOME;
-  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-tui-test-'));
-  process.env.AXIOM_HOME = tmpHome;
-  t.after(() => {
-    if (prevHome === undefined) delete process.env.AXIOM_HOME;
-    else process.env.AXIOM_HOME = prevHome;
-    fs.rmSync(tmpHome, { recursive: true, force: true });
-  });
-
+test('resolveActiveModel avoids unconfigured auth:none providers like litellm and selects logged-in provider', (t) => {
+  useTempHome(t);
   const catalog = loadCatalog();
   assert.equal(resolveActiveModel(catalog, {}), null);
 
@@ -77,17 +92,9 @@ test('resolveActiveModel avoids unconfigured auth:none providers like litellm an
   void controller;
 });
 
-test('submitting a prompt with no connected provider shows /login instructions instead of calling litellm', async t => {
+test('submitting a prompt with no connected provider shows /login instructions instead of calling litellm', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const prevHome = process.env.AXIOM_HOME;
-  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-tui-noprovider-'));
-  process.env.AXIOM_HOME = tmpHome;
-  t.after(() => {
-    if (prevHome === undefined) delete process.env.AXIOM_HOME;
-    else process.env.AXIOM_HOME = prevHome;
-    fs.rmSync(tmpHome, { recursive: true, force: true });
-  });
-
+  useTempHome(t);
   const store = new TuiStore();
   t.after(() => store.dispose());
   const controller = new TuiController(store, { workspaceRoot: process.cwd() });
@@ -110,16 +117,8 @@ test('enrichErrorMessage adds actionable guidance for HTTP 400, fetch failed, 40
   assert.match(enrichErrorMessage('Google error (429): Quota exceeded', googleModel), /vượt hạn mức/);
 });
 
-test('/model and /logout update TuiStore model state and config.json immediately', async t => {
-  const prevHome = process.env.AXIOM_HOME;
-  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-tui-commands-'));
-  process.env.AXIOM_HOME = tmpHome;
-  t.after(() => {
-    if (prevHome === undefined) delete process.env.AXIOM_HOME;
-    else process.env.AXIOM_HOME = prevHome;
-    fs.rmSync(tmpHome, { recursive: true, force: true });
-  });
-
+test('/model and /logout with explicit arguments update TuiStore model state and config.json immediately', async (t) => {
+  useTempHome(t);
   saveCredential('google', { type: 'api_key', key: 'AIzaSyDummyKeyForTest' });
   const store = new TuiStore();
   t.after(() => store.dispose());
@@ -129,7 +128,136 @@ test('/model and /logout update TuiStore model state and config.json immediately
   await controller.submit('/model google/gemini-2.5-pro');
   assert.equal(store.getSnapshot().model?.id, 'gemini-2.5-pro');
   assert.equal(loadConfig().defaultModel, 'google/gemini-2.5-pro');
+  assert.equal(store.getSnapshot().entries.length, 0);
 
   await controller.submit('/logout google');
   assert.equal(store.getSnapshot().model, null);
+  assert.equal(store.getSnapshot().entries.length, 0);
+});
+
+test('TEST A & TEST B: interactive /model selector updates model on Enter and preserves model on Esc without polluting transcript', async (t) => {
+  const home = useTempHome(t);
+  saveCredential('google', { type: 'api_key', key: 'AIzaSyDummyKeyForTest' });
+  fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ enabledProviders: ['google'] }));
+
+  const store = new TuiStore();
+  t.after(() => store.dispose());
+  const controller = new TuiController(store, { workspaceRoot: process.cwd() });
+  assert.equal(store.getSnapshot().model?.id, 'gemini-3.1-flash-lite');
+
+  // TEST B: Open /model -> press Esc -> selector closes, model unchanged, transcript empty.
+  const cancelPromise = controller.submit('/model');
+  await waitFor(() => store.getMenu()?.kind === 'model');
+  store.flush();
+  assert.equal(store.getSnapshot().menu?.kind, 'model');
+  assert.ok((store.getSnapshot().menu?.items.length ?? 0) > 0);
+  store.resolveMenu(null);
+  await cancelPromise;
+
+  assert.equal(store.getSnapshot().menu, null);
+  assert.equal(store.getSnapshot().model?.id, 'gemini-3.1-flash-lite');
+  assert.equal(store.getSnapshot().entries.length, 0);
+
+  // TEST A: Open /model -> select google/gemini-2.5-pro -> selector closes, model updated, transcript empty.
+  const selectPromise = controller.submit('/model');
+  await waitFor(() => store.getMenu()?.kind === 'model');
+  store.resolveMenu('google/gemini-2.5-pro');
+  await selectPromise;
+
+  assert.equal(store.getSnapshot().menu, null);
+  assert.equal(store.getSnapshot().model?.id, 'gemini-2.5-pro');
+  assert.equal(loadConfig().defaultModel, 'google/gemini-2.5-pro');
+  assert.equal(store.getSnapshot().entries.length, 0);
+});
+
+test('TEST C: interactive /login selector picks provider, completes auth and closes without leaving provider list in transcript', async (t) => {
+  const home = useTempHome(t);
+  const target = loadCatalog()
+    .providers()
+    .find((p) => {
+      const v = p.login?.validate as { kind?: string; baseUrl?: string } | undefined;
+      return p.login?.type === 'api-key' && v?.kind === 'chat-completions' && !v.baseUrl;
+    })!;
+
+  const srv = await startFakeServer((req, res) =>
+    res.writeHead(req.headers.authorization === 'Bearer valid-key' ? 200 : 401).end('{}'),
+  );
+  t.after(() => srv.close());
+  fs.writeFileSync(path.join(home, 'models.json'), JSON.stringify({ providers: { [target.id]: { baseUrl: srv.url } } }));
+
+  const store = new TuiStore();
+  t.after(() => store.dispose());
+  const controller = new TuiController(store, { workspaceRoot: process.cwd() });
+
+  const loginPromise = controller.submit('/login');
+  await waitFor(() => store.getMenu()?.kind === 'login');
+  store.flush();
+  assert.equal(store.getSnapshot().menu?.kind, 'login');
+  assert.equal(store.getSnapshot().entries.length, 0);
+
+  // Select the provider from the menu.
+  store.resolveMenu(target.id);
+  await waitFor(() => {
+    store.flush();
+    return store.getSnapshot().question !== null;
+  });
+  // Menu is closed while the transient auth prompt is active.
+  assert.equal(store.getSnapshot().menu, null);
+  assert.equal(store.getSnapshot().question?.secret, true);
+
+  // Submit the API key.
+  store.answer('valid-key');
+  await loginPromise;
+
+  assert.equal(store.getSnapshot().menu, null);
+  assert.equal(store.getSnapshot().question, null);
+  assert.deepEqual(readAuth(home)[target.id], { type: 'api_key', key: 'valid-key' });
+  assert.equal(store.getSnapshot().model?.provider, target.id);
+  // Zero provider list or prompt lines were left in the conversation history!
+  assert.equal(store.getSnapshot().entries.length, 0);
+});
+
+test('TEST D, TEST E & TEST G: repeated menu open/cancel preserves prior chat history and handles abort cleanly', async (t) => {
+  const home = useTempHome(t);
+  saveCredential('google', { type: 'api_key', key: 'AIzaSyDummyKeyForTest' });
+  fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ enabledProviders: ['google'] }));
+
+  const store = new TuiStore();
+  t.after(() => store.dispose());
+  const controller = new TuiController(store, { workspaceRoot: process.cwd(), mock: true });
+
+  // TEST E: Chat before opening any menu.
+  await controller.submit('Explain this repository');
+  store.flush();
+  const initialEntriesCount = store.getSnapshot().entries.length;
+  assert.equal(initialEntriesCount, 1);
+  assert.match(store.getSnapshot().entries[0].prompt ?? '', /Explain this repository/);
+
+  // TEST D: Open and cancel /login and /model multiple times.
+  for (let i = 0; i < 3; i++) {
+    const pLogin = controller.submit('/login');
+    await waitFor(() => store.getMenu()?.kind === 'login');
+    store.resolveMenu(null);
+    await pLogin;
+    assert.equal(store.getSnapshot().menu, null);
+
+    const pModel = controller.submit('/model');
+    await waitFor(() => store.getMenu()?.kind === 'model');
+    store.resolveMenu(null);
+    await pModel;
+    assert.equal(store.getSnapshot().menu, null);
+  }
+
+  // TEST G: Open menu while async command is active, concurrent submit is ignored, and abort() closes menu cleanly.
+  const pAbort = controller.submit('/login');
+  await waitFor(() => store.getMenu()?.kind === 'login');
+  await controller.submit('concurrent message while menu is open');
+  controller.abort();
+  await pAbort;
+  assert.equal(store.getSnapshot().menu, null);
+  assert.equal(store.getSnapshot().busy, false);
+
+  // Prior chat history is still intact with zero menu pollution.
+  assert.equal(store.getSnapshot().entries.length, initialEntriesCount);
+  assert.match(store.getSnapshot().entries[0].prompt ?? '', /Explain this repository/);
 });

@@ -6,6 +6,7 @@ import { renderToString } from 'ink';
 import { Header } from '../src/tui/components/header.js';
 import { Turn } from '../src/tui/components/transcript.js';
 import { Editor } from '../src/tui/components/editor.js';
+import { SelectMenu } from '../src/tui/components/select-menu.js';
 import { ApprovalDialog } from '../src/tui/components/approval-dialog.js';
 import { visibleWidth } from '../src/tui/layout.js';
 import type { TuiTurn } from '../src/tui/store.js';
@@ -97,4 +98,38 @@ for (const columns of [40, 60, 80, 120]) test(`components render within ${column
   );
   assert.ok(!secret.includes('private-value'));
   assert.ok(secret.split('\n').every((line) => visibleWidth(line) <= columns));
+
+  const selector = renderToString(
+    createElement(SelectMenu, {
+      menu: {
+        kind: 'model',
+        title: 'Chọn model cho phiên làm việc',
+        placeholder: 'Gõ để lọc...',
+        query: '',
+        selectedIndex: 0,
+        items: [
+          {
+            value: 'google/gemini-3.1-flash-lite',
+            label: 'google/gemini-3.1-flash-lite',
+            description: 'Gemini 3.1 Flash Lite · 1M · $0.25/$1.5 · khuyên dùng',
+            badge: 'đang dùng',
+            active: true,
+          },
+          {
+            value: 'openrouter/qwen3-coder',
+            label: 'openrouter/qwen3-coder',
+            description: 'Qwen 3 Coder · 256k · $0.2/$0.8',
+            badge: 'connected',
+          },
+        ],
+      },
+      width: columns,
+      onChange() {},
+      onSelect() {},
+      onCancel() {},
+    }),
+    { columns },
+  );
+  assert.match(selector, /gemini-3\.1-flash-lite/);
+  assert.ok(selector.split('\n').every((line) => visibleWidth(line) <= columns));
 });
