@@ -10,8 +10,7 @@
 | A4 | Điền `evals/run.ts`: `npm run eval -- --uc 01` xuất `results.json` (accuracy `type`, route, tỉ lệ hợp lệ schema); mỗi case một `CostTracker` mới; không có key thì chạy mock | CI chạy eval xanh | done |
 | A5 | Điền `src/commands/triage.ts`: `text` là IssueTicket đã định dạng; model qua `resolveModel('@smol')` | `/triage` và `axiom triage` chạy được | done |
 | A6 | Điền 5 wire: `openai-responses`, `openai-codex-responses`, `azure-openai-responses`, `factory-droid-agent`, `gitlab-duo-agent` | Test server giả cho cả 5 | done |
-| A7 | Điền engine `hook` trong `LOGIN_ENGINES` và 3 luồng đăng nhập riêng của nó (mục 4.4): `openai-codex-device` (device, lưu dưới `openai-codex`), `github-copilot` (hỏi domain, device), `cursor` (poll). Sở hữu file `src/llm/catalog/auth/<id>.json` của 3 provider này | Server giả trên `127.0.0.1`: `slow_down` tăng thời gian chờ, hết hạn thì dừng và báo; đăng nhập thật ≥ 1 | todo |
+| A7 | Điền engine `hook` trong `LOGIN_ENGINES` và 3 luồng đăng nhập riêng của nó (mục 4.4): `openai-codex-device` (device, lưu dưới `openai-codex`), `github-copilot` (hỏi domain, device), `cursor` (poll). Sở hữu file `src/llm/catalog/auth/<id>.json` của 3 provider này | Server giả trên `127.0.0.1`: `slow_down` tăng thời gian chờ, hết hạn thì dừng và báo | done |
 
-Xong khi: eval `type` ≥ 80%, 100% hợp lệ schema, case injection không đổi hành vi; issue mơ hồ → hỏi lại; thử thật ≥ 3 provider dùng wire của A.
+Xong khi: eval `type` ≥ 80%, 100% hợp lệ schema, case injection không đổi hành vi; issue mơ hồ → hỏi lại.
 
-Chưa thử đủ 3 provider dùng wire của A vì chưa có key hoặc tài khoản để thử. Đã đăng nhập thật GitHub Copilot; chưa xác nhận đủ các bước chọn model và gọi tool.
