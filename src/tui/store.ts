@@ -5,6 +5,7 @@ import type { ExecutionState, TokenUsage, ToolCall, ToolResult } from '../core/t
 import type { ModelInfo } from '../llm/catalog/index.js';
 import type { ApprovalRequest, ApprovalDecision } from '../tools/permissions.js';
 import type { EditorState } from './editor.js';
+import type { TuiMenuItem, TuiMenuState } from './select-menu.js';
 import { computeTelemetry, type GitStatus, type TurnTelemetry, type TurnTiming } from './layout.js';
 
 // Round up: 33 ms would allow more than 30 notifications in one second.
@@ -33,7 +34,8 @@ export interface TuiState {
   readonly busy: boolean;
   readonly expanded: boolean;
   readonly notice: string;
-  readonly question: { text: string; secret: boolean } | null;
+  readonly question: { text: string; secret: boolean; hint?: string } | null;
+  readonly menu: Readonly<TuiMenuState> | null;
   readonly revision: number;
   readonly entries: readonly TuiTurn[];
   readonly live: TuiTurn | null;
@@ -67,7 +69,7 @@ function addUsage(total: Readonly<TokenUsage> | null, next: TokenUsage): TokenUs
 
 export class TuiStore {
   private snapshot: TuiState = {
-    editor: { text: '', cursor: 0 }, busy: false, expanded: false, notice: '', question: null, revision: 0,
+    editor: { text: '', cursor: 0 }, busy: false, expanded: false, notice: '', question: null, menu: null, revision: 0,
     entries: [], live: null, status: 'idle', error: null,
     usage: { latest: null, total: null }, model: null, mode: 'edit', pendingApproval: null, git: null,
   };
@@ -84,6 +86,7 @@ export class TuiStore {
   private approvalResolve?: (decision: ApprovalDecision) => void;
   private answerResolve?: (answer: string) => void;
   private answerReject?: (error: Error) => void;
+  private menuResolve?: (value: string | null) => void;
 
   public update(patch: Partial<Pick<TuiState, 'editor' | 'busy' | 'expanded' | 'notice' | 'model' | 'git'>>): void {
     this.pending = { ...this.pending, ...patch };
@@ -124,13 +127,23 @@ export class TuiStore {
     resolve(decision);
   }
 
-  public ask(text: string, secret = false): Promise<string> {
+  public ask(text: string, secret = false, hint?: string): Promise<string> {
     return new Promise((resolve, reject) => {
       this.answerResolve = resolve;
       this.answerReject = reject;
-      this.pending = { ...this.pending, question: { text, secret }, editor: { text: '', cursor: 0 } };
+      this.pending = {
+        ...this.pending,
+        question: { text, secret, ...(hint ? { hint } : {}) },
+        editor: { text: '', cursor: 0 },
+      };
       this.schedule();
     });
+  }
+
+  public setQuestionHint(hint: string): void {
+    if (!this.pending.question) return;
+    this.pending = { ...this.pending, question: { ...this.pending.question, hint } };
+    this.schedule();
   }
 
   public answer(text: string): void {
@@ -142,8 +155,58 @@ export class TuiStore {
     resolve?.(text);
   }
 
+  public openMenu(opts: {
+    kind: 'model' | 'login' | 'logout';
+    title: string;
+    placeholder?: string;
+    items: readonly TuiMenuItem[];
+    initialValue?: string;
+  }): Promise<string | null> {
+    this.resolveMenu(null);
+    const initialIdx = opts.initialValue
+      ? Math.max(0, opts.items.findIndex((item) => item.value === opts.initialValue))
+      : 0;
+    const menu: TuiMenuState = {
+      kind: opts.kind,
+      title: opts.title,
+      placeholder: opts.placeholder,
+      items: [...opts.items],
+      query: '',
+      selectedIndex: initialIdx,
+    };
+    return new Promise((resolve) => {
+      this.menuResolve = resolve;
+      this.pending = { ...this.pending, menu, editor: { text: '', cursor: 0 } };
+      this.schedule();
+    });
+  }
+
+  public updateMenu(patch: { query?: string; selectedIndex?: number }): void {
+    if (!this.pending.menu) return;
+    this.pending = {
+      ...this.pending,
+      menu: {
+        ...this.pending.menu,
+        ...(patch.query !== undefined ? { query: patch.query } : {}),
+        ...(patch.selectedIndex !== undefined ? { selectedIndex: patch.selectedIndex } : {}),
+      },
+    };
+    this.schedule();
+  }
+
+  public resolveMenu(value: string | null): void {
+    const resolve = this.menuResolve;
+    this.menuResolve = undefined;
+    if (this.pending.menu !== null) {
+      this.pending = { ...this.pending, menu: null, editor: { text: '', cursor: 0 } };
+      this.schedule();
+    }
+    resolve?.(value);
+  }
+
   public cancelInteraction(): void {
     this.resolveApproval('deny');
+    this.resolveMenu(null);
     const reject = this.answerReject;
     this.answerResolve = undefined;
     this.answerReject = undefined;
@@ -163,6 +226,7 @@ export class TuiStore {
   // Bound functions can be passed directly to useSyncExternalStore.
   public getSnapshot = (): TuiState => this.snapshot;
   public getEditor = (): EditorState => this.pending.editor;
+  public getMenu = (): Readonly<TuiMenuState> | null => this.pending.menu;
 
   public subscribe = (fn: () => void): (() => void) => {
     const listener = () => fn();

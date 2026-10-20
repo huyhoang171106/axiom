@@ -21,7 +21,7 @@ export interface EditOptions {
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
 /** Strips bracketed-paste markers (`ESC[200~` / `ESC[201~`) that some terminals deliver inside `input`. */
-function stripBracketedPaste(raw: string): string {
+export function stripBracketedPaste(raw: string): string {
   return raw.replace(/\x1b\[20[01]~/g, '').replace(/^\[200~|\[201~$/g, '');
 }
 
