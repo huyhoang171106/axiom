@@ -196,7 +196,7 @@ test('parsePasted reads a URL, code#state and a bare code', () => {
 });
 
 test('the oauth-code providers set up so far have a valid login and a source', () => {
-  const ready = ['openai-codex', 'anthropic', 'devin', 'gitlab-duo', 'gitlab-duo-agent', 'openrouter', 'zai-coding-plan'];
+  const ready = ['openai-codex', 'anthropic', 'devin', 'gitlab-duo', 'gitlab-duo-agent', 'openrouter', 'zai-coding-plan', 'google-gemini-cli', 'google-antigravity'];
   const entries = loadCatalog(undefined).providers();
   for (const id of ready) {
     const entry = entries.find((p) => p.id === id);
@@ -213,10 +213,12 @@ async function loginThroughCommand(
   id: string,
   paste: (authorize: URL) => string,
   reply: unknown,
+  files: Record<string, string> = {},
 ): Promise<{ home: string; authorize: URL; token: { url: string; init: RequestInit }; calls: { url: string; init: RequestInit }[] }> {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-oauth-'));
   const previous = { home: process.env.AXIOM_HOME, fetch: globalThis.fetch, open: defaultOAuthDeps.openBrowser };
   process.env.AXIOM_HOME = home;
+  for (const [name, text] of Object.entries(files)) fs.writeFileSync(path.join(home, name), text);
   let authorize!: URL;
   const calls: { url: string; init: RequestInit }[] = [];
   defaultOAuthDeps.openBrowser = (url) => (authorize = new URL(url));
@@ -355,4 +357,92 @@ test('/login zai-coding-plan: a wrong state is refused before any call, a busine
   };
   const pasteRealState = ui(async () => `c#${authorize.searchParams.get('state')}`);
   await assert.rejects(oauthCodeLogin(entry, pasteRealState, { ...deps, openBrowser: (url) => (authorize = new URL(url)) }), /business login failed: Coding Plan not active/);
+});
+
+/** Sets env names for one test (undefined deletes) and puts them back afterwards. */
+function withEnv(t: { after(fn: () => void): void }, values: Record<string, string | undefined>): void {
+  const previous = Object.fromEntries(Object.keys(values).map((k) => [k, process.env[k]]));
+  const apply = (v: Record<string, string | undefined>) => Object.entries(v).forEach(([k, x]) => (x === undefined ? delete process.env[k] : (process.env[k] = x)));
+  apply(values);
+  t.after(() => apply(previous));
+}
+
+const googleToken = { access_token: 'ya29.test', refresh_token: '1//refresh', expires_in: 3599 };
+
+test('/login google-gemini-cli: the client secret comes from the env, never the URL; an onboarded account is accepted', async (t) => {
+  withEnv(t, { GEMINI_CLI_OAUTH_CLIENT_SECRET: 'test-secret', GOOGLE_CLOUD_PROJECT: undefined, GOOGLE_CLOUD_PROJECT_ID: undefined });
+  const { home, authorize, token, calls } = await loginThroughCommand(
+    t,
+    'google-gemini-cli',
+    (a) => `http://127.0.0.1:8085/oauth2callback?code=g-code&state=${a.searchParams.get('state')}`,
+    (url: string) => (url.endsWith(':loadCodeAssist') ? { currentTier: { id: 'free-tier' }, cloudaicompanionProject: 'proj-free' } : googleToken),
+  );
+  assert.equal(authorize.searchParams.get('access_type'), 'offline');
+  assert.ok(!authorize.toString().includes('test-secret'), 'the secret is not in the authorize URL');
+  const form = new URLSearchParams(String(token.init.body));
+  assert.deepEqual([form.get('client_secret'), form.get('code'), form.get('redirect_uri')], ['test-secret', 'g-code', 'http://127.0.0.1:8085/oauth2callback']);
+  assert.equal(calls[1].url, 'https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist');
+  assert.equal((calls[1].init.headers as Record<string, string>).authorization, 'Bearer ya29.test');
+  assert.equal(calls.length, 2, 'an onboarded account is not onboarded again');
+  const stored = readAuth(home)['google-gemini-cli'];
+  assert.ok(stored?.type === 'oauth' && stored.access === 'ya29.test' && stored.refresh === '1//refresh');
+  assert.equal(stored.headers?.['x-goog-user-project'], 'proj-free', 'the project the google-gemini-cli wire reads');
+});
+
+test('google login without the client secret says which variable to set, before the browser opens', async (t) => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-oauth-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  withEnv(t, { AXIOM_HOME: home, GEMINI_CLI_OAUTH_CLIENT_SECRET: undefined });
+  const entry = loadCatalog(undefined).providers().find((p) => p.id === 'google-gemini-cli')!;
+  let opened = false;
+  await assert.rejects(oauthCodeLogin(entry, ui(''), { callbackTimeoutMs: 1_000, openBrowser: () => (opened = true) }), /set GEMINI_CLI_OAUTH_CLIENT_SECRET/);
+  assert.equal(opened, false);
+});
+
+test('/login google-antigravity: secret from ~/.axiom/.env, PKCE, a new account is onboarded on the Antigravity endpoint', async (t) => {
+  withEnv(t, { ANTIGRAVITY_OAUTH_CLIENT_SECRET: undefined, GOOGLE_CLOUD_PROJECT: undefined, GOOGLE_CLOUD_PROJECT_ID: undefined });
+  let polls = 0;
+  const { home, authorize, token, calls } = await loginThroughCommand(
+    t,
+    'google-antigravity',
+    (a) => `http://127.0.0.1:51121/oauth-callback?code=ag-code&state=${a.searchParams.get('state')}`,
+    (url: string) => {
+      if (url.endsWith(':loadCodeAssist')) return { allowedTiers: [{ id: 'free-tier', isDefault: true }] };
+      if (url.endsWith(':onboardUser')) return { name: 'operations/op-1', done: false };
+      if (url.endsWith('/operations/op-1')) return ++polls < 2 ? { name: 'operations/op-1', done: false } : { done: true, response: { cloudaicompanionProject: 'proj-ag' } };
+      return googleToken;
+    },
+    { '.env': 'ANTIGRAVITY_OAUTH_CLIENT_SECRET="ag-secret"\n' },
+  );
+  assert.equal(authorize.searchParams.get('code_challenge_method'), 'S256');
+  const form = new URLSearchParams(String(token.init.body));
+  assert.equal(form.get('client_secret'), 'ag-secret');
+  assert.equal(crypto.createHash('sha256').update(form.get('code_verifier')!).digest('base64url'), authorize.searchParams.get('code_challenge'));
+  const onboard = calls.find((c) => c.url.endsWith(':onboardUser'))!;
+  assert.ok(onboard.url.startsWith('https://daily-cloudcode-pa.googleapis.com/'));
+  assert.deepEqual(JSON.parse(String(onboard.init.body)), { tierId: 'free-tier', metadata: { ideType: 'ANTIGRAVITY' } });
+  assert.equal(polls, 2, 'the operation is polled until done');
+  const stored = readAuth(home)['google-antigravity'];
+  assert.ok(stored?.type === 'oauth' && stored.headers?.['x-goog-user-project'] === 'proj-ag', 'the project made by onboarding');
+});
+
+test("google login: a refusal is reported with Google's reason; a Workspace account without a project is told to set one", async (t) => {
+  withEnv(t, { GEMINI_CLI_OAUTH_CLIENT_SECRET: 's', GOOGLE_CLOUD_PROJECT: undefined, GOOGLE_CLOUD_PROJECT_ID: undefined });
+  const entry = loadCatalog(undefined).providers().find((p) => p.id === 'google-gemini-cli')!;
+  const previous = globalThis.fetch;
+  t.after(() => (globalThis.fetch = previous));
+  let load: { status: number; body: unknown } = { status: 403, body: { error: { code: 403, message: 'Gemini Code Assist is not available in your country' } } };
+  globalThis.fetch = async (input) => {
+    const reply = String(input).endsWith(':loadCodeAssist') ? load : { status: 200, body: googleToken };
+    return new Response(JSON.stringify(reply.body), { status: reply.status, headers: { 'content-type': 'application/json' } });
+  };
+  let authorize!: URL;
+  const paste = ui(async () => `http://127.0.0.1:8085/oauth2callback?code=c&state=${authorize.searchParams.get('state')}`);
+  const deps = { callbackTimeoutMs: 1_000, openBrowser: (url: string) => (authorize = new URL(url)) };
+  await assert.rejects(oauthCodeLogin(entry, paste, deps), /lookup failed with HTTP 403: Gemini Code Assist is not available in your country/);
+  load = { status: 200, body: { currentTier: { id: 'standard-tier' } } };
+  await assert.rejects(oauthCodeLogin(entry, paste, deps), /needs a Cloud project: set GOOGLE_CLOUD_PROJECT/);
+  const reason = { reasonMessage: 'Verify your account to continue.', validationUrl: 'https://accounts.google.com/verify' };
+  load = { status: 200, body: { currentTier: { id: 'standard-tier' }, ineligibleTiers: [reason] } };
+  await assert.rejects(oauthCodeLogin(entry, paste, deps), /refused this account: Verify your account to continue\. https:\/\/accounts\.google\.com\/verify/);
 });
