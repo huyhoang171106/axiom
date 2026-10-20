@@ -12,10 +12,43 @@ export function createTheme(opts: { env?: NodeJS.ProcessEnv; isTTY?: boolean; ic
   const unicode = mode !== 'ascii' && (mode !== 'auto' ||
     (isTTY && env.TERM !== 'dumb' && (process.platform === 'win32' || /utf-?8/i.test(locale))));
   return {
-    accent: colors.cyan, muted: colors.dim, success: colors.green,
-    warning: colors.yellow, error: colors.red, userBg: colors.bgBlue,
+    accent: colors.cyan,
+    muted: colors.dim,
+    success: colors.green,
+    warning: colors.yellow,
+    error: colors.red,
+    userBg: colors.bgBlue,
+    bold: colors.bold,
     icons: unicode
-      ? { running: '●', success: '✓', error: '✗', denied: '⊘', warning: '!' }
-      : { running: '*', success: '+', error: 'x', denied: '-', warning: '!' },
+      ? {
+          running: '●',
+          success: '✓',
+          error: '✗',
+          denied: '⊘',
+          warning: '!',
+          prompt: '❯',
+          cursor: '█',
+          userLeft: '▌',
+          userRight: '▐',
+          bar: '│',
+          thinking: '⠋',
+          bullet: '·',
+          logo: '◆',
+        }
+      : {
+          running: '*',
+          success: '+',
+          error: 'x',
+          denied: '-',
+          warning: '!',
+          prompt: '>',
+          cursor: '_',
+          userLeft: '|',
+          userRight: '|',
+          bar: '|',
+          thinking: '~',
+          bullet: '-',
+          logo: '*',
+        },
   };
 }

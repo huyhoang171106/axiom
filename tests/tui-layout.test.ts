@@ -1,7 +1,14 @@
 // tests/tui-layout.test.ts - Terminal width, truncation and theme contracts
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fitFooterLine, truncate, visibleWidth } from '../src/tui/layout.js';
+import {
+  compactHomePath,
+  fitFooterLine,
+  formatTwoColumnRow,
+  formatUserPromptLines,
+  truncate,
+  visibleWidth,
+} from '../src/tui/layout.js';
 import { createTheme } from '../src/tui/theme.js';
 
 test('truncation measures graphemes and preserves ANSI styles', () => {
@@ -34,9 +41,24 @@ test('footer removes lower priority content first without mutating its input', (
   assert.equal(fitFooterLine(left, '$0.01', 2), '$0.01');
 });
 
+test('user prompt bars, home path compaction and two-column rows fit exact display widths', () => {
+  assert.equal(compactHomePath('C:\\Users\\dev\\workspace\\tinydb', 'C:\\Users\\dev'), '~/workspace/tinydb');
+  assert.equal(compactHomePath('/other/repo', '/home/dev'), '/other/repo');
+
+  const lines = formatUserPromptLines('sửa bug test_insert\ndòng hai', 40);
+  assert.equal(lines.length, 2);
+  assert.ok(lines.every((l) => visibleWidth(l) === 40));
+  assert.match(lines[0], /^▌ > sửa bug test_insert\s+▐$/);
+  assert.match(lines[1], /^▌   dòng hai\s+▐$/);
+
+  const row = formatTwoColumnRow('Left side content', 'Right side content', 60);
+  assert.equal(visibleWidth(row), 60);
+  assert.match(row, /│/);
+});
+
 test('NO_COLOR disables every semantic color and ASCII remains distinguishable', () => {
   const theme = createTheme({ env: { NO_COLOR: '', LANG: 'en_US.UTF-8' }, isTTY: true, icons: 'ascii' });
-  for (const role of ['accent', 'muted', 'success', 'warning', 'error', 'userBg'] as const) {
+  for (const role of ['accent', 'muted', 'success', 'warning', 'error', 'userBg', 'bold'] as const) {
     assert.equal(theme[role]('hello'), 'hello');
   }
   assert.notEqual(theme.icons.success, theme.icons.error);
