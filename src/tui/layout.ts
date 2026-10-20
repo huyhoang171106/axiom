@@ -196,7 +196,7 @@ export function formatTwoColumnRow(
 ): string {
   const divWidth = visibleWidth(divider);
   const avail = Math.max(2, Math.floor(totalWidth) - divWidth);
-  const leftCols = Math.max(1, Math.floor(avail * 0.56));
+  const leftCols = Math.max(1, Math.floor(avail * 0.52));
   const rightCols = Math.max(1, avail - leftCols);
   const l = truncate(leftText, leftCols);
   const lPad = ' '.repeat(Math.max(0, leftCols - visibleWidth(l)));

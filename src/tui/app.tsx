@@ -26,7 +26,7 @@ export function App({
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
   const { columns } = useWindowSize();
   const theme = createTheme();
-  const matches = /^\/\S*$/.test(state.editor.text) ? defaultCommandRouter.complete(state.editor.text) : [];
+  const matches = !state.question && /^\/\S*$/.test(state.editor.text) ? defaultCommandRouter.complete(state.editor.text) : [];
 
   useEffect(() => {
     if (initial) void controller.submit(initial);
@@ -58,11 +58,18 @@ export function App({
 
   const modelLabel = state.model ? `${state.model.provider}/${state.model.id}` : 'Dùng /login để kết nối';
   const completionLine = matches.length
-    ? truncate(`${matches.map((command) => theme.accent(`/${command.name}`)).join('  ')} ${theme.muted('· Tab để điền')}`, columns)
+    ? truncate(
+        matches.length === 1
+          ? `${theme.accent(matches[0].usage)} ${theme.muted(`— ${matches[0].summary} · Tab để điền`)}`
+          : `${matches.map((command) => theme.accent(`/${command.name}`)).join(' ')} ${theme.muted('· Tab để điền')}`,
+        columns,
+      )
     : '';
   const noticeLine = state.notice
     ? truncate(
-        /aborted|Ctrl\+C/i.test(state.notice) ? theme.warning(state.notice) : theme.muted(state.notice),
+        /aborted|Ctrl\+C|Không kết nối|không còn khả dụng|vượt hạn mức/i.test(state.notice)
+          ? theme.warning(state.notice)
+          : theme.muted(state.notice),
         columns,
       )
     : '';
@@ -84,6 +91,7 @@ export function App({
         width={columns}
         disabled={!!state.pendingApproval || (state.busy && !state.question)}
         secret={state.question?.secret}
+        allowEmptySubmit={!!state.question}
         onChange={(editor) => store.update({ editor })}
         onSubmit={(text) => (state.question ? store.answer(text) : void controller.submit(text))}
       />

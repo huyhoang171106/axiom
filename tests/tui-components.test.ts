@@ -20,6 +20,7 @@ for (const columns of [40, 60, 80, 120]) test(`components render within ${column
   if (columns >= 80) {
     assert.match(header, /Welcome/);
     assert.match(header, /Commands/);
+    assert.match(header, /\/help \/login \/model \/triage \/exit/);
   }
   assert.ok(header.split('\n').every((line) => visibleWidth(line) <= columns));
 

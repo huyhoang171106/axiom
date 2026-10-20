@@ -4,6 +4,8 @@ import { Box, Text } from 'ink';
 import { compactHomePath, formatTwoColumnRow, truncate } from '../layout.js';
 import { createTheme } from '../theme.js';
 
+const COMMAND_HINTS = '/help /login /model /triage /exit';
+
 export function Header({
   workspace,
   model,
@@ -21,7 +23,7 @@ export function Header({
   const displayPath = compactHomePath(workspace, os.homedir());
   const divider = ` ${theme.muted(theme.icons.bar)} `;
 
-  if (innerWidth >= 64) {
+  if (innerWidth >= 68) {
     const row1 = formatTwoColumnRow(
       `${theme.accent(`${theme.icons.logo} Axiom v0.1`)} ${theme.muted(`${theme.icons.bullet} Coding agent`)}`,
       theme.accent('Welcome'),
@@ -42,7 +44,7 @@ export function Header({
     );
     const row4 = formatTwoColumnRow(
       theme.muted(`  ${displayPath}`),
-      theme.muted('/help  /login  /model  /triage  /exit'),
+      theme.muted(COMMAND_HINTS),
       innerWidth,
       divider,
     );
@@ -62,7 +64,7 @@ export function Header({
       <Text>{truncate("Let's fix something", innerWidth)}</Text>
       <Text>{truncate(`${model} ${theme.icons.bullet} ${mode} mode`, innerWidth)}</Text>
       <Text>{truncate(theme.muted(displayPath), innerWidth)}</Text>
-      <Text>{truncate(theme.muted('/help  /login  /model  /triage  /exit'), innerWidth)}</Text>
+      <Text>{truncate(theme.muted(COMMAND_HINTS), innerWidth)}</Text>
     </Box>
   );
 }

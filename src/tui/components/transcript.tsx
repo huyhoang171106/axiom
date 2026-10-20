@@ -30,15 +30,17 @@ export function Turn({ turn, expanded, width }: { turn: TuiTurn; expanded: boole
   const promptLines = turn.prompt
     ? formatUserPromptLines(turn.prompt, cols, { left: theme.icons.userLeft, right: theme.icons.userRight })
     : [];
-  const lastThought = turn.thinking
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .at(-1) ?? '';
+  const lastThought =
+    turn.thinking
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .at(-1) ?? '';
   const doneThinking = Boolean(turn.text) || turn.status === 'completed' || turn.status === 'failed';
   const thinkingLine = turn.thinking
     ? truncate(`~ think ${doneThinking ? theme.icons.success : `${theme.icons.thinking} ${lastThought}`}`, cols)
     : '';
+  const errorLines = turn.error ? turn.error.split(/\r?\n/) : [];
 
   return (
     <Box flexDirection="column">
@@ -50,7 +52,13 @@ export function Turn({ turn, expanded, width }: { turn: TuiTurn; expanded: boole
         <ToolRow key={`${row.call.id}-${index}`} row={row} expanded={expanded} width={cols} />
       ))}
       {turn.text && <Box flexDirection="column">{renderAssistantLines(turn.text, theme)}</Box>}
-      {turn.error && <Text>{theme.error(truncate(`${theme.icons.error} ${turn.error}`, cols))}</Text>}
+      {errorLines.map((line, idx) => (
+        <Text key={`err-${idx}`}>
+          {idx === 0
+            ? theme.error(truncate(`${theme.icons.error} ${line}`, cols))
+            : theme.warning(truncate(`  ${line}`, cols))}
+        </Text>
+      ))}
       {turn.telemetry && <Text>{theme.muted(truncate(formatTelemetryLine(turn.telemetry, turn.usage), cols))}</Text>}
     </Box>
   );
