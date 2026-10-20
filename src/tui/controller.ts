@@ -6,16 +6,22 @@ import { redact } from '../core/secrets.js';
 import type { AxiomConfig } from '../core/types.js';
 import { defaultCommandRouter } from '../commands/index.js';
 import { parseCommand, unknownCommandMessage } from '../commands/router.js';
+import type { ModelRow } from '../commands/models.js';
+import type { Command, CommandContext } from '../commands/types.js';
 import { readAuth, readAxiomEnv } from '../llm/auth/store.js';
 import { loadCatalog, readUserProviders, type Catalog, type ModelInfo } from '../llm/catalog/index.js';
 import { resolveModel } from '../llm/model-resolver.js';
+import { formatTokens } from './layout.js';
+import type { TuiMenuItem } from './select-menu.js';
 import { TuiStore } from './store.js';
 import type { GitStatusCache } from './git-status.js';
 
-/** Preferred default model when a provider's catalog default has zero free-tier quota. */
-const PREFERRED_PROVIDER_MODEL: Partial<Record<string, string>> = {
-  google: 'gemini-3.1-flash-lite',
+/** Preferred default models when a provider's catalog default has zero free-tier quota. */
+const PREFERRED_PROVIDER_MODELS: Partial<Record<string, readonly string[]>> = {
+  google: ['gemini-3.1-flash-lite', 'gemini-3.1-flash-lite-preview', 'gemini-3-flash-preview'],
 };
+
+const RETIRED_GOOGLE_MODELS = new Set(['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite']);
 
 function hasExplicitCredential(providerId: string, catalog: Catalog): boolean {
   const entry = catalog.providers().find((p) => p.id === providerId);
@@ -31,10 +37,9 @@ function hasExplicitCredential(providerId: string, catalog: Catalog): boolean {
 function pickProviderModel(providerId: string, catalog: Catalog, config: AxiomConfig): ModelInfo | null {
   const entry = catalog.providers().find((p) => p.id === providerId);
   if (!entry || entry.available === false) return null;
-  const preferredId = PREFERRED_PROVIDER_MODEL[providerId];
+  const preferredIds = PREFERRED_PROVIDER_MODELS[providerId] ?? [];
   const models = catalog.models(providerId);
-  const chosenId =
-    (preferredId && models.some((m) => m.id === preferredId) ? preferredId : undefined) ?? entry.defaultModel;
+  const chosenId = preferredIds.find((id) => models.some((m) => m.id === id)) ?? entry.defaultModel;
   try {
     return resolveModel(`${providerId}/${chosenId}`, catalog, config);
   } catch {
@@ -98,6 +103,57 @@ export function enrichErrorMessage(raw: string, model: ModelInfo | null): string
   return clean;
 }
 
+function buildModelMenuItems(rows: ModelRow[], catalog: Catalog, currentSelector?: string): TuiMenuItem[] {
+  const scored = rows.map((row, idx) => {
+    const hasCred = hasExplicitCredential(row.provider, catalog);
+    const isPreferred = (PREFERRED_PROVIDER_MODELS[row.provider] ?? []).includes(row.id);
+    const isRetired = row.provider === 'google' && RETIRED_GOOGLE_MODELS.has(row.id);
+    const rank = hasCred ? (isPreferred ? 0 : isRetired ? 2 : 1) : 3;
+    return { row, idx, hasCred, isPreferred, isRetired, rank };
+  });
+  scored.sort((a, b) => a.rank - b.rank || a.idx - b.idx);
+
+  return scored.map(({ row, hasCred, isPreferred, isRetired }) => {
+    const isCurrent = row.selector === currentSelector;
+    const ctxText = formatTokens(row.contextWindow);
+    const costText = row.cost ? `$${row.cost.input}/$${row.cost.output}` : 'free/local';
+    const note = isPreferred ? ' · khuyên dùng' : isRetired ? ' · ngừng hỗ trợ key mới' : '';
+    return {
+      value: row.selector,
+      label: row.selector,
+      description: `${row.name} · ${ctxText} · ${costText}${note}`,
+      badge: isCurrent ? 'đang dùng' : hasCred ? 'connected' : 'local',
+      active: isCurrent,
+    };
+  });
+}
+
+interface LoginListRow {
+  id: string;
+  name: string;
+  connection: string;
+  status: string;
+}
+
+function buildLoginMenuItems(rows: LoginListRow[]): TuiMenuItem[] {
+  const scored = rows.map((row, idx) => {
+    const unsupported = row.status.startsWith('unsupported:');
+    const loggedIn = row.status === 'logged in';
+    const rank = unsupported ? 2 : loggedIn ? 0 : 1;
+    return { row, idx, unsupported, loggedIn, rank };
+  });
+  scored.sort((a, b) => a.rank - b.rank || a.idx - b.idx);
+
+  return scored.map(({ row, unsupported, loggedIn }) => ({
+    value: row.id,
+    label: `${row.id} (${row.name})`,
+    description: `${row.connection} · ${row.status}`,
+    badge: loggedIn ? 'đã kết nối' : row.status === 'available' ? 'sẵn sàng' : undefined,
+    active: loggedIn,
+    disabled: unsupported,
+  }));
+}
+
 export class TuiController {
   private agent?: AgentLoop;
   private controller?: AbortController;
@@ -126,6 +182,192 @@ export class TuiController {
     }
   }
 
+  private createCommandContext(
+    config: AxiomConfig,
+    signal: AbortSignal,
+    transientHints?: string[],
+  ): CommandContext {
+    const mock = this.opts.mock;
+    const store = this.store;
+    return {
+      config,
+      workspaceRoot: this.opts.workspaceRoot,
+      signal,
+      ui: {
+        print: (text) => {
+          const clean = redact(text);
+          if (transientHints) {
+            transientHints.push(clean);
+            store.setQuestionHint(transientHints.join('\n'));
+            store.update({ notice: clean });
+            store.flush();
+          } else {
+            store.print(clean);
+          }
+        },
+        ask: async (question, options) => {
+          const hint = transientHints && transientHints.length > 0 ? transientHints.join('\n') : undefined;
+          const answer = await store.ask(question, options?.secret, hint);
+          return options?.secret ? answer.trim().replace(/^(['"])(.*)\1$/, '$2').trim() : answer;
+        },
+        confirm: async (question) => {
+          const hint = transientHints && transientHints.length > 0 ? transientHints.join('\n') : undefined;
+          return /^(y|yes)$/i.test((await store.ask(`${question} [y/N]`, false, hint)).trim());
+        },
+      },
+      session: {
+        get model() {
+          if (mock) return MOCK_MODEL;
+          return (
+            store.getSnapshot().model ??
+            resolveActiveModel(loadCatalog(), config) ??
+            resolveModel('@default', loadCatalog(), config)
+          );
+        },
+        setModel: (info) => {
+          store.update({ model: info });
+          store.flush();
+        },
+      },
+    };
+  }
+
+  private async handleModelCommand(command: Command, args: string, config: AxiomConfig, signal: AbortSignal): Promise<void> {
+    const transientHints: string[] = [];
+    const ctx = this.createCommandContext(config, signal, transientHints);
+    const result = await command.run(args, ctx);
+    if (signal.aborted) return;
+
+    if (result?.kind === 'model-list') {
+      const rows = (result.data as ModelRow[]) ?? [];
+      const catalog = loadCatalog();
+      const current = this.store.getSnapshot().model;
+      const currentSelector = current ? `${current.provider}/${current.id}` : undefined;
+      const items = buildModelMenuItems(rows, catalog, currentSelector);
+      if (items.length === 0) {
+        this.store.update({ notice: 'Chưa có provider nào kết nối. Gõ /login để kết nối.' });
+        this.store.flush();
+        return;
+      }
+      const picked = await this.store.openMenu({
+        kind: 'model',
+        title: 'Chọn model cho phiên làm việc',
+        placeholder: 'Gõ để lọc model hoặc provider...',
+        items,
+        initialValue: currentSelector ?? items[0]?.value,
+      });
+      this.store.flush();
+      if (!picked || signal.aborted) {
+        this.store.update({ notice: 'Đã hủy chọn model.' });
+        this.store.flush();
+        return;
+      }
+      const switchResult = await command.run(picked, ctx);
+      if (signal.aborted) return;
+      this.agent = undefined;
+      this.syncModelAfterCommand('model', picked, switchResult?.data);
+      const updated = this.store.getSnapshot().model;
+      this.store.update({
+        notice: updated ? `Đã chọn model: ${updated.provider}/${updated.id}` : redact(switchResult?.text ?? ''),
+      });
+      this.store.flush();
+      return;
+    }
+
+    this.agent = undefined;
+    this.syncModelAfterCommand('model', args, result?.data);
+    if (result?.text) {
+      this.store.update({ notice: redact(result.text) });
+    }
+    this.store.flush();
+  }
+
+  private async handleLoginCommand(command: Command, args: string, config: AxiomConfig, signal: AbortSignal): Promise<void> {
+    let targetProvider = args.trim();
+    if (!targetProvider) {
+      const listCtx = this.createCommandContext(config, signal, []);
+      const listResult = await command.run('', listCtx);
+      if (signal.aborted) return;
+      const rows = (listResult?.data as LoginListRow[]) ?? [];
+      const current = this.store.getSnapshot().model;
+      const items = buildLoginMenuItems(rows);
+      const picked = await this.store.openMenu({
+        kind: 'login',
+        title: 'Chọn provider để đăng nhập',
+        placeholder: 'Gõ tên provider (vd: google, openrouter, anthropic, openai)...',
+        items,
+        initialValue: current?.provider,
+      });
+      this.store.flush();
+      if (!picked || signal.aborted) {
+        this.store.update({ notice: 'Đã hủy đăng nhập.' });
+        this.store.flush();
+        return;
+      }
+      targetProvider = picked;
+    }
+
+    const loginHints: string[] = [];
+    const loginCtx = this.createCommandContext(config, signal, loginHints);
+    const loginResult = await command.run(targetProvider, loginCtx);
+    if (signal.aborted) return;
+    this.agent = undefined;
+    this.syncModelAfterCommand('login', targetProvider, loginResult?.data);
+    const loginData = loginResult?.data as { stored?: boolean } | undefined;
+    if (loginResult && !loginData?.stored) {
+      this.store.update({ notice: redact(loginResult.text) });
+    }
+    this.store.flush();
+  }
+
+  private async handleLogoutCommand(command: Command, args: string, config: AxiomConfig, signal: AbortSignal): Promise<void> {
+    let targetProvider = args.trim();
+    const ctx = this.createCommandContext(config, signal, []);
+    if (!targetProvider) {
+      const listResult = await command.run('', ctx);
+      if (signal.aborted) return;
+      const stored = (listResult?.data as { stored?: string[] } | undefined)?.stored ?? [];
+      if (stored.length === 0) {
+        this.store.update({ notice: 'Chưa có thông tin đăng nhập nào được lưu.' });
+        this.store.flush();
+        return;
+      }
+      const catalog = loadCatalog();
+      const items: TuiMenuItem[] = stored.map((id) => {
+        const entry = catalog.providers().find((p) => p.id === id);
+        return {
+          value: id,
+          label: entry ? `${id} (${entry.name})` : id,
+          description: 'Xoá thông tin xác thực đã lưu',
+          badge: 'đã kết nối',
+          active: true,
+        };
+      });
+      const picked = await this.store.openMenu({
+        kind: 'logout',
+        title: 'Chọn provider để đăng xuất',
+        placeholder: 'Gõ tên provider...',
+        items,
+      });
+      this.store.flush();
+      if (!picked || signal.aborted) {
+        this.store.update({ notice: 'Đã hủy đăng xuất.' });
+        this.store.flush();
+        return;
+      }
+      targetProvider = picked;
+    }
+
+    const result = await command.run(targetProvider, ctx);
+    if (signal.aborted) return;
+    this.agent = undefined;
+    this.syncModelAfterCommand('logout', targetProvider, result?.data);
+    if (result?.text) {
+      this.store.update({ notice: redact(result.text) });
+    }
+    this.store.flush();
+  }
+
   public async submit(input: string): Promise<void> {
     if (this.running || !input.trim()) return;
     this.running = true;
@@ -133,52 +375,36 @@ export class TuiController {
     const controller = new AbortController();
     this.controller = controller;
     this.store.update({ busy: true, notice: '' });
+    const parsed = parseCommand(input);
     try {
-      const parsed = parseCommand(input);
       if (parsed) {
         const command = defaultCommandRouter.get(parsed.name);
         if (!command) throw new Error(unknownCommandMessage(defaultCommandRouter, parsed.name));
         const config = loadConfig();
-        const mock = this.opts.mock;
-        const store = this.store;
-        const result = await command.run(parsed.args, {
-          config,
-          workspaceRoot: this.opts.workspaceRoot,
-          signal: controller.signal,
-          ui: {
-            print: (text) => store.print(redact(text)),
-            ask: async (question, options) => {
-              const answer = await store.ask(question, options?.secret);
-              return options?.secret ? answer.trim().replace(/^(['"])(.*)\1$/, '$2').trim() : answer;
-            },
-            confirm: async (question) => /^(y|yes)$/i.test((await store.ask(`${question} [y/N]`)).trim()),
-          },
-          session: {
-            get model() {
-              if (mock) return MOCK_MODEL;
-              return store.getSnapshot().model ?? resolveActiveModel(loadCatalog(), config) ?? resolveModel('@default', loadCatalog(), config);
-            },
-            setModel: (info) => {
-              store.update({ model: info });
-              store.flush();
-            },
-          },
-        });
+
+        if (parsed.name === 'model') {
+          await this.handleModelCommand(command, parsed.args, config, controller.signal);
+          return;
+        }
+        if (parsed.name === 'login') {
+          await this.handleLoginCommand(command, parsed.args, config, controller.signal);
+          return;
+        }
+        if (parsed.name === 'logout') {
+          await this.handleLogoutCommand(command, parsed.args, config, controller.signal);
+          return;
+        }
+
+        const result = await command.run(parsed.args, this.createCommandContext(config, controller.signal));
         if (controller.signal.aborted) return;
         if (result?.kind === 'exit') this.opts.exit?.();
         else if (result?.kind === 'clear') this.store.clear();
         else if (result) this.store.print(redact(result.text), input);
-
-        if (['model', 'login', 'logout'].includes(parsed.name)) {
-          this.agent = undefined;
-          this.syncModelAfterCommand(parsed.name, parsed.args, result?.data);
-          this.store.flush();
-        }
       } else {
         const activeModel = this.opts.mock ? MOCK_MODEL : this.ensureConnectedModel();
         this.store.update({ model: activeModel });
         if (!this.agent) {
-          const agent = await createAgent({ workspaceRoot: this.opts.workspaceRoot, mock: this.opts.mock });
+          const agent = await createAgent({ workspaceRoot: this.opts.workspaceRoot, mock: !!this.opts.mock });
           if (controller.signal.aborted) return;
           this.agent = agent;
           this.store.attach(agent.eventBus);
@@ -206,8 +432,19 @@ export class TuiController {
       }
     } catch (error) {
       const raw = error instanceof Error ? error.message : String(error);
+      if (raw === 'Cancelled' || controller.signal.aborted) {
+        this.store.update({ notice: parsed ? 'Đã hủy thao tác.' : 'aborted' });
+        this.store.flush();
+        return;
+      }
       const currentModel = this.store.getSnapshot().model;
-      this.store.print(enrichErrorMessage(raw, currentModel), input);
+      const enriched = enrichErrorMessage(raw, currentModel);
+      if (parsed && ['model', 'login', 'logout'].includes(parsed.name)) {
+        this.store.update({ notice: enriched.replace(/\r?\n/g, ' ') });
+        this.store.flush();
+        return;
+      }
+      this.store.print(enriched, input);
       if (!this.agent && !this.opts.mock && !this.store.getSnapshot().model) {
         this.store.update({ notice: 'Dùng /login <provider> rồi /model <provider/model> để bắt đầu.' });
       }
@@ -215,6 +452,7 @@ export class TuiController {
       this.running = false;
       this.controller = undefined;
       this.store.update({ busy: false });
+      this.store.flush();
     }
   }
 
@@ -227,7 +465,6 @@ export class TuiController {
         'Chưa kết nối provider nào. Gõ /login <provider> (ví dụ: /login google, /login openrouter) hoặc chọn local model bằng /model.',
       );
     }
-    // Persist defaultModel when it was inferred from a logged-in provider so createAgent() resolves the exact same provider.
     if (!config.modelRoles?.default && config.defaultModel !== `${active.provider}/${active.id}`) {
       saveConfig({ defaultModel: `${active.provider}/${active.id}` });
     }
@@ -255,6 +492,10 @@ export class TuiController {
         }
       }
     }
+    if (commandName === 'model' && data && typeof data === 'object' && 'provider' in data && 'id' in data) {
+      this.store.update({ model: data as ModelInfo });
+      return;
+    }
     const resolved = resolveActiveModel(catalog, loadConfig());
     this.store.update({ model: resolved });
   }
@@ -263,6 +504,7 @@ export class TuiController {
     this.controller?.abort();
     this.store.cancelInteraction();
     this.store.update({ notice: 'aborted' });
+    this.store.flush();
   }
 
   public interrupt(now = Date.now()): void {
@@ -275,5 +517,6 @@ export class TuiController {
     if (this.running) this.abort();
     else this.store.update({ editor: { text: '', cursor: 0 } });
     this.store.update({ notice: 'Bấm Ctrl+C lần nữa để thoát' });
+    this.store.flush();
   }
 }
