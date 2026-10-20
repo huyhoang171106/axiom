@@ -297,14 +297,22 @@ export class TuiStore {
     this.thinkingBuffer = '';
   }
 
+  public flush(): void {
+    if (this.timer !== undefined) {
+      clearTimeout(this.timer);
+      this.timer = undefined;
+    }
+    this.flushStream();
+    if (this.pending === this.snapshot) return;
+    this.snapshot = this.pending;
+    for (const listener of [...this.listeners]) listener();
+  }
+
   private schedule(): void {
     if (this.timer !== undefined || (this.pending === this.snapshot && !this.textBuffer && !this.thinkingBuffer)) return;
     this.timer = setTimeout(() => {
       this.timer = undefined;
-      this.flushStream();
-      if (this.pending === this.snapshot) return;
-      this.snapshot = this.pending;
-      for (const listener of [...this.listeners]) listener();
+      this.flush();
     }, FRAME_MS);
   }
 }
