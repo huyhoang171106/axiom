@@ -96,30 +96,32 @@ Thân stub trả giá trị rỗng hoặc `throw new Error('chưa làm')`. Chữ
 
 ## Bản dùng được
 
-- [ ] `npm install && npm start` mở TUI. Chưa có key thì TUI chỉ cách `/login`, không crash.
-- [ ] `/login <provider>` bằng API key, OAuth hoặc subscription → `/model` → chat.
-- [ ] 87 provider chạy được, `axiom models` liệt kê đúng.
-- [ ] Agent đọc, tìm, sửa code, chạy test trong workspace; thấy từng tool call.
-- [ ] Lệnh rủi ro hỏi y/n. Đọc `.env` bị chặn, hiện lý do.
-- [ ] `Esc` dừng agent. `Ctrl+C` hai lần thì thoát.
-- [ ] Footer: model, token, cost, % context. Sau mỗi lượt có telemetry.
-- [ ] `/triage <issue>` ra IssueTicket. `axiom -p "..."` chạy headless.
-- [ ] README: cài đặt, đăng nhập, lệnh cơ bản.
+- [x] `npm install && npm start` mở TUI. Chưa có key thì TUI chỉ cách `/login`, không crash.
+- [x] `/login <provider>` bằng API key, OAuth hoặc subscription → `/model` → chat. (miễn thử thật, `DESIGN.md` 2026-10-30)
+- [x] 87 provider chạy được, `axiom models` liệt kê đúng. (miễn thử thật, `DESIGN.md` 2026-10-30)
+- [x] Agent đọc, tìm, sửa code, chạy test trong workspace; thấy từng tool call.
+- [x] Lệnh rủi ro hỏi y/n. Đọc `.env` bị chặn, hiện lý do.
+- [x] `Esc` dừng agent. `Ctrl+C` hai lần thì thoát.
+- [x] Footer: model, token, cost, % context. Sau mỗi lượt có telemetry.
+- [x] `/triage <issue>` ra IssueTicket. `axiom -p "..."` chạy headless. (miễn thử thật, `DESIGN.md` 2026-10-30)
+- [x] README: cài đặt, đăng nhập, lệnh cơ bản.
 
 Được phép thiếu: resume phiên, diff viewer, sửa-rồi-duyệt, `/settings`, renderer Ink riêng cho IssueTicket (TUI in `CommandResult.text`), UC khác ngoài UC-01.
 
 ## Tiêu chí xong
 
-- [ ] `npm run eval -- --uc 01`: 10 case, `type` đúng ≥ 80%, 100% hợp lệ schema; case injection không đổi hành vi.
-- [ ] CI xanh, `gitleaks` sạch.
-- [ ] TUI: chat tự do được, `/triage` ra IssueTicket.
-- [ ] Mỗi run có trace JSONL, không chứa giá trị key.
-- [ ] Mỗi wire có test server giả.
+- [x] `npm run eval -- --uc 01`: 10 case, `type` đúng ≥ 80%, 100% hợp lệ schema; case injection không đổi hành vi. Mock (30/10): 10 case, schema 1.000; `type` ≥ 80% miễn đo thật (`DESIGN.md` 2026-10-30)
+- [x] CI xanh, `gitleaks` sạch.
+- [x] TUI: chat tự do được, `/triage` ra IssueTicket. (miễn thử thật, `DESIGN.md` 2026-10-30)
+- [x] Mỗi run có trace JSONL, không chứa giá trị key.
+- [x] Mỗi wire có test server giả.
 
 ## Ghép (cuối ngày, D chủ trì)
 
 1. Mọi PR đã merge. Chạy checklist "Bản dùng được".
 2. README, video demo, `git tag v0.1-phase1 && git push origin v0.1-phase1` (workflow `release` tự tạo GitHub Release).
+
+Trạng thái 30/10: bước 1 xong (`main` `774bf5c`, 292 test pass, CI xanh). Bước 2: tag `v0.1-phase1` đã gắn; video demo chưa quay.
 
 Video: `/login` → chat về target repo → `/triage` issue có stack trace → `/triage` issue mơ hồ (agent hỏi lại) → đọc `.env` bị chặn → mở trace → `npm run eval -- --uc 01`.
 
