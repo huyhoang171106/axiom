@@ -13,35 +13,97 @@ import { loadConfig } from '../core/config.js';
 import { loadCatalog, type ModelInfo } from '../llm/catalog/index.js';
 import { resolveModel } from '../llm/model-resolver.js';
 
-const GLOBAL_FLAGS = ['-p', '--mock', '--yes', '--json'];
+export function parseCliArgs(argv: string[]): {
+  model?: string;
+  isPrompt: boolean;
+  mock: boolean;
+  yes: boolean;
+  json: boolean;
+  words: string[];
+} {
+  let model: string | undefined;
+  let isPrompt = false;
+  let mock = false;
+  let yes = false;
+  let json = false;
+  const words: string[] = [];
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === '-p' || arg === '--prompt') {
+      isPrompt = true;
+    } else if (arg === '--mock') {
+      mock = true;
+    } else if (arg === '--yes') {
+      yes = true;
+    } else if (arg === '--json') {
+      json = true;
+    } else if (arg === '-m' || arg === '--model') {
+      if (i + 1 < argv.length) {
+        model = argv[++i];
+      }
+    } else if (arg.startsWith('--model=')) {
+      model = arg.slice('--model='.length);
+    } else if (arg.startsWith('-m=')) {
+      model = arg.slice('-m='.length);
+    } else {
+      words.push(arg);
+    }
+  }
+  return { model, isPrompt, mock, yes, json, words };
+}
 
 export async function runCli(argv = process.argv.slice(2)): Promise<void> {
-  const words = argv.filter((a) => !GLOBAL_FLAGS.includes(a));
+  const { model, isPrompt, mock, yes, json, words } = parseCliArgs(argv);
   const fromArgs = words.join(' ').trim();
   const named = words[0] && defaultCommandRouter.get(words[0]) ? { name: words[0], args: words.slice(1).join(' ') } : null;
-  if (!named && !fromArgs.startsWith('/') && process.stdout.isTTY && !argv.includes('-p')) return startTui(argv);
+  if (!named && !fromArgs.startsWith('/') && process.stdout.isTTY && !isPrompt) return startTui(argv);
 
   // Piped input is the task, so `echo "..." | axiom -p` works like `axiom -p "..."`.
   const input = fromArgs || (process.stdin.isTTY ? '' : (await text(process.stdin)).trim());
   const command = named ?? parseCommand(input);
-  if (command) return runCommand(command.name, command.args, argv);
+  if (command) return runCommand(command.name, command.args, argv, model);
   if (!input) throw new Error('No task. Usage: axiom -p "<task>" or axiom <command>; axiom help lists commands');
 
-  const agent = await createAgent({ workspaceRoot: process.cwd(), mock: argv.includes('--mock') });
-  agent.eventBus.on('stream_token', ({ delta }) => process.stdout.write(delta));
-  agent.eventBus.on('tool_call_start', (tc) => console.error(pc.dim(`\n> ${tc.name} ${JSON.stringify(tc.arguments).slice(0, 120)}`)));
+  const agent = await createAgent({ workspaceRoot: process.cwd(), mock, model });
+  let isThinking = false;
+  agent.eventBus.on('thinking', ({ delta }) => {
+    if (!isThinking) {
+      isThinking = true;
+      process.stderr.write(pc.dim('~ think: '));
+    }
+    process.stderr.write(pc.dim(delta));
+  });
+  agent.eventBus.on('stream_token', ({ delta }) => {
+    if (isThinking) {
+      isThinking = false;
+      process.stderr.write('\n');
+    }
+    process.stdout.write(delta);
+  });
+  agent.eventBus.on('tool_call_start', (tc) => {
+    if (isThinking) {
+      isThinking = false;
+      process.stderr.write('\n');
+    }
+    console.error(pc.dim(`\n> ${tc.name} ${JSON.stringify(tc.arguments).slice(0, 120)}`));
+  });
 
   // Risky calls need a yes. With no terminal to ask on, the registry refuses them unless --yes was given.
   const ui = createHeadlessUI();
-  if (argv.includes('--yes')) agent.toolRegistry.allowWithoutApprover = true;
+  if (yes) agent.toolRegistry.allowWithoutApprover = true;
   else if (process.stdin.isTTY) agent.toolRegistry.approver = async ({ name, reason }) => ((await ui.confirm(`Allow ${name}? (${reason})`)) ? 'approve' : 'deny');
 
   const r = await agent.runTask(input);
+  if (isThinking) {
+    isThinking = false;
+    process.stderr.write('\n');
+  }
   console.log(`\n${pc.dim(`[${r.status}] $${r.totalCostDollars.toFixed(4)} · ${r.filesChanged.length} file(s) changed`)}${r.error ? pc.red(` ${r.error}`) : ''}`);
 }
 
 /** Same `router.get(name).run(...)` call the TUI makes for `/name`. */
-async function runCommand(name: string, args: string, argv: string[]): Promise<void> {
+async function runCommand(name: string, args: string, argv: string[], modelSelector?: string): Promise<void> {
   const command = defaultCommandRouter.get(name);
   if (!command) throw new Error(unknownCommandMessage(defaultCommandRouter, name));
   const config = loadConfig();
@@ -54,7 +116,7 @@ async function runCommand(name: string, args: string, argv: string[]): Promise<v
     session: {
       // Resolved on first use, so commands that need no model (login, help) work before any provider is set up.
       get model() {
-        return (model ??= argv.includes('--mock') ? MOCK_MODEL : resolveModel('@default', loadCatalog(), config));
+        return (model ??= argv.includes('--mock') ? MOCK_MODEL : resolveModel(modelSelector ?? '@default', loadCatalog(), config));
       },
       setModel(info) {
         model = info;

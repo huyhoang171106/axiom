@@ -31,23 +31,32 @@ export function Editor(props: {
   const cols = props.width ? Math.max(20, Math.floor(props.width)) : undefined;
   const innerWidth = cols ? Math.max(8, cols - 4) : 1000;
   const cursorGlyph = props.disabled ? '' : theme.accent(theme.icons.cursor);
-  const prefix0 = `${props.disabled ? theme.muted(theme.icons.prompt) : theme.accent(theme.icons.prompt)} `;
-  const prefixN = `${theme.muted(theme.icons.bar)} `;
 
   if (!props.value.text) {
-    const hint = props.disabled
-      ? 'Đang xử lý…'
-      : props.secret
-        ? 'Dán key rồi bấm Enter (ký tự được ẩn)'
-        : props.allowEmptySubmit
-          ? 'Nhập câu trả lời hoặc bấm Enter để chọn mặc định'
-          : 'Nhập yêu cầu hoặc /help';
-    const content = props.disabled
-      ? `${prefix0}${theme.muted(hint)}`
-      : `${prefix0}${cursorGlyph} ${theme.muted(hint)}`;
+    if (props.disabled) {
+      return (
+        <Box borderStyle="round" paddingX={1} flexDirection="column" {...(cols ? { width: cols } : {})}>
+          <Text>{truncate(theme.muted('Đang xử lý…'), innerWidth)}</Text>
+        </Box>
+      );
+    }
+    if (props.secret) {
+      return (
+        <Box borderStyle="round" paddingX={1} flexDirection="column" {...(cols ? { width: cols } : {})}>
+          <Text>{truncate(`${cursorGlyph} ${theme.muted('Dán key rồi bấm Enter (ký tự được ẩn)')}`, innerWidth)}</Text>
+        </Box>
+      );
+    }
+    if (props.allowEmptySubmit) {
+      return (
+        <Box borderStyle="round" paddingX={1} flexDirection="column" {...(cols ? { width: cols } : {})}>
+          <Text>{truncate(`${cursorGlyph} ${theme.muted('Nhập câu trả lời hoặc bấm Enter để chọn mặc định')}`, innerWidth)}</Text>
+        </Box>
+      );
+    }
     return (
       <Box borderStyle="round" paddingX={1} flexDirection="column" {...(cols ? { width: cols } : {})}>
-        <Text>{truncate(content, innerWidth)}</Text>
+        <Text>{cursorGlyph}</Text>
       </Box>
     );
   }
@@ -57,7 +66,7 @@ export function Editor(props: {
     const masked = '*'.repeat(Math.min(len, 48));
     return (
       <Box borderStyle="round" paddingX={1} flexDirection="column" {...(cols ? { width: cols } : {})}>
-        <Text>{truncate(`${prefix0}${masked}${cursorGlyph} ${theme.muted(`(${len} chars)`)}`, innerWidth)}</Text>
+        <Text>{truncate(`${masked}${cursorGlyph} ${theme.muted(`(${len} chars)`)}`, innerWidth)}</Text>
       </Box>
     );
   }
@@ -69,7 +78,7 @@ export function Editor(props: {
   return (
     <Box borderStyle="round" paddingX={1} flexDirection="column" {...(cols ? { width: cols } : {})}>
       {lines.map((line, idx) => (
-        <Text key={idx}>{truncate(`${idx === 0 ? prefix0 : prefixN}${line}`, innerWidth)}</Text>
+        <Text key={idx}>{truncate(line, innerWidth)}</Text>
       ))}
     </Box>
   );

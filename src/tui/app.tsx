@@ -2,12 +2,14 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 import { defaultCommandRouter } from '../commands/index.js';
+import { parseCommand } from '../commands/router.js';
 import { Header } from './components/header.js';
 import { Transcript } from './components/transcript.js';
 import { ApprovalDialog } from './components/approval-dialog.js';
 import { Editor } from './components/editor.js';
 import { MENU_PAGE_SIZE, SelectMenu } from './components/select-menu.js';
 import { Footer } from './components/footer.js';
+import { SlashCompletion } from './components/slash-completion.js';
 import { truncate } from './layout.js';
 import { createTheme } from './theme.js';
 import type { TuiStore } from './store.js';
@@ -26,6 +28,7 @@ export function App({
 }) {
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
   const { columns, rows } = useWindowSize();
+  const safeColumns = Math.max(20, columns || 80);
   const safeRows = Math.max(12, rows || 24);
   const maxLiveLines = Math.max(4, safeRows - 10);
   const menuPageSize = Math.max(2, Math.min(MENU_PAGE_SIZE, safeRows - 9));
@@ -79,18 +82,6 @@ export function App({
   });
 
   const modelLabel = state.model ? `${state.model.provider}/${state.model.id}` : 'Dùng /login để kết nối';
-  const completionLine = matches.length
-    ? truncate(
-        matches.length === 1
-          ? `${theme.accent(matches[0].usage)} ${theme.muted(`— ${matches[0].summary} · Tab để điền`)}`
-          : `${matches
-              .map((command, idx) =>
-                idx === clampedSlashIdx ? theme.accent(theme.bold(`/${command.name}`)) : theme.muted(`/${command.name}`),
-              )
-              .join(' ')} ${theme.muted('· ↑↓ Tab để điền')}`,
-        columns,
-      )
-    : '';
   const noticeLine = state.notice
     ? truncate(
         /aborted|Ctrl\+C|Không kết nối|không còn khả dụng|vượt hạn mức|rejected|not saved|failed|Unknown/i.test(
@@ -98,25 +89,25 @@ export function App({
         )
           ? theme.warning(state.notice)
           : theme.muted(state.notice),
-        columns,
+        safeColumns,
       )
     : '';
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" width={safeColumns}>
       <Transcript
         state={state}
         expanded={state.expanded}
-        width={columns}
-        maxLiveLines={maxLiveLines}
-        header={<Header workspace={workspace} model={modelLabel} mode={state.mode} width={columns} />}
+        width={safeColumns}
+        header={<Header workspace={workspace} model={modelLabel} mode={state.mode} width={safeColumns} />}
       />
-      {state.pendingApproval && <ApprovalDialog approval={state.pendingApproval} width={columns} />}
+      {noticeLine && <Text>{noticeLine}</Text>}
+      {state.pendingApproval && <ApprovalDialog approval={state.pendingApproval} width={safeColumns} />}
       {state.menu ? (
         <SelectMenu
           menu={state.menu}
           getMenu={store.getMenu}
-          width={columns}
+          width={safeColumns}
           pageSize={menuPageSize}
           disabled={!!state.pendingApproval}
           onChange={(patch) => store.updateMenu(patch)}
@@ -127,26 +118,43 @@ export function App({
         <>
           {state.question?.hint &&
             state.question.hint.split(/\r?\n/).map((line, idx) => (
-              <Text key={`qhint-${idx}`}>{truncate(theme.muted(`  ${line}`), columns)}</Text>
+              <Text key={`qhint-${idx}`}>{truncate(theme.muted(`  ${line}`), safeColumns)}</Text>
             ))}
           {state.question && (
-            <Text>{truncate(theme.accent(`${theme.icons.prompt} ${state.question.text}`), columns)}</Text>
+            <Text>{truncate(theme.accent(`${theme.icons.prompt} ${state.question.text}`), safeColumns)}</Text>
           )}
           <Editor
             value={state.editor}
             getValue={store.getEditor}
-            width={columns}
+            width={safeColumns}
             disabled={!!state.pendingApproval || (state.busy && !state.question)}
             secret={state.question?.secret}
             allowEmptySubmit={!!state.question}
             onChange={(editor) => store.update({ editor })}
-            onSubmit={(text) => (state.question ? store.answer(text) : void controller.submit(text))}
+            onSubmit={(text) => {
+              if (state.question) {
+                store.answer(text);
+                return;
+              }
+              let submitText = text;
+              if (matches.length > 0) {
+                const selected = matches[clampedSlashIdx] ?? matches[0];
+                if (selected) {
+                  const parsed = parseCommand(text);
+                  if (!parsed && text.trim() === '/') {
+                    submitText = `/${selected.name}`;
+                  } else if (parsed && !defaultCommandRouter.get(parsed.name)) {
+                    submitText = `/${selected.name}${parsed.args ? ' ' + parsed.args : ''}`;
+                  }
+                }
+              }
+              void controller.submit(submitText);
+            }}
           />
-          {completionLine && <Text>{completionLine}</Text>}
+          <SlashCompletion matches={matches} selectedIndex={clampedSlashIdx} width={safeColumns} />
         </>
       )}
-      {noticeLine && <Text>{noticeLine}</Text>}
-      <Footer state={state} workspace={workspace} width={columns} />
+      <Footer state={state} workspace={workspace} width={safeColumns} />
     </Box>
   );
 }

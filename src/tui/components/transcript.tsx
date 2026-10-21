@@ -3,33 +3,98 @@ import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Box, Static, Text } from 'ink';
 import type { TuiTurn, TuiState } from '../store.js';
 import { ToolRow } from './tool-row.js';
-import { formatTelemetryLine, formatUserPromptLines, truncate } from '../layout.js';
+import { formatTelemetryLine, formatUserPromptLines, truncate, visibleWidth } from '../layout.js';
 import { createTheme } from '../theme.js';
 
-function renderAssistantLines(text: string, theme: ReturnType<typeof createTheme>, maxLines?: number): ReactNode[] {
+function formatInlineMarkdown(text: string, theme: ReturnType<typeof createTheme>): string {
+  // Bold: **text**
+  let res = text.replace(/\*\*([^*]+)\*\*/g, (_, b) => theme.bold(b));
+  // Inline code: `code`
+  res = res.replace(/`([^`]+)`/g, (_, c) => theme.accent(c));
+  return res;
+}
+
+function renderAssistantLines(
+  text: string,
+  theme: ReturnType<typeof createTheme>,
+  width: number,
+  maxLines?: number,
+): ReactNode[] {
   const allLines = text.split(/\r?\n/);
   const clippedCount =
     maxLines !== undefined && maxLines > 0 && allLines.length > maxLines ? allLines.length - maxLines : 0;
   const lines = clippedCount > 0 ? allLines.slice(-maxLines!) : allLines;
+  const innerW = Math.max(16, width);
+
   let inFence = false;
   if (clippedCount > 0) {
     for (let i = 0; i < clippedCount; i++) {
       if (allLines[i].trimStart().startsWith('```')) inFence = !inFence;
     }
   }
-  const rendered = lines.map((line, idx) => {
-    if (line.trimStart().startsWith('```')) {
-      inFence = !inFence;
-      return <Text key={idx}>{theme.muted(line)}</Text>;
+
+  const rendered: ReactNode[] = [];
+
+  for (let idx = 0; idx < lines.length; idx++) {
+    const rawLine = lines[idx];
+    const trimmed = rawLine.trimStart();
+
+    if (trimmed.startsWith('```')) {
+      if (!inFence) {
+        inFence = true;
+        const lang = trimmed.slice(3).trim();
+        const header = lang ? `╭─ [${lang}] ` : '╭── ';
+        const borderLen = Math.max(0, innerW - visibleWidth(header) - 1);
+        const topBorder = truncate(`${header}${'─'.repeat(borderLen)}╮`, innerW);
+        rendered.push(<Text key={`fence-start-${idx}`}>{theme.muted(topBorder)}</Text>);
+      } else {
+        inFence = false;
+        const bottomBorder = truncate(`╰${'─'.repeat(Math.max(0, innerW - 2))}╯`, innerW);
+        rendered.push(<Text key={`fence-end-${idx}`}>{theme.muted(bottomBorder)}</Text>);
+      }
+      continue;
     }
+
     if (inFence) {
-      return <Text key={idx}>{theme.muted(`${theme.icons.bar} `)}{line}</Text>;
+      rendered.push(
+        <Text key={`code-${idx}`}>
+          {theme.muted(`${theme.icons.bar}  `)}
+          {rawLine.length > innerW - 4 ? rawLine.slice(0, innerW - 5) + '…' : rawLine}
+        </Text>,
+      );
+      continue;
     }
-    if (/^#{1,6}\s/.test(line)) {
-      return <Text key={idx}>{theme.accent(theme.bold(line))}</Text>;
+
+    if (/^#{1,6}\s/.test(trimmed)) {
+      rendered.push(<Text key={`h-${idx}`}>{theme.accent(theme.bold(truncate(rawLine, innerW)))}</Text>);
+      continue;
     }
-    return <Text key={idx}>{line}</Text>;
-  });
+
+    if (/^[-*•]\s+/.test(trimmed)) {
+      const itemContent = rawLine.replace(/^(\s*)[-*•]\s+/, '$1  • ');
+      rendered.push(<Text key={`bullet-${idx}`}>{formatInlineMarkdown(truncate(itemContent, innerW), theme)}</Text>);
+      continue;
+    }
+
+    if (/^\d+\.\s+/.test(trimmed)) {
+      rendered.push(<Text key={`num-${idx}`}>{formatInlineMarkdown(truncate(rawLine, innerW), theme)}</Text>);
+      continue;
+    }
+
+    if (/^>\s+/.test(trimmed)) {
+      const quote = rawLine.replace(/^>\s*/, '');
+      rendered.push(
+        <Text key={`quote-${idx}`}>
+          {theme.muted(`${theme.icons.bar} `)}
+          {theme.muted(truncate(quote, innerW - 2))}
+        </Text>,
+      );
+      continue;
+    }
+
+    rendered.push(<Text key={`text-${idx}`}>{formatInlineMarkdown(truncate(rawLine, innerW), theme)}</Text>);
+  }
+
   if (clippedCount > 0) {
     rendered.unshift(<Text key="clipped-hint">{theme.muted(`… (+${clippedCount} dòng phía trên)`)}</Text>);
   }
@@ -73,7 +138,7 @@ export function Turn({
       {turn.tools.map((row, index) => (
         <ToolRow key={`${row.call.id}-${index}`} row={row} expanded={expanded} width={cols} />
       ))}
-      {turn.text && <Box flexDirection="column">{renderAssistantLines(turn.text, theme, maxLines)}</Box>}
+      {turn.text && <Box flexDirection="column">{renderAssistantLines(turn.text, theme, cols, maxLines)}</Box>}
       {errorLines.map((line, idx) => (
         <Text key={`err-${idx}`}>
           {idx === 0
@@ -99,11 +164,6 @@ export function Transcript({
   maxLiveLines?: number;
   header?: ReactNode;
 }) {
-  const headerCommittedRef = useRef(false);
-  useLayoutEffect(() => {
-    if (header) headerCommittedRef.current = true;
-  }, [Boolean(header)]);
-
   // Only include the startup header in revision 0; /clear increments revision so it never re-prints the welcome header.
   const includeHeader = Boolean(header) && state.revision === 0;
   const items = useMemo<('header' | TuiTurn)[]>(
@@ -116,7 +176,6 @@ export function Transcript({
       <Static key={state.revision} items={items}>
         {(item) => {
           if (item === 'header') {
-            if (headerCommittedRef.current) return null;
             return <Box key="header">{header}</Box>;
           }
           return <Turn key={item.id} turn={item} expanded={false} width={width} />;
