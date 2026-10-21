@@ -14,10 +14,10 @@ export const MOCK_MODEL: ModelInfo = {
   provider: 'mock', id: 'mock', name: 'Mock', api: 'openai-completions', baseUrl: '', contextWindow: 128000, reasoning: false, input: ['text'],
 };
 
-export async function createAgent(opts: { workspaceRoot: string; mock?: boolean; signal?: AbortSignal }): Promise<AgentLoop> {
+export async function createAgent(opts: { workspaceRoot: string; mock?: boolean; signal?: AbortSignal; model?: string }): Promise<AgentLoop> {
   const config = { ...loadConfig(), workspaceRoot: opts.workspaceRoot };
   // --mock has to work with no provider set up (CI, eval), so it skips model resolution entirely.
-  const info = opts.mock ? MOCK_MODEL : resolveModel('@default', loadCatalog(), config);
+  const info = opts.mock ? MOCK_MODEL : resolveModel(opts.model ?? '@default', loadCatalog(), config);
   const agent = new AgentLoop({
     config,
     provider: opts.mock ? new MockProvider('mock', ['mock reply']) : await createProviderFor(info),

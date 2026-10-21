@@ -164,14 +164,25 @@ export class TuiController {
 
   constructor(
     public readonly store: TuiStore,
-    private readonly opts: { workspaceRoot: string; mock?: boolean; exit?: () => void; git?: GitStatusCache },
+    private readonly opts: { workspaceRoot: string; mock?: boolean; model?: string; exit?: () => void; git?: GitStatusCache },
   ) {
     if (this.opts.mock) {
       this.store.update({ model: MOCK_MODEL });
       this.store.flush();
     } else {
       const config = loadConfig();
-      const initialModel = resolveActiveModel(loadCatalog(), config);
+      const catalog = loadCatalog();
+      let initialModel: ModelInfo | null = null;
+      if (this.opts.model) {
+        try {
+          initialModel = resolveModel(this.opts.model, catalog, config);
+        } catch {
+          initialModel = null;
+        }
+      }
+      if (!initialModel) {
+        initialModel = resolveActiveModel(catalog, config);
+      }
       if (initialModel) {
         if (!config.modelRoles?.default && config.defaultModel !== `${initialModel.provider}/${initialModel.id}`) {
           saveConfig({ defaultModel: `${initialModel.provider}/${initialModel.id}` });
@@ -378,7 +389,16 @@ export class TuiController {
     const parsed = parseCommand(input);
     try {
       if (parsed) {
-        const command = defaultCommandRouter.get(parsed.name);
+        let command = defaultCommandRouter.get(parsed.name);
+        if (!command) {
+          const completions = defaultCommandRouter.complete(`/${parsed.name}`);
+          if (completions.length > 0) {
+            command = defaultCommandRouter.get(completions[0].name);
+            if (command) {
+              parsed.name = command.name;
+            }
+          }
+        }
         if (!command) throw new Error(unknownCommandMessage(defaultCommandRouter, parsed.name));
         const config = loadConfig();
 

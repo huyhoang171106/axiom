@@ -133,17 +133,18 @@ export function parseGitStatus(output: string): GitStatus {
 
 /**
  * Footer left segments. Cut order (lowest priority first):
- * commit → git status → branch → cwd shrunk to its last directory.
+ * runtime → commit → git status → branch → cwd shrunk to its last directory.
  */
-export function footerLeftSegments(cwd: string, git: GitStatus | null): Segment[] {
+export function footerLeftSegments(cwd: string, git: GitStatus | null, runtime?: string): Segment[] {
   const base = cwd.split(/[\\/]+/).filter(Boolean).at(-1) ?? cwd;
-  const segments: Segment[] = [{ text: cwd, compact: base, priority: 4 }];
-  if (git?.branch) segments.push({ text: git.branch, priority: 3 });
+  const segments: Segment[] = [{ text: cwd, compact: base, priority: 5 }];
+  if (git?.branch) segments.push({ text: git.branch, priority: 4 });
   if (git && (git.changed || git.untracked)) {
     const flags = [git.changed ? `!${git.changed}` : '', git.untracked ? `?${git.untracked}` : ''].filter(Boolean).join(' ');
-    segments.push({ text: `[${flags}]`, priority: 2 });
+    segments.push({ text: `[${flags}]`, priority: 3 });
   }
-  if (git?.commit) segments.push({ text: git.commit, priority: 1 });
+  if (git?.commit) segments.push({ text: git.commit, priority: 2 });
+  if (runtime) segments.push({ text: runtime, priority: 1 });
   return segments;
 }
 

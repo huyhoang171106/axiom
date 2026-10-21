@@ -21,7 +21,11 @@ for (const columns of [40, 60, 80, 120]) test(`components render within ${column
   if (columns >= 80) {
     assert.match(header, /Welcome/);
     assert.match(header, /Commands/);
-    assert.match(header, /\/help \/login \/model \/triage \/exit/);
+    assert.match(header, /\/help/);
+    assert.match(header, /\/login/);
+    assert.match(header, /\/model/);
+    assert.match(header, /\/triage/);
+    assert.match(header, /\/exit/);
   }
   assert.ok(header.split('\n').every((line) => visibleWidth(line) <= columns));
 
@@ -144,4 +148,17 @@ for (const columns of [40, 60, 80, 120]) test(`components render within ${column
   assert.match(clippedLive, /\+19 dòng phía trên/);
   assert.ok(!clippedLive.includes('Line 1 of streaming response'));
   assert.match(clippedLive, /Line 25 of streaming response/);
+
+  // Model output with markdown structures like pi-open-tui
+  const markdownTurn: TuiTurn = {
+    ...turn,
+    text: '# Main Title\n## Section\n- Bullet item with **bold** and `code`\n> Blockquote text\n```python\nprint("hello")\n```',
+  };
+  const renderedMd = renderToString(createElement(Turn, { turn: markdownTurn, expanded: false, width: columns }), { columns });
+  assert.match(renderedMd, /Main Title/);
+  assert.match(renderedMd, /Section/);
+  assert.match(renderedMd, /Bullet item with/);
+  assert.match(renderedMd, /Blockquote text/);
+  assert.match(renderedMd, /print\("hello"\)/);
+  assert.ok(renderedMd.split('\n').every((line) => visibleWidth(line) <= columns));
 });

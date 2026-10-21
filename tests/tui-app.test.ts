@@ -17,6 +17,8 @@ function countOccurrences(haystack: string, needle: string): number {
   return haystack.split(needle).length - 1;
 }
 
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 test('command output printed after the header is shown in the terminal', async () => {
   const stdout = fakeTty();
   let written = '';
@@ -219,3 +221,81 @@ test('multi-turn chat -> /help -> /model -> /login -> /clear -> chat never dupli
     console.error = origConsoleError;
   }
 });
+
+test('fullscreen alternateScreen mode enters alternate buffer on mount and restores on unmount', async () => {
+  const stdout = fakeTty();
+  let written = '';
+  stdout.on('data', (chunk: Buffer) => { written += chunk.toString(); });
+  const store = new TuiStore();
+  const controller = { submit: async () => {}, interrupt() {}, abort() {}, lastPrompt: '' } as unknown as TuiController;
+  const app = render(createElement(App, { store, controller, workspace: '/repo', initial: '' }), {
+    stdout: stdout as unknown as NodeJS.WriteStream,
+    stdin: fakeTty() as unknown as NodeJS.ReadStream,
+    patchConsole: false,
+    exitOnCtrlC: false,
+    interactive: true,
+    alternateScreen: true,
+  });
+  await new Promise(resolve => setTimeout(resolve, 60));
+  assert.match(written, /\x1b\[\?1049h/);
+  app.unmount();
+  assert.match(written, /\x1b\[\?1049l/);
+  store.dispose();
+});
+
+test('typing partial slash command shows vertical completions and Enter auto-matches first suggestion', async () => {
+  const stdout = fakeTty(90, 24);
+  const stdin = fakeTty(90, 24);
+  let written = '';
+  stdout.on('data', (chunk: Buffer) => { written += chunk.toString(); });
+  const store = new TuiStore();
+  let submitted = '';
+  const controller = {
+    submit: async (input: string) => { submitted = input; },
+    interrupt() {},
+    abort() {},
+    lastPrompt: '',
+  } as unknown as TuiController;
+
+  const app = render(createElement(App, { store, controller, workspace: '/repo', initial: '' }), {
+    stdout: stdout as unknown as NodeJS.WriteStream,
+    stdin: stdin as unknown as NodeJS.ReadStream,
+    patchConsole: false,
+    exitOnCtrlC: false,
+    interactive: true,
+  });
+
+  try {
+    await wait(60);
+    // Type /mo
+    stdin.write('/mo');
+    await wait(60);
+
+    // Assert vertical completions are rendered
+    assert.match(written, /→ model/);
+    assert.match(written, /models/);
+    assert.match(written, /\(1\/2\)/);
+
+    // Press Enter on /mo
+    stdin.write('\r');
+    await wait(60);
+
+    // Enter should have auto-matched /model instead of sending raw /mo
+    assert.equal(submitted, '/model');
+
+    // Now test Down arrow selection
+    stdin.write('/mo');
+    await wait(60);
+    stdin.write('\u001b[B'); // Down arrow -> selects `models`
+    await wait(60);
+    stdin.write('\r'); // Enter
+    await wait(60);
+    assert.equal(submitted, '/models');
+  } finally {
+    app.unmount();
+    store.dispose();
+  }
+});
+
+
+
