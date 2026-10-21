@@ -19,6 +19,7 @@ const credentialSchema = z.discriminatedUnion('type', [
     refresh: z.string().optional(),
     expires: z.number().optional(),
     email: z.string().optional(),
+    projectId: z.string().optional(),
     headers: z.record(z.string(), z.string()).optional(),
     baseUrl: z.url().optional(),
   }),

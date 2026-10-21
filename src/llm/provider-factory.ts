@@ -42,7 +42,7 @@ export const WIRES: Record<WireApi, WireFactory> = {
     new OpenAIProvider({ apiKey: credential, baseUrl: info.baseUrl, headers: info.headers }, info.provider),
   // Catalog base URLs stop before the version segment (`https://api.anthropic.com`); the class appends `/messages`.
   'anthropic-messages': (info, credential) =>
-    new AnthropicProvider({ apiKey: credential, baseUrl: `${info.baseUrl.replace(/\/+$/, '')}/v1`, headers: info.headers }),
+    new AnthropicProvider({ apiKey: credential, baseUrl: `${info.baseUrl.replace(/\/+$/, '')}/v1`, headers: info.headers }, info.provider),
   'openai-responses': (info, credential) => new OpenAIResponsesProvider(info, credential),
   'openai-codex-responses': (info, credential) => new OpenAICodexResponsesProvider(info, credential),
   'azure-openai-responses': (info, credential) => new AzureOpenAIResponsesProvider(info, credential),

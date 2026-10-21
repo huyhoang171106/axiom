@@ -225,6 +225,47 @@ test('google-gemini-cli rejects credential without project', async () => {
   );
 });
 
+test('google-antigravity formats wire body, resolves tier model and strips x-goog-user-project header', async () => {
+  const srv = await startFakeServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'text/event-stream' });
+    res.end(
+      sse({
+        response: {
+          candidates: [{ content: { parts: [{ text: 'Antigravity online.' }] } }],
+          finishReason: 'STOP',
+        },
+      }),
+    );
+  });
+  try {
+    const credential = JSON.stringify({ token: 'ya29.ag-token', projectId: 'aicode-consumers' });
+    const info = {
+      ...makeInfo('google-gemini-cli', 'google-antigravity', srv.url),
+      headers: { 'x-goog-user-project': 'aicode-consumers' },
+    };
+    const provider = new GoogleGeminiCliProvider(info, credential);
+    const result = await provider.chat({
+      model: 'gemini-3.8-flash',
+      messages: [{ role: 'user', content: 'hello' }],
+    });
+
+    assert.equal(result.content, 'Antigravity online.');
+    const req = srv.seen[0];
+    assert.equal(req.url, '/v1internal:streamGenerateContent?alt=sse');
+    assert.equal(req.headers['x-goog-user-project'], undefined, 'x-goog-user-project must be stripped');
+    assert.match(req.headers['user-agent'] as string, /^antigravity\/hub\//);
+
+    const sent = JSON.parse(req.body.toString('utf8'));
+    assert.equal(sent.project, 'aicode-consumers');
+    assert.equal(sent.model, 'gemini-3.8-flash-medium', 'base flash model mapped to medium tier');
+    assert.equal(sent.userAgent, 'antigravity');
+    assert.equal(sent.requestType, 'agent');
+    assert.match(sent.requestId, /^agent\//);
+  } finally {
+    await srv.close();
+  }
+});
+
 test('google-vertex exchanges service_account ADC JWT for a bearer token, caches it, and streams from project/location endpoint', async () => {
   const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
   const privatePem = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();

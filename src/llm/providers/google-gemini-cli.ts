@@ -84,6 +84,22 @@ export function parseCodeAssistCredential(
   return { token, projectId };
 }
 
+function resolveAntigravityWireModel(model: string, thinking?: string): string {
+  const clean = model.replace(/^models\//, '');
+  const tier = thinking === 'low' ? 'low' : thinking === 'high' ? 'high' : 'medium';
+  const tierMap: Record<string, string> = {
+    'gemini-3.8-flash': `gemini-3.8-flash-${tier}`,
+    'gemini-4-argon': `gemini-4-argon-${tier}`,
+    'claude-sonnet-5-5': `claude-sonnet-5-5-${tier}`,
+    'claude-opus-5-5': `claude-opus-5-5-${tier}`,
+    'claude-sonnet-4-5': `claude-sonnet-5-5-${tier}`,
+    'claude-opus-4-5': `claude-opus-5-5-${tier}`,
+    'claude-sonnet-4-6': `claude-sonnet-5-5-${tier}`,
+    'claude-opus-4-6': `claude-opus-5-5-${tier}`,
+  };
+  return tierMap[clean] || clean;
+}
+
 export class GoogleGeminiCliProvider extends BaseLLMProvider {
   readonly name: LLMProviderType;
 
@@ -98,21 +114,53 @@ export class GoogleGeminiCliProvider extends BaseLLMProvider {
   async chat({ model, messages, tools, temperature, maxTokens, onToken, onThinking, signal }: ChatParams): Promise<ChatResult> {
     const { token, projectId } = parseCodeAssistCredential(this.name, model, this.credential, this.info.headers);
     const request = buildGeminiRequest(this.info, { messages, tools, temperature, maxTokens });
+    const isAntigravity = this.name === 'google-antigravity';
+    const os = process.platform === 'darwin' ? 'darwin' : 'linux';
+    const arch = process.arch === 'arm64' ? 'arm64' : 'amd64';
+    const antigravityUserAgent = isAntigravity
+      ? `antigravity/hub/2.26.0 (aidev_client; os_type=${os}; arch=${arch}; cl=1005016104)`
+      : undefined;
+
+    const effectiveHeaders: Record<string, string> = { ...this.info.headers };
+    if (isAntigravity) {
+      for (const k of Object.keys(effectiveHeaders)) {
+        if (/^x-(goog-user|cloud)-project$/i.test(k)) {
+          delete effectiveHeaders[k];
+        }
+      }
+    }
+
+    const wireModel = isAntigravity
+      ? resolveAntigravityWireModel(model, (this.info as unknown as { thinking?: string }).thinking)
+      : model.replace(/^models\//, '');
+
+    const body = isAntigravity
+      ? {
+          project: projectId,
+          model: wireModel,
+          requestId: `agent/${crypto.randomUUID()}/${Date.now()}/${crypto.randomUUID()}/1`,
+          userAgent: 'antigravity',
+          requestType: 'agent',
+          request,
+        }
+      : {
+          project: projectId,
+          model: wireModel,
+          userPromptId: crypto.randomUUID(),
+          request,
+        };
+
     return requestGemini({
       provider: this.name,
       info: this.info,
       model,
       url: `${trimBase(this.info.baseUrl)}/v1internal:streamGenerateContent?alt=sse`,
       headers: {
-        ...this.info.headers,
-        ...(token && !hasHeader(this.info.headers, 'authorization') && { authorization: `Bearer ${token}` }),
+        ...(antigravityUserAgent && { 'User-Agent': antigravityUserAgent }),
+        ...effectiveHeaders,
+        ...(token && !hasHeader(effectiveHeaders, 'authorization') && { authorization: `Bearer ${token}` }),
       },
-      body: {
-        project: projectId,
-        model: model.replace(/^models\//, ''),
-        userPromptId: crypto.randomUUID(),
-        request,
-      },
+      body,
       params: { onToken, onThinking, signal },
     });
   }
