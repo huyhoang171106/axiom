@@ -35,10 +35,22 @@ const operationSchema = z.looseObject({
   response: z.looseObject({ cloudaicompanionProject: z.union([z.string(), z.looseObject({ id: z.string() })]).optional() }).nullish(),
 });
 
-async function call<T>(step: string, schema: z.ZodType<T>, url: string, access: string, body?: unknown): Promise<T> {
+async function call<T>(step: string, schema: z.ZodType<T>, url: string, access: string, body?: unknown, providerId?: string): Promise<T> {
+  const os = process.platform === 'darwin' ? 'darwin' : 'linux';
+  const arch = process.arch === 'arm64' ? 'arm64' : 'amd64';
+  const isAntigravity = providerId === 'google-antigravity';
+  const userAgent = isAntigravity
+    ? `antigravity/hub/2.26.0 (aidev_client; os_type=${os}; arch=${arch}; cl=1005016104)`
+    : undefined;
+
   const response = await fetch(url, {
     method: body === undefined ? 'GET' : 'POST',
-    headers: { accept: 'application/json', 'content-type': 'application/json', authorization: `Bearer ${access}` },
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      authorization: `Bearer ${access}`,
+      ...(userAgent && { 'User-Agent': userAgent }),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: withTimeout(undefined, 30_000),
   });
@@ -69,10 +81,15 @@ export const afterExchange: AfterExchangeHook['afterExchange'] = async (credenti
   const load = await call('lookup', loadSchema, `${api}:loadCodeAssist`, credential.access, {
     cloudaicompanionProject: envProject,
     metadata: { ...metadata, duetProject: envProject },
+  }, provider.id);
+  const withProject = (project: string): Credential => ({
+    ...credential,
+    projectId: project,
+    headers: { ...credential.headers, 'x-goog-user-project': project },
   });
-  const withProject = (project: string): Credential => ({ ...credential, headers: { ...credential.headers, 'x-goog-user-project': project } });
   if (load.currentTier) {
-    const project = load.cloudaicompanionProject || envProject;
+    let project = load.cloudaicompanionProject || envProject;
+    if (!project && provider.id === 'google-antigravity') project = 'aicode-consumers';
     if (!project) throw noProject(load);
     return withProject(project);
   }
@@ -84,15 +101,16 @@ export const afterExchange: AfterExchangeHook['afterExchange'] = async (credenti
     tierId,
     metadata,
     ...(tierId !== 'free-tier' && { cloudaicompanionProject: envProject }),
-  });
+  }, provider.id);
   for (let attempt = 0; !operation.done && operation.name && attempt < POLL_ATTEMPTS; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-    operation = await call('onboarding', operationSchema, `${api}/${operation.name}`, credential.access);
+    operation = await call('onboarding', operationSchema, `${api}/${operation.name}`, credential.access, undefined, provider.id);
   }
   if (operation.error?.message) throw new Error(`Google Code Assist onboarding failed: ${operation.error.message}`);
   if (!operation.done) throw new Error('Google Code Assist onboarding did not finish in time. Run /login again.');
   const made = operation.response?.cloudaicompanionProject;
-  const project = (typeof made === 'string' ? made : made?.id) || envProject;
+  let project = (typeof made === 'string' ? made : made?.id) || envProject;
+  if (!project && provider.id === 'google-antigravity') project = 'aicode-consumers';
   if (!project) throw noProject();
   return withProject(project);
 };

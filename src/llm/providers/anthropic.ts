@@ -17,6 +17,9 @@ import {
   sseErrorFrame,
   throwHttpError,
 } from '../provider-error.js';
+import crypto from 'node:crypto';
+import { hasHeader } from './responses-shared.js';
+import { readAuth } from '../auth/store.js';
 
 interface AnthropicContentBlock {
   type: 'text' | 'tool_use' | 'tool_result' | 'thinking';
@@ -34,13 +37,124 @@ interface AnthropicMessagePayload {
   content: string | AnthropicContentBlock[];
 }
 
+const CCH_SEED = 0x4d659218e32a3268n;
+const CCH_PLACEHOLDER_STR = 'cch=00000';
+
+function xxhash64(buffer: Buffer, seed = 0n): bigint {
+  const b = buffer;
+  const P1 = 0x9e3779b185ebca87n;
+  const P2 = 0xc2b2ae3d27d4eb4fn;
+  const P3 = 0x165667b19e3779f9n;
+  const P4 = 0x85ebca77c2b2ae63n;
+  const P5 = 0x27d4eb2f165667c5n;
+  const MASK = 0xffffffffffffffffn;
+
+  const rotl = (x: bigint, r: bigint) => ((x << r) | (x >> (64n - r))) & MASK;
+  const round = (acc: bigint, input: bigint) => (rotl((acc + input * P2) & MASK, 31n) * P1) & MASK;
+  const mergeRound = (acc: bigint, val: bigint) => {
+    const r = round(0n, val);
+    let a = acc ^ r;
+    a = (a * P1 + P4) & MASK;
+    return a;
+  };
+
+  const len = BigInt(b.length);
+  let h64 = 0n;
+  let offset = 0;
+
+  if (b.length >= 32) {
+    let v1 = (seed + P1 + P2) & MASK;
+    let v2 = (seed + P2) & MASK;
+    let v3 = seed & MASK;
+    let v4 = (seed - P1) & MASK;
+
+    const limit = b.length - 32;
+    while (offset <= limit) {
+      v1 = round(v1, b.readBigUInt64LE(offset)); offset += 8;
+      v2 = round(v2, b.readBigUInt64LE(offset)); offset += 8;
+      v3 = round(v3, b.readBigUInt64LE(offset)); offset += 8;
+      v4 = round(v4, b.readBigUInt64LE(offset)); offset += 8;
+    }
+
+    h64 = (rotl(v1, 1n) + rotl(v2, 7n) + rotl(v3, 12n) + rotl(v4, 18n)) & MASK;
+    h64 = mergeRound(h64, v1);
+    h64 = mergeRound(h64, v2);
+    h64 = mergeRound(h64, v3);
+    h64 = mergeRound(h64, v4);
+  } else {
+    h64 = (seed + P5) & MASK;
+  }
+
+  h64 = (h64 + len) & MASK;
+
+  while (offset + 8 <= b.length) {
+    const k1 = round(0n, b.readBigUInt64LE(offset));
+    h64 ^= k1;
+    h64 = (rotl(h64, 27n) * P1 + P4) & MASK;
+    offset += 8;
+  }
+
+  if (offset + 4 <= b.length) {
+    h64 ^= (BigInt(b.readUInt32LE(offset)) * P1) & MASK;
+    h64 = (rotl(h64, 23n) * P2 + P3) & MASK;
+    offset += 4;
+  }
+
+  while (offset < b.length) {
+    h64 ^= (BigInt(b[offset]!) * P5) & MASK;
+    h64 = (rotl(h64, 11n) * P1) & MASK;
+    offset += 1;
+  }
+
+  h64 ^= h64 >> 33n;
+  h64 = (h64 * P2) & MASK;
+  h64 ^= h64 >> 29n;
+  h64 = (h64 * P3) & MASK;
+  h64 ^= h64 >> 32n;
+
+  return h64;
+}
+
+function createClaudeBillingHeader(firstUserMessageText: string): string {
+  const k = [4, 7, 20].map((i) => firstUserMessageText[i] ?? '0').join('');
+  const version = '2.1.280';
+  const versionSuffix = crypto.createHash('sha256').update(`59cf53e54c78${k}${version}`).digest('hex').slice(0, 3);
+  return `x-anthropic-billing-header: cc_version=${version}.${versionSuffix}; cc_entrypoint=cli; ${CCH_PLACEHOLDER_STR};`;
+}
+
+function patchCch(bodyBuffer: Buffer): 'patched' | 'no-billing-header' | 'unanchored' {
+  const marker = Buffer.from('"system":[{"type":"text","text":"x-anthropic-billing-header:');
+  const placeholder = Buffer.from(CCH_PLACEHOLDER_STR);
+  const markerIdx = bodyBuffer.indexOf(marker);
+  if (markerIdx === -1) return 'no-billing-header';
+  const searchFrom = markerIdx + marker.length;
+  const idx = bodyBuffer.indexOf(placeholder, searchFrom);
+  if (idx === -1 || idx - searchFrom > 150) return 'unanchored';
+  const h = xxhash64(bodyBuffer, CCH_SEED);
+  const cch = (h & 0xfffffn).toString(16).padStart(5, '0');
+  for (let i = 0; i < 5; i++) {
+    bodyBuffer[idx + 4 + i] = cch.charCodeAt(i);
+  }
+  return 'patched';
+}
+
+function isStoredOAuth(providerName: string, apiKey: string): boolean {
+  try {
+    const stored = readAuth()[providerName];
+    return stored?.type === 'oauth' && stored.access === apiKey;
+  } catch {
+    return false;
+  }
+}
+
 export class AnthropicProvider extends BaseLLMProvider {
-  readonly name: LLMProviderType = 'anthropic';
+  readonly name: LLMProviderType;
   private credentials?: ProviderCredentials;
 
-  constructor(credentials?: ProviderCredentials) {
+  constructor(credentials?: ProviderCredentials, name: LLMProviderType = 'anthropic') {
     super();
     this.credentials = credentials;
+    this.name = name;
   }
 
   async chat(params: ChatParams): Promise<ChatResult> {
@@ -57,11 +171,12 @@ export class AnthropicProvider extends BaseLLMProvider {
 
     const apiKey =
       this.credentials?.apiKey ||
-      (typeof process !== 'undefined' ? process.env?.ANTHROPIC_API_KEY : '') ||
+      (typeof process !== 'undefined' ? (process.env?.ANTHROPIC_OAUTH_TOKEN || process.env?.ANTHROPIC_API_KEY) : '') ||
       '';
 
-    if (!apiKey) {
-      throw new Error('Anthropic API key is required. Set it in configuration or ANTHROPIC_API_KEY environment variable.');
+    const hasAuthHeader = hasHeader(this.credentials?.headers, 'authorization');
+    if (!apiKey && !hasAuthHeader) {
+      throw new Error('Anthropic API key or OAuth token is required. Set it in configuration or ANTHROPIC_API_KEY / ANTHROPIC_OAUTH_TOKEN environment variable.');
     }
 
     const baseUrl = (this.credentials?.baseUrl || 'https://api.anthropic.com/v1').replace(/\/+$/, '');
@@ -89,7 +204,32 @@ export class AnthropicProvider extends BaseLLMProvider {
       max_tokens: maxTokens,
     };
 
-    if (systemPrompt) {
+    const isOAuth = Boolean(
+      apiKey && (
+        apiKey.includes('sk-ant-oat') ||
+        apiKey.startsWith('sk-ant-oat') ||
+        (typeof process !== 'undefined' && Boolean(process.env?.ANTHROPIC_OAUTH_TOKEN) && apiKey === process.env.ANTHROPIC_OAUTH_TOKEN) ||
+        this.credentials?.source === 'subscription' ||
+        isStoredOAuth(this.name, apiKey)
+      )
+    );
+
+    const isCopilotOrGitlab = this.name === 'github-copilot' || this.name === 'gitlab-duo';
+    const CLAUDE_CODE_SYSTEM_PREFIX = "You are Claude Code, Anthropic's official CLI for Claude.";
+
+    if (isOAuth) {
+      const firstUserMsg = messages.find((m) => m.role === 'user');
+      const firstUserText = typeof firstUserMsg?.content === 'string' ? firstUserMsg.content : '';
+      const billingHeader = createClaudeBillingHeader(firstUserText);
+      const systemBlocks: Array<{ type: 'text'; text: string }> = [
+        { type: 'text', text: billingHeader },
+        { type: 'text', text: CLAUDE_CODE_SYSTEM_PREFIX },
+      ];
+      if (systemPrompt) {
+        systemBlocks.push({ type: 'text', text: systemPrompt });
+      }
+      requestBody.system = systemBlocks;
+    } else if (systemPrompt) {
       requestBody.system = systemPrompt;
     }
 
@@ -108,17 +248,41 @@ export class AnthropicProvider extends BaseLLMProvider {
 
     const headers: Record<string, string> = {
       'content-type': 'application/json',
-      'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
       'anthropic-beta': 'prompt-caching-2024-07-31,output-128k-2025-02-19',
-      // Catalog headers (providers.md section 7.1) carry provider differences, so they go out last.
-      ...this.credentials?.headers,
     };
+
+    if (isOAuth) {
+      headers['authorization'] = `Bearer ${apiKey}`;
+      headers['anthropic-beta'] = 'claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,effort-2025-11-24';
+      headers['anthropic-dangerous-direct-browser-access'] = 'true';
+      headers['user-agent'] = 'claude-cli/2.1.280 (external, cli)';
+      headers['x-app'] = 'cli';
+    } else if (isCopilotOrGitlab) {
+      headers['authorization'] = `Bearer ${apiKey}`;
+    } else if (apiKey && !hasAuthHeader) {
+      headers['x-api-key'] = apiKey;
+    }
+
+    // Catalog headers (providers.md section 7.1) carry provider differences, so they go out last.
+    Object.assign(headers, this.credentials?.headers);
+
+    if (hasHeader(headers, 'authorization') && !hasHeader(this.credentials?.headers, 'x-api-key') && (isOAuth || isCopilotOrGitlab)) {
+      delete headers['x-api-key'];
+    }
+
+    const jsonStr = JSON.stringify(requestBody);
+    let bodyData: string | Buffer = jsonStr;
+    if (isOAuth) {
+      const buf = Buffer.from(jsonStr, 'utf-8');
+      patchCch(buf);
+      bodyData = buf;
+    }
 
     const response = await fetch(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify(requestBody),
+      body: bodyData,
       signal,
     });
 

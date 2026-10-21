@@ -426,6 +426,7 @@ test('/login google-antigravity: secret from ~/.axiom/.env, PKCE, a new account 
   assert.ok(stored?.type === 'oauth' && stored.headers?.['x-goog-user-project'] === 'proj-ag', 'the project made by onboarding');
 });
 
+
 test("google login: a refusal is reported with Google's reason; a Workspace account without a project is told to set one", async (t) => {
   withEnv(t, { GEMINI_CLI_OAUTH_CLIENT_SECRET: 's', GOOGLE_CLOUD_PROJECT: undefined, GOOGLE_CLOUD_PROJECT_ID: undefined });
   const entry = loadCatalog(undefined).providers().find((p) => p.id === 'google-gemini-cli')!;

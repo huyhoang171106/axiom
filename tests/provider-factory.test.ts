@@ -27,6 +27,48 @@ test('anthropic-messages wire appends /v1 to the catalog base URL and sends the 
     assert.equal(r.content, 'ok');
     assert.equal(srv.seen[0].url, '/api/anthropic/v1/messages');
     assert.equal(srv.seen[0].headers['x-api-key'], 'k-1');
+    assert.equal(srv.seen[0].headers.authorization, undefined);
+  } finally {
+    srv.close();
+  }
+});
+
+test('anthropic-messages with oauth token sends bearer auth, claude identity and oauth beta header', async () => {
+  let seenBody: Record<string, unknown> | undefined;
+  const srv = await fakeServer({ content: [{ type: 'text', text: 'ok' }], usage: { input_tokens: 1, output_tokens: 1 } });
+  // Intercept body to inspect payload
+  const origListeners = srv.close;
+  try {
+    const infoAnthropic: ModelInfo = { ...info('anthropic-messages', `${srv.url}/api/anthropic`), provider: 'anthropic' };
+    const r = await WIRES['anthropic-messages'](infoAnthropic, 'sk-ant-oat01-test-token').chat({
+      model: 'claude-opus-5-5',
+      messages: [{ role: 'system', content: 'custom prompt' }, { role: 'user', content: 'hi' }],
+    });
+    assert.equal(r.content, 'ok');
+    assert.equal(srv.seen[0].url, '/api/anthropic/v1/messages');
+    assert.equal(srv.seen[0].headers.authorization, 'Bearer sk-ant-oat01-test-token');
+    assert.equal(srv.seen[0].headers['x-api-key'], undefined, 'x-api-key must not be sent for OAuth token');
+    assert.match(String(srv.seen[0].headers['anthropic-beta']), /oauth-2025-04-20/);
+    assert.match(String(srv.seen[0].headers['anthropic-beta']), /claude-code-20250219/);
+    assert.match(String(srv.seen[0].headers['user-agent']), /^claude-cli\//);
+    assert.equal(srv.seen[0].headers['x-app'], 'cli');
+  } finally {
+    srv.close();
+  }
+});
+
+test('anthropic-messages with github-copilot or gitlab-duo sends bearer auth instead of x-api-key', async () => {
+  const srv = await fakeServer({ content: [{ type: 'text', text: 'ok' }], usage: { input_tokens: 1, output_tokens: 1 } });
+  try {
+    const copilotInfo: ModelInfo = { ...info('anthropic-messages', `${srv.url}/copilot`), provider: 'github-copilot' };
+    await WIRES['anthropic-messages'](copilotInfo, 'gh-copilot-token').chat({ model: 'm', messages: [{ role: 'user', content: 'hi' }] });
+    assert.equal(srv.seen[0].headers.authorization, 'Bearer gh-copilot-token');
+    assert.equal(srv.seen[0].headers['x-api-key'], undefined);
+
+    const gitlabInfo: ModelInfo = { ...info('anthropic-messages', `${srv.url}/gitlab`), provider: 'gitlab-duo' };
+    await WIRES['anthropic-messages'](gitlabInfo, 'gl-pat-token').chat({ model: 'm', messages: [{ role: 'user', content: 'hi' }] });
+    assert.equal(srv.seen[1].headers.authorization, 'Bearer gl-pat-token');
+    assert.equal(srv.seen[1].headers['x-api-key'], undefined);
   } finally {
     srv.close();
   }

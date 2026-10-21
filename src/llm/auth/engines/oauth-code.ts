@@ -26,6 +26,7 @@ export const oauthLoginSchema = z.object({
   clientSecretEnv: z.string().regex(/^[A-Z][A-Z0-9_]*$/).optional(),
   authorizeUrl: z.url(),
   tokenUrl: z.url(),
+  userinfoUrl: z.url().optional(),
   scopes: z.array(z.string().min(1)).optional(),
   /** Query of the authorize URL. Uses `{code_challenge}` for PKCE; `{state}` makes the returned state mandatory. */
   authorizeParams: params,
@@ -240,6 +241,33 @@ export async function oauthCodeLogin(provider: ProviderEntry, ui: CommandUI, dep
   if (checksState && !stateOk) throw new Error(`Sign-in to ${provider.id} was refused: the state does not match (possible forged redirect).`);
   const body = await exchange(provider, login, fill(login.tokenParams, { ...values, code: returned.code }));
   const credential = toCredential(provider, login, body);
+
+  if (!credential.email && body && typeof body === 'object') {
+    const raw = body as Record<string, unknown>;
+    if (typeof raw.id_token === 'string') {
+      try {
+        const payload = JSON.parse(Buffer.from(raw.id_token.split('.')[1], 'base64url').toString('utf8'));
+        if (typeof payload.email === 'string' && payload.email) credential.email = payload.email;
+      } catch {
+        // Ignored; userinfo fallback below
+      }
+    }
+  }
+  if (!credential.email && login.userinfoUrl) {
+    try {
+      const res = await fetch(login.userinfoUrl, {
+        headers: { authorization: `Bearer ${credential.access}`, accept: 'application/json' },
+        signal: withTimeout(undefined, 5_000),
+      });
+      if (res.ok) {
+        const info = (await res.json()) as Record<string, unknown>;
+        if (typeof info.email === 'string' && info.email) credential.email = info.email;
+      }
+    } catch {
+      // Userinfo failure must not fail the login
+    }
+  }
+
   if (login.afterExchange) {
     const hook = (await import(`../hooks/${login.afterExchange}.js`)) as AfterExchangeHook;
     return hook.afterExchange(credential, body, provider);
