@@ -88,9 +88,9 @@ Import direction: `cli → tui → commands → agents → core → llm, tools`.
 - **Mandatory flow for every change, no exceptions:** branch → PR → merge it yourself.
   1. `git switch main && git pull && git switch -c <lane>/<task-id>-<slug>` (e.g. `b/b1-catalog`).
   2. Commit, then `git fetch && git rebase origin/main`, then `npm run lint && npm test`.
-  3. `git push -u origin HEAD && gh pr create --base main --fill && gh pr merge --auto --merge`. GitHub merges it by itself when CI is green; no reviewer.
-  4. CI red: fix on the same branch and push; auto-merge stays on. Then `git switch main && git pull`.
-- `main` is protected: merges only through a PR with green `check`, `secrets`, `pr-title`. Merges use a merge commit, so every branch commit lands on `main`: the PR title (merge commit title) and each commit must be `type(scope): subject`.
+  3. `scripts/ship.sh`: rebase, push, open the PR, wait for every check (`check`, `secrets`, `pr-title`), merge with a merge commit titled `<PR title> (#N)` only when all pass, then switch to an up-to-date `main`. No reviewer.
+  4. A check failed: the script stops without merging. Fix the cause on the same branch, commit, run `scripts/ship.sh` again. **KHÔNG ĐƯỢC** merge a PR with a red or pending check.
+- `main` has no GitHub protection (free org plan), so the rule is ours: merge only through a PR with green `check`, `secrets`, `pr-title`, via `scripts/ship.sh`. Merges use a merge commit, so every branch commit lands on `main`: the PR title (merge commit title) and each commit must be `type(scope): subject`.
 - Never commit on `main`. Never push or force-push `main`.
 - Commits: `type(scope): subject` (imperative, ≤ 72 chars); body says why. Types: `feat fix refactor test docs ci chore perf`. Scope: folder or area (`core`, `llm`, `tools`, `policy`, `tui`, `triage`, `eval`).
 - PR: commit-style title; body (Vietnamese) has task ID and how it was checked. Run the guide checklist before merging.

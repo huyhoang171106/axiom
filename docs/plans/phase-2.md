@@ -205,7 +205,7 @@ Renderer TUI theo `kind` của `CommandResult`: chủ UC viết component trong 
 
 1. Mỗi task một branch từ `main`: `<làn>/<task>-<slug>` viết thường, ví dụ `b/b2-embedder`.
 2. Trước khi push: `git fetch origin && git rebase origin/main && npm run lint && npm test`.
-3. Push và mở PR: `git push -u origin HEAD && gh pr create --base main --fill && gh pr merge --auto --merge`.
+3. Push, mở PR, chờ CI và tự merge: `scripts/ship.sh` (`CONVENTIONS.md` mục Git). Check nào đỏ thì script dừng, không merge.
 4. Tiêu đề PR và mọi commit: `type(scope): subject` ≤ 72 ký tự. Thân PR (tiếng Việt): mã task, cách đã kiểm tra.
 5. Test không gọi mạng thật: model dùng `MockProvider`, embedding dùng `fakeEmbedder`, HTTP dùng server giả trên `127.0.0.1`, `AXIOM_HOME` là thư mục tạm.
 6. Test cần Python/pytest: bỏ qua có lý do khi không có Python, theo mẫu `{ skip: !hasPython && 'needs python + pytest' }`; CI cài Python (C thêm bước vào `ci.yml` ở C3).
