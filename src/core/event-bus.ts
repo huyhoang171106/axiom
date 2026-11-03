@@ -10,6 +10,7 @@ import type {
   FailureDiagnosis,
   TokenUsage,
 } from './types.js';
+import type { Risk } from '../tools/permissions.js';
 
 export interface AxiomEvents {
   state_change: (data: { from: ExecutionState; to: ExecutionState; reason?: string }) => void;
@@ -23,6 +24,8 @@ export interface AxiomEvents {
   recovery_attempt: (diagnosis: FailureDiagnosis) => void;
   cost_update: (usage: TokenUsage) => void;
   error: (data: { message: string; error?: Error }) => void;
+  node: (data: { graph: string; node: string; phase: 'enter' | 'exit'; threadId?: string }) => void;
+  approval: (data: { tool: string; reason: string; risk?: Risk; decision: 'approve' | 'deny' | 'edited' | 'auto-deny'; approver: string }) => void;
 }
 
 export class EventBus {

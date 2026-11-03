@@ -15,3 +15,8 @@ export function harnessHome(): string {
 export function axiomHome(): string {
   return process.env.AXIOM_HOME || path.join(os.homedir(), '.axiom');
 }
+
+/** Python for pytest and the ast chunker: AXIOM_PYTHON, else `python3` (`python` on Windows, where `python3` is often the Store stub). */
+export function pythonBin(): string {
+  return process.env.AXIOM_PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
+}

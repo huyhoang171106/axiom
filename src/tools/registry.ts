@@ -9,6 +9,8 @@ import { WriteTool } from './write.js';
 import { EditTool } from './edit.js';
 import { ListDirTool } from './list-dir.js';
 import { SearchCodeTool } from './search-code.js';
+import { ApplyPatchTool } from './apply-patch.js';
+import { RunTestsTool } from './run-tests.js';
 import { decide, type Approver, type PolicyDecision } from './permissions.js';
 
 export class ToolRegistry {
@@ -29,12 +31,35 @@ export class ToolRegistry {
    */
   private readonly allowed?: ReadonlySet<string>;
 
+  /** Set on `scoped()` views: approval state is read from the session registry at call time, never copied. */
+  private session?: ToolRegistry;
+
   /** `allowed` limits the registry to those tool names; omit it for the full standard set. */
   constructor(allowed?: readonly string[]) {
     this.allowed = allowed ? new Set(allowed) : undefined;
-    for (const tool of [new BashTool(), new ReadTool(), new WriteTool(), new EditTool(), new ListDirTool(), new SearchCodeTool()]) {
+    for (const tool of [
+      new BashTool(), new ReadTool(), new WriteTool(), new EditTool(), new ListDirTool(), new SearchCodeTool(),
+      new ApplyPatchTool(), new RunTestsTool(),
+    ]) {
       if (!this.allowed || this.allowed.has(tool.name)) this.registerTool(tool);
     }
+  }
+
+  /**
+   * A view for one workflow node: only `allowed` tools (never more than this registry allows; tools not in it
+   * may be registered on the view, e.g. `submit_*`), sharing this registry's tool instances and its approver
+   * and unattended opt-out as they are when a call is made, not when the view was created.
+   */
+  scoped(allowed: readonly string[]): ToolRegistry {
+    const names = this.allowed ? allowed.filter((name) => this.allowed!.has(name)) : allowed;
+    const view = new ToolRegistry(names);
+    view.session = this.session ?? this;
+    view.tools.clear();
+    for (const name of names) {
+      const tool = this.tools.get(name);
+      if (tool) view.tools.set(name, tool);
+    }
+    return view;
   }
 
   registerTool(tool: BaseTool): void {
@@ -108,15 +133,18 @@ export class ToolRegistry {
       // Tool output goes to the model and the trace; a key a tool happened to print must not travel with it.
       const output = redact(await tool.execute(args, context as ToolExecutionContext));
       const durationMs = Date.now() - startTime;
+      // Tools that report a failure as an `Error: ...` string instead of throwing must not count as a success.
+      const isError = /^Error\b/.test(output);
 
       return {
         toolCallId,
         name,
         output,
-        isError: false,
+        ...(isError && { error: output }),
+        isError,
         metadata: {
           durationMs,
-          success: true,
+          success: !isError,
           policy,
         },
       };
@@ -155,15 +183,16 @@ export class ToolRegistry {
       return { args, policy, refusal: `Blocked by policy (${policy.reason}). This action is never allowed; do not retry it in another form.` };
     }
     if (policy.verdict === 'allow') return { args, policy };
-    if (!this.approver) {
-      if (this.allowWithoutApprover) return { args, policy: { ...policy, approval: 'unattended' } };
+    const { approver, allowWithoutApprover } = this.session ?? this;
+    if (!approver) {
+      if (allowWithoutApprover) return { args, policy: { ...policy, approval: 'unattended' } };
       return {
         args,
         policy,
         refusal: `Refusing "${name}" (${policy.reason}): no approver is installed and unattended execution was not enabled.`,
       };
     }
-    const answer = await this.approver({ name, args, reason: policy.reason });
+    const answer = await approver({ name, args, reason: policy.reason });
     if (answer === 'deny') {
       return {
         args,

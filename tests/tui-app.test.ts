@@ -7,6 +7,12 @@ import { render } from 'ink';
 import { App } from '../src/tui/app.js';
 import { TuiStore } from '../src/tui/store.js';
 import { TuiController } from '../src/tui/controller.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+// Every session writes a trace; keep it out of the real ~/.axiom.
+process.env.AXIOM_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-test-home-'));
 
 function fakeTty(columns = 100, rows = 40): PassThrough & { columns: number; rows: number; isTTY: boolean; setRawMode(): void; ref(): void; unref(): void } {
   return Object.assign(new PassThrough(), { columns, rows, isTTY: true, setRawMode() {}, ref() {}, unref() {} });
@@ -274,7 +280,8 @@ test('typing partial slash command shows vertical completions and Enter auto-mat
     // Assert vertical completions are rendered
     assert.match(written, /→ model/);
     assert.match(written, /models/);
-    assert.match(written, /\(1\/2\)/);
+    assert.match(written, /mode\b/);
+    assert.match(written, /\(1\/3\)/);
 
     // Press Enter on /mo
     stdin.write('\r');

@@ -8,6 +8,7 @@ import { defaultCommandRouter } from '../commands/index.js';
 import { parseCommand, unknownCommandMessage } from '../commands/router.js';
 import type { ModelRow } from '../commands/models.js';
 import type { Command, CommandContext } from '../commands/types.js';
+import { createExecutionContext, type ExecutionContext } from '../core/execution-context.js';
 import { readAuth, readAxiomEnv } from '../llm/auth/store.js';
 import { loadCatalog, readUserProviders, type Catalog, type ModelInfo } from '../llm/catalog/index.js';
 import { resolveModel } from '../llm/model-resolver.js';
@@ -159,7 +160,7 @@ export class TuiController {
   private controller?: AbortController;
   private running = false;
   private lastInterrupt = -Infinity;
-  private detachGit?: () => void;
+  private execution?: ExecutionContext;
   public lastPrompt = '';
 
   constructor(
@@ -193,6 +194,16 @@ export class TuiController {
     }
   }
 
+  /** The session chat and slash commands share; made on the first input so the first command already has it. */
+  private get exec(): ExecutionContext {
+    if (!this.execution) {
+      this.execution = createExecutionContext();
+      this.store.attach(this.execution.bus);
+      this.opts.git?.attach(this.execution.bus);
+    }
+    return this.execution;
+  }
+
   private createCommandContext(
     config: AxiomConfig,
     signal: AbortSignal,
@@ -201,6 +212,7 @@ export class TuiController {
     const mock = this.opts.mock;
     const store = this.store;
     return {
+      ...this.exec,
       config,
       workspaceRoot: this.opts.workspaceRoot,
       signal,
@@ -387,6 +399,12 @@ export class TuiController {
     this.controller = controller;
     this.store.update({ busy: true, notice: '' });
     const parsed = parseCommand(input);
+    // Every tool call of this input, chat or workflow node, asks through the approval dialog.
+    this.exec.tools.approver = (request) =>
+      new Promise((resolve) => {
+        if (controller.signal.aborted) resolve('deny');
+        else this.store.requestApproval(request, resolve);
+      });
     try {
       if (parsed) {
         let command = defaultCommandRouter.get(parsed.name);
@@ -424,18 +442,10 @@ export class TuiController {
         const activeModel = this.opts.mock ? MOCK_MODEL : this.ensureConnectedModel();
         this.store.update({ model: activeModel });
         if (!this.agent) {
-          const agent = await createAgent({ workspaceRoot: this.opts.workspaceRoot, mock: !!this.opts.mock });
+          const agent = await createAgent({ workspaceRoot: this.opts.workspaceRoot, mock: !!this.opts.mock, exec: this.exec });
           if (controller.signal.aborted) return;
           this.agent = agent;
-          this.store.attach(agent.eventBus);
-          this.detachGit?.();
-          this.detachGit = this.opts.git?.attach(agent.eventBus);
         }
-        this.agent.toolRegistry.approver = (request) =>
-          new Promise((resolve) => {
-            if (controller.signal.aborted) resolve('deny');
-            else this.store.requestApproval(request, resolve);
-          });
         if (this.agent.stateMachine.getState() === 'completed') {
           this.agent.stateMachine.reset();
         }

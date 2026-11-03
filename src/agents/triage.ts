@@ -139,6 +139,9 @@ export interface TriageOptions {
   maxSteps?: number;
   signal?: AbortSignal;
   onToolCall?: (name: string) => void;
+  /** Session bus (traced) and tracker; omitted, triage runs on its own untraced bus and a fresh tracker. */
+  bus?: EventBus;
+  costTracker?: CostTracker;
 }
 
 export async function runTriage(opts: TriageOptions): Promise<TriageResult> {
@@ -160,8 +163,10 @@ export async function runTriage(opts: TriageOptions): Promise<TriageResult> {
   const registry = new ToolRegistry(['read_file', 'search_code', submitTool.name]);
   registry.registerTool(submitTool);
 
-  const eventBus = new EventBus();
-  if (opts.onToolCall) eventBus.on('tool_call_start', (call) => opts.onToolCall?.(call.name));
+  const eventBus = opts.bus ?? new EventBus();
+  const onToolCall = (call: { name: string }) => opts.onToolCall?.(call.name);
+  // The session bus outlives this run, so the listener must not.
+  if (opts.onToolCall) eventBus.on('tool_call_start', onToolCall);
   const agent = new AgentLoop({
     config: { ...DEFAULT_CONFIG, workspaceRoot: opts.workspaceRoot },
     provider: opts.provider,
@@ -171,7 +176,7 @@ export async function runTriage(opts: TriageOptions): Promise<TriageResult> {
       sessionsDir: path.join(axiomHome(), 'sessions'),
       autoSave: false,
     }),
-    costTracker: new CostTracker(),
+    costTracker: opts.costTracker ?? new CostTracker(),
     eventBus,
     systemPrompt: buildSystemPrompt(TRIAGE_SYSTEM_PROMPT, opts.workspaceRoot),
     model: opts.model,
@@ -179,7 +184,7 @@ export async function runTriage(opts: TriageOptions): Promise<TriageResult> {
     signal: controller.signal,
   });
 
-  const result = await agent.runTask(opts.issue, controller.signal);
+  const result = await agent.runTask(opts.issue, controller.signal).finally(() => eventBus.off('tool_call_start', onToolCall));
 
   if (accepted) return validateTicket(accepted, opts.workspaceRoot);
   if (submitTool.attempts >= MAX_SUBMIT_ATTEMPTS) {

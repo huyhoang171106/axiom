@@ -1,16 +1,14 @@
 // src/commands/types.ts - Command contract shared by TUI slash commands and headless `axiom <command>` (tui.md section 9)
 
+import type { CommandUI, ExecutionContext } from '../core/execution-context.js';
 import type { AxiomConfig } from '../core/types.js';
 import type { ModelInfo } from '../llm/catalog/index.js';
 
-/** TUI và headless mỗi bên có một bản cài đặt riêng. Command không biết mình chạy ở đâu. */
-export interface CommandUI {
-  print(text: string): void;
-  ask(question: string, opts?: { secret?: boolean }): Promise<string>; // headless không có TTY: throw
-  confirm(question: string): Promise<boolean>;                          // headless không có TTY: false
-}
+// Lives in core so agents (workflows) can take a UI without importing commands.
+export type { CommandUI } from '../core/execution-context.js';
 
-export interface CommandContext {
+/** `tools`, `bus`, `costTracker`, `runId` come from the session (`ExecutionContext`), shared with chat. */
+export interface CommandContext extends ExecutionContext {
   config: AxiomConfig;
   workspaceRoot: string;
   ui: CommandUI;

@@ -67,8 +67,8 @@ axiom fix --issue <dir>     # gọi workflow trực tiếp, eval runner dùng đ
 | `/review [diff]` | Reviewer chỉ đọc, xuất ReviewReport | UC-06 | E |
 | `/pr` | Mô tả PR + CHANGELOG | UC-09 | A |
 | `/mcp` · `axiom mcp serve` | Trạng thái MCP client và chạy server `repo-tools` | UC-11 | B |
-| `/plan` · `/mode read-only\|edit\|auto` | Plan mode (chỉ có tool đọc) và mức quyền | UC-05 | E |
-| `/model` · `/cost` | Đổi model, xem token và chi phí | — | A, D |
+| `/plan` · `/mode read-only\|edit` | Plan mode (chỉ có tool đọc) và mức quyền | UC-05 | E |
+| `/model` · `/cost` | Đổi model, xem token và chi phí | — | A |
 | `/memory` · `/compact` · `/tree` · `/undo` | Xem/xoá memory, nén context, cây phiên, quay lại checkpoint | UC-04 | D |
 | `/audit` · `/skills` · `/help` | Audit log duyệt/từ chối, danh sách skill, trợ giúp | UC-05 | E (`/audit`), A (`/skills`), D (`/help`) |
 
@@ -191,3 +191,11 @@ Quy tắc của lớp: mỗi phase chỉ dùng kiến thức đã học đến t
 | 2026-11-03 | Một cơ chế resume: LangGraph checkpointer. Checkpoint của `session.ts` chỉ giữ `filesSnapshot` cho `/undo`, bỏ `stateSnapshot` | `DESIGN.md` mục 2 yêu cầu chỉ giữ một cơ chế resume |
 | 2026-11-03 | `decide()` trả `ask` cho tool không có trong danh mục (trước đây `allow`) | UC-05: hành động chưa phân loại không được chạy im lặng |
 | 2026-11-04 | Repo chuyển sang `se373agenticengineering/nhom-30`. Không có auto-merge và bảo vệ `main` (gói miễn phí, repo private, nhóm không có quyền admin), nên tác giả (người hoặc agent) chạy `scripts/ship.sh`: đợi mọi check xanh rồi tự merge; check đỏ thì không merge. Job `secrets` dùng gitleaks CLI thay cho action | `gitleaks-action` đòi license với repo của organization; giữ quy tắc "chỉ merge khi CI xanh" bằng script thay cho cài đặt GitHub |
+| 2026-11-04 | `ExecutionContext` cấp phiên (`src/core/execution-context.ts`): `tools` (registry phiên giữ approver, `allowWithoutApprover`, sau này mode và danh sách từ chối), `bus` (có trace), `costTracker`, `runId`. TUI tạo ở lần nhập đầu, headless tạo trước khi chạy; `CommandContext` và `RouteContext` kế thừa nó. Node workflow dùng `ctx.tools.scoped([...])`, không `new ToolRegistry`. `CommandUI` chuyển sang `core/execution-context.ts` (`commands/types.ts` export lại) | Lệnh slash đầu tiên phải có approver, trace, tracker mà không cần chat trước; approver và từ chối dùng chung giữa các node; `agents` không import ngược `commands` |
+| 2026-11-04 | `scoped()` chỉ thu hẹp: tool = giao của danh sách xin và registry phiên; approver và `allowWithoutApprover` đọc từ registry phiên lúc gọi, không chép | Đổi mode hoặc cài approver sau khi tạo view vẫn có hiệu lực; node không tự mở rộng quyền |
+| 2026-11-04 | `askHuman`, `runGraph` có thân thật từ D0 (chuyển từ E3). Câu hỏi yes/no đi qua `ui.confirm`, lựa chọn khác qua `ui.ask`; câu trả lời không hợp lệ thành lựa chọn cuối. E3 thêm hỏi lại và nối TUI | D1, A2 cần test trả lời `no` ngay sprint 1–2 |
+| 2026-11-04 | `/triage` chỉ có graph `triage → confirm`; `runRoute` chạy sau graph, ngoài mọi graph (#7) | `interrupt()` của graph con thoát lên graph cha; resume chạy lại node `route` và lặp lại sửa đổi |
+| 2026-11-04 | Headless `--yes`: `ui.confirm` trả yes, registry đặt `allowWithoutApprover`; `deny` của policy vẫn chặn. Không có `--yes` và không TTY: confirm trả no, `ask` bị từ chối | Một luồng chính sách cho chat và lệnh; không viết `headlessApprover` riêng |
+| 2026-11-04 | `executeTool` coi output bắt đầu bằng `Error` là lỗi (`isError: true`, `success: false`) | Tool trả chuỗi lỗi thay vì throw từng được tính là thành công |
+| 2026-11-04 | `pythonBin()` ở `src/core/paths.ts`: `AXIOM_PYTHON`, rồi `python3` (Windows: `python`). B1, C1, C3 dùng chung | Ba chỗ từng mặc định khác nhau; máy dev chỉ có `python3` |
+| 2026-11-04 | Phase 2 bỏ `/mode auto`, chỉ còn `read-only\|edit` (#35). `/cost` chuyển sang A1 (#6) | Đề UC-05 bắt duyệt mọi hành động mà `auto` sẽ tự cho chạy; giảm tải làn D |

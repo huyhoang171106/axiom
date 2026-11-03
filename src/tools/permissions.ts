@@ -4,15 +4,18 @@ import path from 'node:path';
 import { isBundledSkillFile } from './bundled-skills.js';
 
 export type Verdict = 'allow' | 'ask' | 'deny';
+export type Risk = 'low' | 'medium' | 'high';
 export interface PolicyDecision {
   verdict: Verdict;
   reason: string;
+  risk?: Risk;
 }
 
 export interface ApprovalRequest {
   name: string;
   args: Record<string, unknown>;
   reason: string;
+  risk?: Risk;
 }
 /** A human answer to an `ask`: run as proposed, refuse, or run with arguments the human edited. */
 export type ApprovalDecision = 'approve' | 'deny' | { editedArgs: Record<string, unknown> };

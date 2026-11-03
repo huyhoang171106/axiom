@@ -17,6 +17,8 @@ const TRACED_EVENTS = [
   'recovery_attempt',
   'cost_update',
   'error',
+  'node',
+  'approval',
 ] as const satisfies readonly (keyof AxiomEvents)[];
 
 /**

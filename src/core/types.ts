@@ -163,8 +163,8 @@ export interface DecisionRouterConfig {
 }
 
 /** Per-task model slots, same idea as OMP's modelRoles. Selector: `[provider/]model` (a leading segment naming a configured provider picks that provider). */
-export type ModelRole = 'default' | 'smol' | 'slow' | 'task' | 'plan' | 'review';
-export const MODEL_ROLES: readonly ModelRole[] = ['default', 'smol', 'slow', 'task', 'plan', 'review'];
+export type ModelRole = 'default' | 'smol' | 'slow' | 'task' | 'plan' | 'review' | 'code' | 'embed';
+export const MODEL_ROLES: readonly ModelRole[] = ['default', 'smol', 'slow', 'task', 'plan', 'review', 'code', 'embed'];
 
 export interface AxiomConfig {
   activeProvider: LLMProviderType;

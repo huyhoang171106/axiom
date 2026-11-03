@@ -13,7 +13,7 @@ Tools that do not read AGENTS.md: `ln -s AGENTS.md CLAUDE.md` (or `GEMINI.md`).
 
 Axiom (SE373 Đề tài 01): an LLM tool-use loop over a local workspace, with cost tracking, sessions and sandboxed tools.
 
-- TypeScript (ESM), Node >= 22, npm. Runtime deps: `picocolors` only.
+- TypeScript (ESM), Node >= 22, npm. Runtime deps: `package.json` `dependencies` (Ink, React, zod, LangGraph); a new one needs a decision-log row.
 - Source: `src/{cli,core,llm,tools}`. Entry: `bin/axiom.ts`. Tests: `tests/*.test.ts` (`node:test` via tsx).
 - Do not edit: `dist/` (build output), `node_modules/`.
 - Repo: `github.com/se373agenticengineering/nhom-30` (remote `origin`). Team: 5 people, lanes A–E. Docs are Vietnamese; code, comments, commits are English.
@@ -25,8 +25,8 @@ Axiom (SE373 Đề tài 01): an LLM tool-use loop over a local workspace, with c
 | Topic spec (UCs, schemas such as IssueTicket, grading) | `2026-10-06_de_tai_01_coding_agent.md` |
 | Architecture, owners, decision log | `docs/DESIGN.md` |
 | Naming, layout, import direction, git, tests | `docs/CONVENTIONS.md` |
-| Phase overview, seams, done criteria | `docs/plans/phase-1.md` |
-| One person's tasks | `docs/plans/phase-1-{A,B,C,D,E}.md` |
+| Phase overview, seams, done criteria | `docs/plans/phase-2.md` |
+| One person's tasks | `docs/plans/phase-2-{A,B,C,D,E}.md` |
 | Provider / TUI rules | `docs/guides/providers.md`, `docs/guides/tui.md` |
 
 If a doc and the code disagree, stop and ask. Do not pick one silently.

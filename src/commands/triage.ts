@@ -36,6 +36,8 @@ export const triageCommand: Command = {
       provider,
       model: info.id,
       signal: ctx.signal,
+      bus: ctx.bus,
+      costTracker: ctx.costTracker,
     });
     return {
       kind: 'issue-ticket',
