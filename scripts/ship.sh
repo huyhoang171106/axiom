@@ -17,10 +17,28 @@ git rebase origin/main
 git push -u origin HEAD --force-with-lease
 gh pr view --json number >/dev/null 2>&1 || gh pr create --base main --fill-first  # title = first commit subject, which follows the convention
 
-# Checks register a few seconds after the push; watching earlier reports "no checks".
-sleep 15
+# Checks register some seconds after the push. Watching before all required ones exist sees only the
+# finished ones and returns green, which merged a PR with pending checks once.
+REQUIRED=(check secrets pr-title)
+for _ in $(seq 60); do
+  names=$(gh pr checks --json name -q '.[].name' 2>/dev/null || true)
+  missing=0
+  for name in "${REQUIRED[@]}"; do grep -qx "$name" <<<"$names" || missing=1; done
+  [ "$missing" = 0 ] && break
+  sleep 5
+done
+if [ "$missing" != 0 ]; then
+  echo "ship: required checks (${REQUIRED[*]}) did not start within 5 minutes. Not merged." >&2
+  exit 1
+fi
+
 if ! gh pr checks --watch --fail-fast; then
   echo "ship: a check failed. Fix it on this branch and run scripts/ship.sh again. Not merged." >&2
+  exit 1
+fi
+notgreen=$(gh pr checks --json name,bucket -q '[.[] | select(.bucket != "pass" and .bucket != "skipping") | .name] | join(", ")')
+if [ -n "$notgreen" ]; then
+  echo "ship: not green yet: $notgreen. Not merged." >&2
   exit 1
 fi
 
