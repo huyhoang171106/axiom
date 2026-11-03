@@ -96,6 +96,29 @@ test('store records telemetry from mocked clock, excluding tool time', t => {
   assert.equal(turn.telemetry?.tps, 50); // 50 tokens over (4000 - 3000) ms
 });
 
+test('tool-only model rounds count as output, so TPS spans every round', t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 10_000 });
+  const store = new TuiStore();
+  t.after(() => store.dispose());
+  const bus = new EventBus();
+  store.attach(bus);
+  store.prepareTurn('hi');
+  bus.emit('state_change', { from: 'idle', to: 'executing' });
+  t.mock.timers.tick(2000); // round 1: tool call only, no text
+  bus.emit('tool_call_start', { id: 't1', name: 'run_command', arguments: {} });
+  t.mock.timers.tick(60_000); // tool plus approval wait
+  bus.emit('tool_call_end', { toolCallId: 't1', name: 'run_command', output: '' });
+  t.mock.timers.tick(9500); // round 2 streams its answer at the very end
+  bus.emit('stream_token', { delta: 'a' });
+  t.mock.timers.tick(500);
+  bus.emit('cost_update', { promptTokens: 100, completionTokens: 1000, totalTokens: 1100, costEstimate: 0.01 });
+  bus.emit('state_change', { from: 'executing', to: 'completed' });
+  t.mock.timers.tick(34);
+  const turn = store.getSnapshot().entries.at(-1)!;
+  assert.equal(turn.telemetry?.ttftMs, 2000);
+  assert.equal(turn.telemetry?.tps, 100); // 1000 tokens over (70000 - 60000) ms of model time
+});
+
 test('git cache refreshes after writing tools only and survives git failures', async () => {
   let runs = 0;
   const seen: unknown[] = [];

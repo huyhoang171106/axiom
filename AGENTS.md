@@ -16,7 +16,7 @@ Axiom (SE373 Đề tài 01): an LLM tool-use loop over a local workspace, with c
 - TypeScript (ESM), Node >= 22, npm. Runtime deps: `picocolors` only.
 - Source: `src/{cli,core,llm,tools}`. Entry: `bin/axiom.ts`. Tests: `tests/*.test.ts` (`node:test` via tsx).
 - Do not edit: `dist/` (build output), `node_modules/`.
-- Repo: `github.com/huyhoang171106/new_harness`. Team: 5 people, lanes A–E. Docs are Vietnamese; code, comments, commits are English.
+- Repo: `github.com/se373agenticengineering/nhom-30` (remote `origin`). Team: 5 people, lanes A–E. Docs are Vietnamese; code, comments, commits are English.
 
 ## Where things are
 
