@@ -15,7 +15,7 @@ export GH_REPO
 git fetch origin
 git rebase origin/main
 git push -u origin HEAD --force-with-lease
-gh pr view --json number >/dev/null 2>&1 || gh pr create --base main --fill
+gh pr view --json number >/dev/null 2>&1 || gh pr create --base main --fill-first  # title = first commit subject, which follows the convention
 
 # Checks register a few seconds after the push; watching earlier reports "no checks".
 sleep 15
