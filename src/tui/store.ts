@@ -93,6 +93,10 @@ export class TuiStore {
     this.schedule();
   }
 
+  private markFirstOutput(): void {
+    if (this.timing && this.timing.firstTokenAt === undefined) this.timing.firstTokenAt = Date.now();
+  }
+
   /** Marks the send time of the next turn; TTFT and TPS are measured from here. */
   public prepareTurn(prompt: string): void {
     this.prompt = prompt;
@@ -244,12 +248,13 @@ export class TuiStore {
     };
     on('stream_token', ({ delta }) => {
       if (!delta) return;
-      if (this.timing && this.timing.firstTokenAt === undefined) this.timing.firstTokenAt = Date.now();
+      this.markFirstOutput();
       this.textBuffer += delta;
       this.schedule();
     });
     on('thinking', ({ delta }) => {
       if (!delta) return;
+      this.markFirstOutput();
       this.thinkingBuffer += delta;
       this.schedule();
     });
@@ -280,8 +285,10 @@ export class TuiStore {
     });
     on('tool_call_start', (call) => {
       this.flushStream();
-      // Only tool time inside the generation window (after the first token) is excluded from TPS.
-      if (this.timing?.firstTokenAt !== undefined) this.toolStarts.set(call.id, Date.now());
+      // A tool-only model reply streams no text, so the call itself is its first visible output;
+      // without this, every tool round counted as TTFT and TPS divided by the last reply only.
+      this.markFirstOutput();
+      if (this.timing) this.toolStarts.set(call.id, Date.now());
       const live = this.pending.live ?? this.createTurn('executing');
       this.pending = {
         ...this.pending,
