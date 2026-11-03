@@ -57,7 +57,7 @@ Task đầu của A, B, C, E (A1, B1, C1, E1) không cần file của D0, làm �
 ## 4. Luồng chạy
 
 ```
- /triage <issue> ─► [triage] ─► [confirm: askHuman "Chạy route?"] ─► [route]
+ /triage <issue> ─► [triage] ─► [confirm: askHuman "Chạy route?"] ─► END ─► yes: runRoute (ngoài graph)
                                                                        ├─ answer    ─► answerQuestion (B)
                                                                        ├─ fix       ─► fixIssue (C)
                                                                        ├─ implement ─► runFeature (D)
@@ -96,7 +96,15 @@ approval: (data: { tool: string; reason: string; risk?: Risk; decision: 'approve
 import type { BaseCheckpointSaver } from '@langchain/langgraph';
 export function createCheckpointer(dbPath?: string): BaseCheckpointSaver; // mặc định path.join(axiomHome(), 'checkpoints.db'); stub trả new MemorySaver()
 export function newThreadId(kind: 'triage' | 'fix' | 'feature'): string;  // `${kind}-${YYYYMMDD-HHmmss}-${6 hex}`
-export function traceNode<S>(bus: EventBus, graph: string, node: string, fn: (s: S) => Promise<Partial<S>>): (s: S) => Promise<Partial<S>>;
+export type GraphNode<S> = (s: S, config: LangGraphRunnableConfig) => Promise<Partial<S>>;
+export function traceNode<S>(bus: EventBus, graph: string, node: string, fn: GraphNode<S>): GraphNode<S>; // threadId lấy từ config.configurable.thread_id
+
+// src/core/execution-context.ts — một bản mỗi phiên (TUI, headless); CommandContext và RouteContext kế thừa
+export interface ExecutionContext { tools: ToolRegistry; bus: EventBus; costTracker: CostTracker; runId: string }
+// src/tools/registry.ts — view cho một node: chỉ thu hẹp, dùng chung approver/allowWithoutApprover của registry phiên
+scoped(allowed: readonly string[]): ToolRegistry;
+// src/core/paths.ts
+export function pythonBin(): string; // AXIOM_PYTHON, rồi python3 (Windows: python)
 // bọc thân node: emit node enter, chạy fn, emit node exit. Mọi node của mọi graph PHẢI bọc bằng hàm này
 ```
 
@@ -104,21 +112,21 @@ export function traceNode<S>(bus: EventBus, graph: string, node: string, fn: (s:
 
 | File | Chữ ký | Stub trả | Điền |
 |---|---|---|---|
-| `src/core/human-gate.ts` | `askHuman(question: string, choices: readonly string[]): string` (gọi trong node, dùng `interrupt`)<br>`runGraph<S>(graph: CompiledGraph, input: Partial<S> \| null, opts: { threadId: string; ui: CommandUI; signal?: AbortSignal }): Promise<S>` (chạy, gặp interrupt thì hỏi `ui`, resume bằng `new Command({ resume })`, lặp đến hết) | `askHuman` trả `choices[0]`; `runGraph` gọi `graph.invoke` một lần | E3 |
-| `src/agents/route.ts` | `runRoute(ticket: IssueTicket, issue: string, ctx: RouteContext): Promise<RouteResult>`<br>`interface RouteContext { workspaceRoot: string; config: AxiomConfig; ui: CommandUI; signal: AbortSignal; bus: EventBus }`<br>`interface RouteResult { route: IssueTicket['route']; text: string; data?: unknown }` | `{ route, text: 'chưa làm' }` | A2 |
+| `src/core/human-gate.ts` | `askHuman(question: string, choices: readonly string[]): string` (gọi trong node, dùng `interrupt`)<br>`runGraph<S>(graph: CompiledGraph, input: Partial<S> \| null, opts: { threadId: string; ui: CommandUI; signal?: AbortSignal }): Promise<S>` (chạy, gặp interrupt thì hỏi `ui`, resume bằng `new Command({ resume })`, lặp đến hết) | Thân thật (D0). yes/no qua `ui.confirm`, khác qua `ui.ask`, sai thì lấy lựa chọn cuối | E3 (hỏi lại, nối TUI) |
+| `src/agents/route.ts` | `runRoute(ticket: IssueTicket, issue: string, ctx: RouteContext): Promise<RouteResult>`<br>`interface RouteContext extends ExecutionContext { workspaceRoot: string; config: AxiomConfig; ui: CommandUI; signal: AbortSignal }`<br>`interface RouteResult { route: IssueTicket['route']; text: string; data?: unknown }` | `{ route, text: 'chưa làm' }` | A2 |
 | `src/core/rag/types.ts` | Xem 5.3 | (chỉ kiểu) | — |
 | `src/core/rag/chunker.ts` | `chunkRepo(root: string): Promise<Chunk[]>` | `[]` | B1 |
 | `src/core/rag/embedder.ts` | `createEmbedder(info: ModelInfo): Embedder`<br>`fakeEmbedder(dim?: number): Embedder` (băm từ → vector cố định, dùng trong test) | throw | B2 |
 | `src/core/rag/index.ts` | `class RepoIndex { static open(root: string, embedder: Embedder, opts?: { dir?: string }): Promise<RepoIndex>; update(): Promise<IndexDiff>; search(query: string, k?: number): Promise<ScoredChunk[]> }` | `search` trả `[]` | B2, B3 |
 | `src/core/rag/citations.ts` | `parseCitations(text: string): Citation[]`<br>`validateCitation(c: Citation, root: string, retrieved: readonly Chunk[]): string \| null` (null = hợp lệ, chuỗi = lý do sai) | `[]`, `null` | B4 |
-| `src/agents/ask.ts` | `answerQuestion(question: string, opts: AskOptions): Promise<AskAnswer>`<br>`interface AskOptions { workspaceRoot: string; provider: BaseLLMProvider; model: string; embedder: Embedder; signal?: AbortSignal; bus?: EventBus }`<br>`interface AskAnswer { text: string; citations: Citation[]; found: boolean }` | throw | B4 |
+| `src/agents/ask.ts` | `answerQuestion(question: string, opts: AskOptions): Promise<AskAnswer>`<br>`interface AskOptions { workspaceRoot: string; provider: BaseLLMProvider; model: string; embedder: Embedder; signal?: AbortSignal; bus?: EventBus; costTracker?: CostTracker }`<br>`interface AskAnswer { text: string; citations: Citation[]; found: boolean }` | throw | B4 |
 | `src/tools/apply-patch.ts` | `class ApplyPatchTool extends BaseTool` (`name = 'apply_patch'`, tham số `{ patch: string }`)<br>`parseUnifiedDiff(patch: string): FilePatch[]` | `execute` trả lỗi "chưa làm" | C2 |
 | `src/tools/test-guard.ts` | `findTestTampering(patches: readonly FilePatch[], workspaceRoot: string): string \| null` | `null` | C2 |
 | `src/core/verifier.ts` | `runPytest(root: string, opts?: { target?: string; timeoutMs?: number; signal?: AbortSignal }): Promise<TestRun>`<br>`findRegressions(before: TestRun, after: TestRun): string[]`<br>`interface TestRun { passed: string[]; failed: string[]; timedOut: boolean; exitCode: number \| null; output: string }` | throw | C3 |
 | `src/tools/run-tests.ts` | `class RunTestsTool extends BaseTool` (`name = 'run_tests'`, tham số `{ target?: string }`) | lỗi "chưa làm" | C3 |
-| `src/agents/fix.ts` | `fixIssue(opts: FixOptions): Promise<FixReport>` (kiểu ở `phase-2-C.md` C5) | throw | C5 |
+| `src/agents/fix.ts` | `fixIssue(opts: FixOptions): Promise<FixReport>` (kiểu ở `phase-2-C.md` C5, thêm `tools: ToolRegistry`, `costTracker?: CostTracker`) | throw | C5 |
 | `src/core/task-state.ts` | Kiểu và hàm ở `phase-2-D.md` D1 | `null`, `[]` | D1 |
-| `src/agents/feature.ts` | `runFeature(request: string, opts: FeatureOptions): Promise<FeatureReport>`<br>`resumeTask(threadId: string \| undefined, opts: FeatureOptions): Promise<FeatureReport>` | throw | D1, D2 |
+| `src/agents/feature.ts` | `FeatureOptions` thêm `tools: ToolRegistry`, `costTracker?: CostTracker`<br>`runFeature(request: string, opts: FeatureOptions): Promise<FeatureReport>`<br>`resumeTask(threadId: string \| undefined, opts: FeatureOptions): Promise<FeatureReport>` | throw | D1, D2 |
 | `src/core/compaction.ts` | `COMPACT_SECTIONS`, `shouldCompact`, `compactHistory`, `missingSections` (`phase-2-D.md` D3) | `false`, `''`, `[]` | D3 |
 | `src/core/memory.ts` | `memoryPath`, `loadMemory`, `addMemory`, `clearMemory` (`phase-2-D.md` D4) | `''` | D4 |
 | `src/core/audit.ts` | `recordDecision(entry: AuditEntry): void`, `readAudit(limit?: number): AuditEntry[]` (`phase-2-E.md` E4) | không làm gì, `[]` | E4 |
@@ -173,10 +181,10 @@ Chỉ chủ sở hữu được sửa thân file. File "chung" chỉ được **
 
 | File | Chủ |
 |---|---|
-| `src/agents/triage.ts`, `src/agents/route.ts`, `src/commands/triage.ts`, `evals/run.ts`, `evals/registry.ts` (khung), `evals/uc01/` | A |
+| `src/agents/triage.ts`, `src/agents/route.ts`, `src/commands/triage.ts`, `src/commands/cost.ts`, `evals/run.ts`, `evals/registry.ts` (khung), `evals/uc01/` | A |
 | `src/core/rag/*`, `src/agents/ask.ts`, `src/commands/ask.ts`, `evals/uc02/` | B |
 | `src/tools/apply-patch.ts`, `src/tools/test-guard.ts`, `src/tools/run-tests.ts`, `src/core/verifier.ts`, `src/tools/sandbox.ts`, `src/agents/fix.ts`, `src/commands/fix.ts`, `skills/bug-fix/`, `evals/issues/bug-*`, `evals/issues/bugs.ts`, `evals/uc03/` | C |
-| `src/core/graph.ts`, `src/core/task-state.ts`, `src/agents/feature.ts`, `src/core/compaction.ts`, `src/core/memory.ts`, `src/core/agent-loop.ts`, `src/core/session.ts`, `src/core/state-machine.ts`, `src/core/prompt.ts`, `src/core/trace.ts`, `src/commands/{feature,resume,memory,compact,cost}.ts`, `evals/issues/feat-*`, `evals/uc04/` | D |
+| `src/core/graph.ts`, `src/core/task-state.ts`, `src/agents/feature.ts`, `src/core/compaction.ts`, `src/core/memory.ts`, `src/core/agent-loop.ts`, `src/core/session.ts`, `src/core/state-machine.ts`, `src/core/prompt.ts`, `src/core/trace.ts`, `src/commands/{feature,resume,memory,compact}.ts`, `src/core/execution-context.ts`, `evals/issues/feat-*`, `evals/uc04/` | D |
 | `src/tools/permissions.ts`, `src/tools/registry.ts`, `src/tools/denied-actions.ts`, `src/core/audit.ts`, `src/core/human-gate.ts`, `src/commands/{mode,plan,audit}.ts`, `src/tui/*` (trừ renderer riêng bên dưới), `evals/uc05/` | E |
 | `src/tui/components/issue-ticket.tsx` | A |
 | `src/tui/components/citation.tsx` | B |
@@ -190,7 +198,7 @@ Renderer TUI theo `kind` của `CommandResult`: chủ UC viết component trong 
 | Cần | Của | Trước khi có thân thật, dùng |
 |---|---|---|
 | Checkpointer SQLite | D2 | Stub D0 trả `MemorySaver` (mất khi tắt tiến trình, đủ cho test) |
-| `askHuman`, `runGraph` | E3 | Stub D0: `askHuman` trả lựa chọn đầu, `runGraph` chạy một lần |
+| `askHuman`, `runGraph` | D0 | Đã có thân thật |
 | `RepoIndex.search` | B3 | Tool `search_code` |
 | `apply_patch` | C2 | Tool `edit` |
 | `runPytest`, `run_tests` | C3 | `run_command` với `python -m pytest -q` |

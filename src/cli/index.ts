@@ -10,6 +10,7 @@ import { defaultCommandRouter } from '../commands/index.js';
 import { parseCommand, unknownCommandMessage } from '../commands/router.js';
 import type { CommandContext, CommandUI } from '../commands/types.js';
 import { loadConfig } from '../core/config.js';
+import { createExecutionContext, type ExecutionContext } from '../core/execution-context.js';
 import { loadCatalog, type ModelInfo } from '../llm/catalog/index.js';
 import { resolveModel } from '../llm/model-resolver.js';
 
@@ -65,7 +66,9 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
   if (command) return runCommand(command.name, command.args, argv, model);
   if (!input) throw new Error('No task. Usage: axiom -p "<task>" or axiom <command>; axiom help lists commands');
 
-  const agent = await createAgent({ workspaceRoot: process.cwd(), mock, model });
+  const ui = createHeadlessUI({ yes });
+  const exec = createHeadlessExecution(ui, yes);
+  const agent = await createAgent({ workspaceRoot: process.cwd(), mock, model, exec });
   let isThinking = false;
   agent.eventBus.on('thinking', ({ delta }) => {
     if (!isThinking) {
@@ -89,10 +92,6 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
     console.error(pc.dim(`\n> ${tc.name} ${JSON.stringify(tc.arguments).slice(0, 120)}`));
   });
 
-  // Risky calls need a yes. With no terminal to ask on, the registry refuses them unless --yes was given.
-  const ui = createHeadlessUI();
-  if (yes) agent.toolRegistry.allowWithoutApprover = true;
-  else if (process.stdin.isTTY) agent.toolRegistry.approver = async ({ name, reason }) => ((await ui.confirm(`Allow ${name}? (${reason})`)) ? 'approve' : 'deny');
 
   const r = await agent.runTask(input);
   if (isThinking) {
@@ -108,10 +107,13 @@ async function runCommand(name: string, args: string, argv: string[], modelSelec
   if (!command) throw new Error(unknownCommandMessage(defaultCommandRouter, name));
   const config = loadConfig();
   let model: ModelInfo | undefined;
+  const yes = argv.includes('--yes');
+  const ui = createHeadlessUI({ yes });
   const ctx: CommandContext = {
+    ...createHeadlessExecution(ui, yes),
     config,
     workspaceRoot: process.cwd(),
-    ui: createHeadlessUI(),
+    ui,
     signal: new AbortController().signal,
     session: {
       // Resolved on first use, so commands that need no model (login, help) work before any provider is set up.
@@ -129,8 +131,22 @@ async function runCommand(name: string, args: string, argv: string[], modelSelec
   console.log(argv.includes('--json') ? JSON.stringify(result.data, null, 2) : result.text);
 }
 
-/** Questions go to stderr so stdout stays clean for piping; without a terminal nothing can be asked. */
-export function createHeadlessUI(): CommandUI {
+/**
+ * Risky calls need a yes. `--yes` runs them unattended (a policy deny still blocks); otherwise a terminal asks,
+ * and with no terminal the registry refuses them. Chat and commands share this one session.
+ */
+function createHeadlessExecution(ui: CommandUI, yes: boolean): ExecutionContext {
+  const exec = createExecutionContext();
+  if (yes) exec.tools.allowWithoutApprover = true;
+  else if (process.stdin.isTTY) exec.tools.approver = async ({ name, reason }) => ((await ui.confirm(`Allow ${name}? (${reason})`)) ? 'approve' : 'deny');
+  return exec;
+}
+
+/**
+ * Questions go to stderr so stdout stays clean for piping; without a terminal nothing can be asked.
+ * `yes` answers every confirm (workflow gates such as "Run the suggested route?") with yes.
+ */
+export function createHeadlessUI(opts: { yes?: boolean } = {}): CommandUI {
   const ask = async (question: string, opts?: { secret?: boolean }): Promise<string> => {
     if (!process.stdin.isTTY) throw new Error(`Cannot ask "${question}": no terminal. Run it in a terminal or pass the value another way.`);
     const secret = !!opts?.secret;
@@ -148,6 +164,6 @@ export function createHeadlessUI(): CommandUI {
   return {
     print: (line) => console.log(line),
     ask,
-    confirm: async (question) => process.stdin.isTTY === true && /^y/i.test(await ask(pc.yellow(`${question} [y/N]`))),
+    confirm: async (question) => opts.yes === true || (process.stdin.isTTY === true && /^y/i.test(await ask(pc.yellow(`${question} [y/N]`)))),
   };
 }

@@ -112,7 +112,7 @@ export function hasProvider(config: AxiomConfig, info: ModelInfo, catalog: Catal
 }
 
 /** Pipeline smoke ticket: mock mode exercises the full loop; its metrics are not meaningful. */
-function mockProvider(): MockProvider {
+export function mockProvider(): MockProvider {
   return new MockProvider('mock', [
     {
       content: '',

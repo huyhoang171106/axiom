@@ -15,7 +15,7 @@ export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhi
 const THINKING_LEVELS: readonly string[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh'];
 
 /** Where an unset role points (providers.md section 9); `default` falls back to the startup choice. */
-const ROLE_FALLBACK: Record<ModelRole, ModelRole | undefined> = { default: undefined, smol: 'default', slow: 'default', plan: 'slow', review: 'default', task: 'default' };
+const ROLE_FALLBACK: Record<ModelRole, ModelRole | undefined> = { default: undefined, smol: 'default', slow: 'default', plan: 'slow', review: 'default', task: 'default', code: 'default', embed: undefined };
 
 export const NO_PROVIDER_MESSAGE = 'No provider is set up yet. Type /login or set the API key env var of a provider.';
 

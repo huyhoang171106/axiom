@@ -4,6 +4,12 @@ import { defaultCommandRouter } from '../src/commands/index.js';
 import { CommandRouter, parseCommand, unknownCommandMessage } from '../src/commands/router.js';
 import type { Command } from '../src/commands/types.js';
 import { createHeadlessUI, runCli } from '../src/cli/index.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+// Every session writes a trace; keep it out of the real ~/.axiom.
+process.env.AXIOM_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-test-home-'));
 
 const stub = (name: string): Command => ({ name, summary: name, usage: `/${name}`, run: async () => {} });
 
