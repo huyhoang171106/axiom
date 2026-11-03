@@ -88,8 +88,12 @@ Branch `c/c3-verifier`.
 
 ```ts
 // src/tools/sandbox.ts — thêm option, mặc định giữ hành vi cũ
-export function bwrapInvocation(command: string, cwd: string, opts?: { bwrap?: string; home?: string; extraWritable?: string[]; isolateNetwork?: boolean }): { file: string; args: string[] };
+export function bwrapInvocation(command: string, cwd: string, opts?: { bwrap?: string; home?: string; extraWritable?: string[]; isolateNetwork?: boolean; readableRoots?: string[] }): { file: string; args: string[] };
 // isolateNetwork: true → thêm '--unshare-net' cạnh '--unshare-pid'. Sửa comment đầu hàm cho đúng
+// readableRoots (DESIGN.md 2026-11-04, P2-R0): có giá trị → không '--ro-bind / /' mà chỉ:
+//   '--ro-bind /usr /usr'; /bin, /lib, /lib64: symlink trên host → '--symlink usr/<x> /<x>', thư mục → '--ro-bind';
+//   '--dev /dev', '--proc /proc', '--tmpfs /tmp', '--tmpfs /home'; '--ro-bind <r> <r>' cho mỗi r trong readableRoots còn tồn tại;
+//   writable chỉ còn cwd + extraWritable (bỏ WRITABLE_CACHE_DIRS). Không truyền → giữ hành vi cũ
 
 // src/core/verifier.ts — TestRun như phase-2.md mục 5.2
 export const PYTEST_ARGS: readonly string[];   // ['-m', 'pytest', '-q', '-rA', '-p', 'no:cacheprovider']
@@ -103,7 +107,7 @@ export class RunTestsTool extends BaseTool { readonly name = 'run_tests'; /* par
 ```
 
 Bước:
-1. `runPytest`: python = `AXIOM_PYTHON ?? 'python3'`; `planSandbox()`; kiểu `bwrap` → `bwrapInvocation(cmd, root, { isolateNetwork: true })`; kiểu `local` → chạy thẳng, env qua `scrubEnv`. `target` phải nằm trong `root` (`escapesWorkspace`).
+1. `runPytest`: python = `pythonBin()`; `planSandbox()`; kiểu `bwrap` → `bwrapInvocation(cmd, root, { isolateNetwork: true, readableRoots })`, với `readableRoots` = các thư mục in ra bởi `<python> -I -c "import sys, site; print(sys.prefix, sys.base_prefix, site.getusersitepackages(), sep='\n')"` (venv, Python của `setup-python` trên CI, pytest cài `--user`); kiểu `local` → chạy thẳng, env qua `scrubEnv`. `target` phải nằm trong `root` (`escapesWorkspace`).
 2. Timeout: hết `timeoutMs` → kill cả nhóm tiến trình (`detached: true`, `process.kill(-pid, 'SIGKILL')`), `timedOut: true`, `exitCode: null`.
 3. `output` cắt còn 8000 ký tự cuối, qua `redact`.
 4. `RunTestsTool.execute` trả: `passed N, failed M` + tên test fail + `output` cắt 3000 ký tự; `timedOut` thì thêm `TIMEOUT after 120s`.
@@ -113,10 +117,11 @@ Test `tests/verifier.test.ts` (repo Python tạm, `skip` khi không có Python):
 - `parses passed and failed node ids from -rA output` (chạy không cần Python)
 - `a hanging test is killed at the timeout` (`timeoutMs: 2000`)
 - `a test that opens a socket fails under bwrap` (thêm `skip` khi `!isBwrapUsable()`)
+- `a test cannot read files outside the workspace under bwrap` (test đọc một file tạm nằm trong `$HOME` ngoài `root`, phải fail; `skip` khi `!isBwrapUsable()`)
 - `findRegressions reports tests that passed before and fail after` (không cần Python)
 - `target outside the workspace is rejected`
 
-Test `tests/sandbox.test.ts` (file mới) có: `isolateNetwork adds --unshare-net; default does not`.
+Test `tests/sandbox.test.ts` (file mới) có: `isolateNetwork adds --unshare-net; default does not`, `readableRoots replaces the read-only root bind and hides /home`.
 
 ## C4. Skill `bug-fix`
 

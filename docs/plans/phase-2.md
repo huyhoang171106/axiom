@@ -245,6 +245,13 @@ Renderer TUI theo `kind` của `CommandResult`: chủ UC viết component trong 
 - [ ] Trace có event `node` và `approval`; test `no registered secret value reaches the trace` vẫn pass.
 - [ ] Mỗi `docs/uc-XX.md` có: thiết kế (sơ đồ ASCII), failure mode đã gặp, bảng kết quả eval thật, model đã dùng, chi phí.
 
+Máy eval thật (P2-R0, #38; quyết định ở `DESIGN.md` mục 9, 2026-11-04): máy của D, D vận hành. Dựng lại trên máy khác:
+
+1. `/login anthropic` (OAuth Claude Pro/Max). `@default` = `anthropic/claude-opus-5-5`.
+2. `docker run -d --name ollama --restart unless-stopped -p 127.0.0.1:11434:11434 -v ollama:/root/.ollama ollama/ollama`, rồi `docker exec ollama ollama pull qwen3-embedding:0.6b`.
+3. `~/.axiom/config.json`: `"modelRoles": { "embed": "ollama/qwen3-embedding:0.6b" }`; `axiom models refresh` phải in `Refreshed: ollama`.
+4. Python ≥ 3.12 có pytest, bwrap dùng được (`planSandbox().kind === 'bwrap'`).
+
 ## 11. Ghép (tối CN 08/11, D chủ trì; tag sau khi eval thật xong, chậm nhất 10/11)
 
 1. Kiểm mọi PR đã merge: `gh pr list --state open` rỗng.
