@@ -8,6 +8,10 @@ case "$branch" in
   main | master | "") echo "ship: run from a feature branch, not '${branch:-detached HEAD}'" >&2; exit 1 ;;
 esac
 
+# gh may default to another remote (e.g. an old fork); always target the repo behind `origin`.
+GH_REPO=$(git remote get-url origin | sed -E 's#^(https://github.com/|git@github.com:)##; s#\.git$##')
+export GH_REPO
+
 git fetch origin
 git rebase origin/main
 git push -u origin HEAD --force-with-lease
