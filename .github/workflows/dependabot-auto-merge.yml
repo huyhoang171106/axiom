@@ -1,8 +1,13 @@
 name: dependabot-auto-merge
 
-# Dependabot never turns on auto-merge itself. Minor/patch npm bumps and GitHub Actions bumps merge once
-# the required checks pass; npm majors stay open for a person to decide.
-on: pull_request
+# The org repo has no GitHub auto-merge (free plan), so this does what scripts/ship.sh does for people:
+# an eligible Dependabot PR gets the `automerge` label, and once `ci` passes on it the PR is merged only if every
+# check is green. Minor/patch npm bumps and GitHub Actions bumps are eligible; npm majors stay open for a person.
+on:
+  pull_request:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
 
 permissions:
   contents: write
@@ -11,7 +16,7 @@ permissions:
 jobs:
   auto-merge:
     name: auto-merge
-    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -21,4 +26,26 @@ jobs:
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh pr merge --auto --merge "$PR_URL"
+        run: gh pr edit "$PR_URL" --add-label automerge
+
+  merge:
+    name: merge
+    if: >-
+      github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.actor.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      BRANCH: ${{ github.event.workflow_run.head_branch }}
+      SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - run: |
+          pr=$(gh pr list --head "$BRANCH" --state open --json number,labels,headRefOid \
+            -q '.[] | select(.headRefOid == env.SHA) | select(any(.labels[]; .name == "automerge")) | .number')
+          if [ -z "$pr" ]; then echo "No open automerge-labeled PR at $SHA; nothing to merge."; exit 0; fi
+          notgreen=$(gh pr checks "$pr" --json name,bucket -q '[.[] | select(.bucket != "pass" and .bucket != "skipping") | .name] | join(", ")')
+          if [ -n "$notgreen" ]; then echo "::error::PR #$pr is not green yet: $notgreen. Not merged."; exit 1; fi
+          title=$(gh pr view "$pr" --json title -q .title)
+          gh pr merge "$pr" --merge --delete-branch --subject "$title (#$pr)"
