@@ -2,7 +2,8 @@
 
 | | |
 |---|---|
-| Thời gian | 28/10–10/11. Chia việc 03/11 (thứ ba). Mỗi làn merge xong **trước 23:59 ngày 09/11**. Ngày 10/11 ghép, eval thật, gắn tag |
+| Thời gian | 28/10–10/11 (hạn của lớp: cuối tuần 9). Nhóm chốt **mọi task merge xong trước 23:59 CN 08/11**. T2–T3 (09–10/11) để sửa lỗi, eval thật, video, gắn tag |
+| Theo dõi | GitHub Project https://github.com/orgs/se373agenticengineering/projects/30 (trường Sprint, Làn, Thứ tự), milestone `Phase 2`, mỗi task một issue có quan hệ blocked-by |
 | Tag | `v0.2-phase2` |
 | Người làm | A An, B Bảo, C Trâm, D Hoàng, E Bắc. Việc từng người: `phase-2-{A,B,C,D,E}.md` |
 | Đọc kèm | `AGENTS.md`, `docs/CONVENTIONS.md`, `docs/DESIGN.md`, đề `2026-10-06_de_tai_01_coding_agent.md` (UC-01..05, mục 2.2, 2.3, 4, 6) |
@@ -40,18 +41,16 @@ Ghi vào "Nhật ký quyết định" của `DESIGN.md` cùng PR này.
 
 Còn nợ từ Phase 1: video demo (`phase-1.md` mục Ghép). D quay ở D7.
 
-## 3. Lịch theo ngày
+## 3. Lịch theo sprint (mỗi sprint một ngày)
 
-| Ngày | A | B | C | D | E |
+| Sprint | A | B | C | D | E |
 |---|---|---|---|---|---|
-| T3 03/11 | Đọc plan | Đọc plan | Đọc plan | **D0** (merge trước 23:59) | Đọc plan |
-| T4 04/11 | A1 | B1 | C1 | D1 | E1 |
-| T5 05/11 | A2 | B2 | C2 | D2 | E2 |
-| T6 06/11 | A3 | B3 | C3, C4 | D3 | E3 |
-| T7 07/11 | A3 (tiếp) | B4 | C5 | D4 | E4 |
-| CN 08/11 | A4 | B4 (tiếp) | C5 (tiếp) | D5 | E5 |
-| T2 09/11 | A5 | B5 | C6, C7 | D6 | E6 |
-| T3 10/11 | Chạy eval thật UC-01, viết `docs/uc-01.md` | Như A cho UC-02 | Như A cho UC-03 | D7 ghép, tag | Như A cho UC-05 |
+| 1 · T4 04/11 | A1 | B1 | C1 | **D0** (merge trước 12:00), D1 | E1 |
+| 2 · T5 05/11 | A2 | B2 | C2, C4 | D2 | E2 |
+| 3 · T6 06/11 | A3 | B3 | C3 | D3, D4 | E3 |
+| 4 · T7 07/11 | A4 | B4 | C5 | D5 | E4, E5 |
+| 5 · CN 08/11 | A5 | B5 | C6, C7 | D6, D7 ghép | E6 |
+| T2–T3 09–10/11 | Sửa lỗi, eval thật UC-01, `docs/uc-01.md` | Như A cho UC-02 | Như A cho UC-03 | Eval `--all`, video, tag | Như A cho UC-05 |
 
 Task đầu của A, B, C, E (A1, B1, C1, E1) không cần file của D0, làm được ngay 04/11 kể cả khi D0 trễ.
 
@@ -212,7 +211,7 @@ Renderer TUI theo `kind` của `CommandResult`: chủ UC viết component trong 
 7. Xong task: đổi cột Trạng thái của dòng đó trong `phase-2-<làn>.md` thành `done` ngay trong PR của task.
 8. Kẹt quá 2 giờ vì phần của người khác: dùng Seam ở mục 7, nhắn nhóm, làm tiếp task sau.
 
-## 9. Bản dùng được (kiểm ngày 10/11)
+## 9. Bản dùng được (kiểm tối CN 08/11)
 
 - [ ] `npm install && npm start` mở TUI như Phase 1.
 - [ ] `/triage <issue bug>` → bảng IssueTicket → hỏi "Chạy route đề xuất? [Y/n]" → Y → `/fix` chạy.
@@ -238,7 +237,7 @@ Renderer TUI theo `kind` của `CommandResult`: chủ UC viết component trong 
 - [ ] Trace có event `node` và `approval`; test `no registered secret value reaches the trace` vẫn pass.
 - [ ] Mỗi `docs/uc-XX.md` có: thiết kế (sơ đồ ASCII), failure mode đã gặp, bảng kết quả eval thật, model đã dùng, chi phí.
 
-## 11. Ghép (10/11, D chủ trì)
+## 11. Ghép (tối CN 08/11, D chủ trì; tag sau khi eval thật xong, chậm nhất 10/11)
 
 1. Kiểm mọi PR đã merge: `gh pr list --state open` rỗng.
 2. `git switch main && git pull && npm install && npm run lint && npm test`.

@@ -4,16 +4,16 @@
 
 | # | Ngày | Việc | Trạng thái |
 |---|---|---|---|
-| D0 | 03/11 | Cài LangGraph, tạo mọi file dùng chung và stub | |
+| D0 | 04/11 | Cài LangGraph, tạo mọi file dùng chung và stub | |
 | D1 | 04/11 | `task-state.ts`, graph `/feature` | |
 | D2 | 05/11 | Checkpointer SQLite, `/resume` | |
 | D3 | 06/11 | Compaction, `/compact` | |
-| D4 | 07/11 | Memory, `/memory` | |
-| D5 | 08/11 | 3 feature + eval UC-04 | |
-| D6 | 09/11 | `/resume` liệt kê, `/memory`, `/cost` trong TUI | |
-| D7 | 10/11 | Ghép, video, tag `v0.2-phase2` | |
+| D4 | 06/11 | Memory, `/memory` | |
+| D5 | 07/11 | 3 feature + eval UC-04 | |
+| D6 | 08/11 | `/resume` liệt kê, `/memory`, `/cost` trong TUI | |
+| D7 | 08/11 | Ghép, video, tag `v0.2-phase2` | |
 
-## D0. Khung (merge trước 23:59 03/11)
+## D0. Khung (merge trước 12:00 T4 04/11)
 
 Branch `d/d0-phase2-skeleton`.
 

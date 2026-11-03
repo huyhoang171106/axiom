@@ -7,10 +7,10 @@
 | C1 | 04/11 | `bug-06..10`, thêm loại `unfixable` | |
 | C2 | 05/11 | `apply_patch` + guard sửa test | |
 | C3 | 06/11 | `runPytest`, `run_tests` tắt mạng, `findRegressions`, Python trong CI | |
-| C4 | 06/11 | Skill `bug-fix` | |
-| C5 | 07–08/11 | Graph `/fix` | |
-| C6 | 09/11 | Eval UC-03 | |
-| C7 | 09/11 | Diff viewer, tiến trình vòng fix | |
+| C4 | 05/11 | Skill `bug-fix` | |
+| C5 | 07/11 | Graph `/fix` | |
+| C6 | 08/11 | Eval UC-03 | |
+| C7 | 08/11 | Diff viewer, tiến trình vòng fix | |
 
 ## C1. Đủ 10 bug
 

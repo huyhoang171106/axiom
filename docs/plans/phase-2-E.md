@@ -8,8 +8,8 @@
 | E2 | 05/11 | Chống lách sau khi bị từ chối | |
 | E3 | 06/11 | `askHuman`, `runGraph`, approver headless | |
 | E4 | 07/11 | Audit log, `/audit` | |
-| E5 | 08/11 | `/mode`, `/plan`, màn hình duyệt có mức rủi ro | |
-| E6 | 09/11 | Eval UC-05 | |
+| E5 | 07/11 | `/mode`, `/plan`, màn hình duyệt có mức rủi ro | |
+| E6 | 08/11 | Eval UC-05 | |
 
 Nguyên tắc (Q1): duyệt **tool call** đi qua `gate()` → `registry.approver` (Promise). `askHuman` + `interrupt()` chỉ dùng cho cổng giữa các node. Không thêm đường nào bỏ qua `gate()`.
 
