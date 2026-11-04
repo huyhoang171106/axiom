@@ -1,6 +1,7 @@
 // src/commands/ask.ts - `ask` command (UC-02)
 
 import { answerQuestion } from '../agents/ask.js';
+import { TEAM_DOCS_DIR } from '../core/rag/chunker.js';
 import { createEmbedder, embedIdentity, embedModelFromConfig } from '../core/rag/embedder.js';
 import { loadCatalog } from '../llm/catalog/index.js';
 import { createProviderFor, resolveModel } from '../llm/model-resolver.js';
@@ -22,6 +23,7 @@ export const askCommand: Command = {
       model: info.id,
       embedder: createEmbedder(embedInfo, { costTracker: ctx.costTracker }),
       embedModel: embedIdentity(embedInfo),
+      teamDir: TEAM_DOCS_DIR,
       signal: ctx.signal,
       bus: ctx.bus,
       costTracker: ctx.costTracker,

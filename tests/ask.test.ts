@@ -48,23 +48,33 @@ function options(provider: MockProvider, tracker = new CostTracker()): AskOption
 }
 
 describe('ask', () => {
-  it('answer keeps only validated citations', needsPython, async () => {
-    const bad = 'Insert is at db/table.py:L4-L6 and db/nowhere.py:L1-L2.';
+  it('answer keeps only validated citations and shows none of the failed ones', needsPython, async () => {
+    const bad = 'Insert is at db/table.py:L4-L6 and db/nowhere.py:L1-L2.\nRemove lives in db/gone.py:L1-L3.';
     const provider = new MockProvider('mock', [bad, bad]);
     const answer = await answerQuestion('Where is insert?', options(provider));
     assert.equal(answer.found, true);
     assert.deepEqual(answer.citations, [{ path: 'db/table.py', startLine: 4, endLine: 6 }]);
-    assert.match(answer.text, /db\/nowhere\.py:L1-L2: file not found/);
-    assert.match(answer.text.split('\n').at(-1) ?? '', /Đã bỏ 1 trích dẫn/);
+    assert.doesNotMatch(answer.text, /nowhere|gone/, 'failed citations are not in the shown text');
+    assert.doesNotMatch(answer.text, /Remove lives/, 'a line left without any valid citation is dropped with its claim');
+    assert.match(answer.text, /^Insert is at db\/table\.py:L4-L6/);
+    assert.match(answer.text.split('\n').at(-1) ?? '', /Đã bỏ 2 trích dẫn/);
+  });
+
+  it('a citation in a sentence about something else is rejected', needsPython, async () => {
+    const offTopic = 'Searching uses a regex, see db/table.py:L4-L6.';
+    const provider = new MockProvider('mock', [offTopic, offTopic]);
+    const answer = await answerQuestion('Where is insert?', options(provider));
+    assert.match(provider.callHistory[1].messages.at(-1)?.content ?? '', /db\/table\.py:L4-L6: cited lines do not mention what the sentence says/);
+    assert.deepEqual(answer, { text: NOT_FOUND_TEXT, citations: [], found: false });
   });
 
   it('invalid citation triggers exactly one retry', needsPython, async () => {
-    const provider = new MockProvider('mock', ['See db/table.py:L4-L40.', 'See db/table.py:L4-L6.', 'never used']);
+    const provider = new MockProvider('mock', ['Insert is in db/table.py:L4-L40.', 'Insert is in db/table.py:L4-L6.', 'never used']);
     const tracker = new CostTracker();
     const answer = await answerQuestion('Where is insert?', options(provider, tracker));
     assert.equal(provider.callHistory.length, 2);
     assert.match(provider.callHistory[1].messages.at(-1)?.content ?? '', /db\/table\.py:L4-L40: line out of range/);
-    assert.deepEqual(answer, { text: 'See db/table.py:L4-L6.', citations: [{ path: 'db/table.py', startLine: 4, endLine: 6 }], found: true });
+    assert.deepEqual(answer, { text: 'Insert is in db/table.py:L4-L6.', citations: [{ path: 'db/table.py', startLine: 4, endLine: 6 }], found: true });
     assert.equal(tracker.getSessionSummary().byModel['mock-model'].calls, 2);
 
     const stubborn = new MockProvider('mock', ['db/table.py:L99-L100', 'db/table.py:L99-L100', 'never used']);
@@ -74,7 +84,7 @@ describe('ask', () => {
   });
 
   it('the prompt carries each chunk with its path and line range', needsPython, async () => {
-    const provider = new MockProvider('mock', ['db/table.py:L4-L6']);
+    const provider = new MockProvider('mock', ['Insert is in db/table.py:L4-L6']);
     await answerQuestion('Where is insert?', options(provider));
     assert.match(provider.callHistory[0].messages[1].content, /### db\/table\.py:L4-L6 \(Table\.insert\)\n    def insert/);
     assert.match(provider.callHistory[0].messages[0].content, new RegExp(NOT_FOUND_TEXT));
@@ -93,11 +103,27 @@ describe('ask', () => {
     assert.equal(provider.callHistory.length, 0);
   });
 
+  it('team docs are searched, cited with team: and linked under the team dir', needsPython, async () => {
+    const team = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-ask-team-'));
+    try {
+      fs.writeFileSync(path.join(team, 'rules.md'), '# Tests\nnever edit existing tests to make them pass\n');
+      const provider = new MockProvider('mock', ['Existing tests must not be edited to pass: team:rules.md:L1-L2.']);
+      const answer = await answerQuestion('Can I edit existing tests?', { ...options(provider), teamDir: team });
+      assert.match(provider.callHistory[0].messages[1].content, /### team:rules\.md:L1-L2 \(Tests\)/);
+      assert.deepEqual(answer.citations, [{ path: 'rules.md', startLine: 1, endLine: 2, source: 'team' }]);
+      const link = fileLink(root, answer.citations[0], team);
+      assert.ok(link.includes(`${pathToFileURL(path.join(team, 'rules.md')).href}#L1`) && link.includes('team:rules.md:L1-L2'));
+    } finally {
+      fs.rmSync(team, { recursive: true, force: true });
+    }
+  });
+
   it('fileLink wraps the citation in OSC 8', () => {
     const c = { path: 'db/table.py', startLine: 4, endLine: 6 };
     const url = `${pathToFileURL(path.resolve(root, 'db/table.py')).href}#L4`;
     assert.equal(fileLink(root, c), `\x1b]8;;${url}\x1b\\db/table.py:L4-L6\x1b]8;;\x1b\\`);
     assert.equal(linkCitations('a db/table.py:L4-6 b db/table.py:L8-L9', root, [c]), `a ${fileLink(root, c)} b db/table.py:L8-L9`);
+    assert.equal(linkCitations('x team:db/table.py:L4-L6', root, [c]), 'x team:db/table.py:L4-L6', 'a team citation never links to the repo file of the same path');
   });
 
   it('the command without modelRoles.embed fails with the fix', async () => {

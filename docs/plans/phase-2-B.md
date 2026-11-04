@@ -7,7 +7,7 @@
 | B1 | 04/11 | Chunk Python bằng `ast`, tài liệu theo heading | done |
 | B2 | 05/11 | Embedder, BM25, `RepoIndex.search` | done |
 | B3 | 06/11 | Index tăng dần theo hash file | done |
-| B4 | 07/11 | `answerQuestion`, `/ask`, kiểm tra trích dẫn, link bấm được | done |
+| B4 | 07/11 | `answerQuestion`, `/ask`, kiểm tra trích dẫn, link bấm được | phần B xong; chờ E nối kind `ask-answer` (`AskAnswerView`) vào TUI (#14) |
 | B5 | 08/11 | Eval UC-02 ≥ 20 câu | chờ A3 và eval thật |
 
 Kiểu dữ liệu (`Chunk`, `ScoredChunk`, `Citation`, `IndexDiff`, `Embedder`) cố định ở `phase-2.md` mục 5.3.
@@ -113,28 +113,31 @@ Branch `b/b4-ask`. Cần B2.
 
 ```ts
 // src/core/rag/citations.ts
-export const CITATION_RE: RegExp;   // /([\w./-]+\.\w+):L(\d+)(?:-L?(\d+))?/g  — khớp "tinydb/table.py:L10-L25" và "tinydb/table.py:L10-25"
+export const CITATION_RE: RegExp;   // khớp "tinydb/table.py:L10-L25", "tinydb/table.py:L10-25" và "team:team-conventions.md:L3-L5" (source 'team')
 export function parseCitations(text: string): Citation[];
-export function validateCitation(c: Citation, root: string, retrieved: readonly Chunk[]): string | null;
-export function fileLink(root: string, c: Citation): string;   // OSC 8: \x1b]8;;file://<abs>#L<start>\x1b\\<path>:L<start>-L<end>\x1b]8;;\x1b\\
+export function validateCitation(c: Citation, root: string, retrieved: readonly Chunk[], teamDir?: string): string | null;   // teamDir mặc định TEAM_DOCS_DIR
+export function checkSupport(claim: string, c: Citation, retrieved: readonly Chunk[]): string | null;
+export function fileLink(root: string, c: Citation, teamDir?: string): string;   // OSC 8: \x1b]8;;file://<abs>#L<start>\x1b\\<path>:L<start>-L<end>\x1b]8;;\x1b\\
 
 // src/agents/ask.ts — AskOptions, AskAnswer như phase-2.md mục 5.2
 export const NOT_FOUND_TEXT = 'Không tìm thấy trong repo.';
 ```
 
 `validateCitation` trả lý do khi:
-1. file không tồn tại hoặc ngoài `root` (`escapesWorkspace`) → `'file not found'`;
+1. file không tồn tại hoặc ngoài gốc của nguồn (`root`, hoặc `teamDir` với `source: 'team'`) → `'file not found'`;
 2. `startLine < 1`, `endLine > số dòng file`, hoặc `startLine > endLine` → `'line out of range'`;
-3. khoảng dòng không giao với chunk nào trong `retrieved` cùng `path` → `'not from retrieved context'`.
+3. khoảng dòng không nằm trọn trong một chunk của `retrieved` cùng nguồn và `path` → `'not inside a retrieved chunk'`.
+
+`checkSupport` (đề UC-02 tiêu chí 1: đoạn trích chứa symbol hoặc nội dung liên quan): câu chứa trích dẫn phải có ít nhất một từ (dài > 2, không phải từ đệm tiếng Anh) trùng với các dòng được trích hoặc `symbol` của chunk → không thì `'cited lines do not mention what the sentence says'`; câu chỉ có trích dẫn → `'no claim next to the citation'`.
 
 `answerQuestion`:
 1. `index.search(question, 5)`. Không có chunk nào điểm ≥ `MIN_SCORE` (hằng, B5 chỉnh) → `{ text: NOT_FOUND_TEXT, citations: [], found: false }`, không gọi model.
-2. Prompt hệ thống: chỉ trả lời từ các đoạn đã cho; mỗi ý phải có `path:Lx-Ly`; không đủ thông tin thì trả đúng `NOT_FOUND_TEXT`. Mỗi chunk đưa vào dạng `### <path>:L<start>-L<end> (<symbol>)` + code.
-3. Gọi `provider.chat` một lần (không tool). Parse trích dẫn, validate từng cái.
-4. Có trích dẫn sai → gọi lại model 1 lần, kèm danh sách lý do. Vẫn sai → bỏ các trích dẫn sai khỏi `citations` và thêm dòng cảnh báo cuối `text`.
+2. Prompt hệ thống: chỉ trả lời từ các đoạn đã cho; mỗi ý phải có `path:Lx-Ly` trong cùng câu và nêu tên symbol/thuật ngữ mà dòng được trích chứa; không đủ thông tin thì trả đúng `NOT_FOUND_TEXT`. Mỗi chunk đưa vào dạng `### <path>:L<start>-L<end> (<symbol>)` + code; chunk team có tiền tố `team:`.
+3. Gọi `provider.chat` một lần (không tool). Với mỗi trích dẫn: `validateCitation`, rồi `checkSupport` với câu chứa nó.
+4. Có trích dẫn sai → gọi lại model 1 lần, kèm danh sách lý do. Vẫn sai → xoá trích dẫn sai khỏi `text` (dòng không còn trích dẫn hợp lệ nào thì xoá cả dòng), thêm dòng cảnh báo cuối `text` (chỉ ghi số lượng, không ghi lại trích dẫn sai).
 5. Câu trả lời không có trích dẫn hợp lệ nào và không phải `NOT_FOUND_TEXT` → `found: false`, `text = NOT_FOUND_TEXT`.
 
-Lệnh `src/commands/ask.ts`: model `resolveModel('@default')`, embedder `embedderFromConfig`, trả `{ kind: 'ask-answer', data: AskAnswer, text }`. Headless in `text` với trích dẫn dạng chữ thường (không OSC 8).
+Lệnh `src/commands/ask.ts`: model `resolveModel('@default')`, embedder từ `embedModelFromConfig` (định danh `embedIdentity`), `teamDir: TEAM_DOCS_DIR`, trả `{ kind: 'ask-answer', data: AskAnswer, text }`. Headless in `text` với trích dẫn dạng chữ thường (không OSC 8).
 
 TUI: `src/tui/components/citation.tsx` `export function AskAnswerView(props: { answer: AskAnswer; root: string; width: number })` thay mỗi trích dẫn bằng `fileLink`. Nhắn E kind `ask-answer`.
 
