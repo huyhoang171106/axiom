@@ -91,6 +91,8 @@ export interface ModelUsageSummary {
   costDollars: number;
   tokens: number;
   totalTokens: number;
+  promptTokens: number;
+  completionTokens: number;
 }
 
 export interface SessionSummary {
@@ -161,11 +163,15 @@ export class CostTracker {
     this.cachedTokens += cached;
 
     if (!this.breakdown[model]) {
-      this.breakdown[model] = { calls: 0, cost: 0, costDollars: 0, tokens: 0, totalTokens: 0 };
+      this.breakdown[model] = { calls: 0, cost: 0, costDollars: 0, tokens: 0, totalTokens: 0, promptTokens: 0, completionTokens: 0 };
     }
 
     const item = this.breakdown[model];
     item.calls += 1;
+    // Lưu riêng token vào/ra của từng model, dùng cùng số đã được làm sạch
+    // như tổng phiên. Cache read đã nằm trong prompt, không cộng thêm lần nữa.
+    item.promptTokens += prompt;
+    item.completionTokens += completion;
     item.cost = Number((item.cost + cost).toFixed(6));
     item.costDollars = item.cost;
     item.tokens += tokens;
@@ -178,7 +184,9 @@ export class CostTracker {
   getSessionSummary(): SessionSummary {
     const totalCost = Number(this.totalCost.toFixed(6));
     const cacheHitRatio = this.promptTokens > 0 ? Number((this.cachedTokens / this.promptTokens).toFixed(4)) : 0;
-    const breakdownCopy = { ...this.breakdown };
+    // Sao chép cả từng dòng, không chỉ object bên ngoài: caller có thể sửa
+    // snapshot mà không vô tình thay đổi số liệu tracker đang lưu.
+    const breakdownCopy = Object.fromEntries(Object.entries(this.breakdown).map(([model, usage]) => [model, { ...usage }]));
     return {
       totalTokens: this.totalTokens,
       totalCost,

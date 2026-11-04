@@ -4,7 +4,7 @@
 
 | # | Ngày | Việc | Trạng thái |
 |---|---|---|---|
-| A1 | 04/11 | Model theo role cho từng lệnh | |
+| A1 | 04/11 | Role `@code`/`@embed`, `/cost` theo model và budget theo run (#6) | done |
 | A2 | 05/11 | Graph `triage → confirm → route`, điền `runRoute` | |
 | A3 | 06/11 | `UC_RUNNERS`, `--uc NN`, `--all`, chỉ số mục 6.2 | |
 | A4 | 07/11 | Số đo thật UC-01 | |
@@ -12,7 +12,7 @@
 
 ## A1. Model theo role
 
-Branch `a/a1-roles`. Không cần D0 (D0 thêm `'code' | 'embed'` vào `ModelRole`; nếu D0 chưa merge, rebase sau khi merge).
+Branch `a/a1-roles`. D0 đã merge; A1 sở hữu `/cost` theo #6. Resolver báo lỗi khi thiếu `modelRoles.embed`, `@code` fallback `@default`. `/cost` đọc tracker phiên, báo input/output và cost theo model; budget `AgentLoop.runTask` chỉ tính usage của run đó, không cộng chung các node workflow.
 
 | Lệnh / workflow | Role | Chỗ gọi |
 |---|---|---|
@@ -22,18 +22,7 @@ Branch `a/a1-roles`. Không cần D0 (D0 thêm `'code' | 'embed'` vào `ModelRol
 | `/review` (Phase 3) | `@review` | — |
 | embedding | `@embed` | `src/core/rag/embedder.ts` (B) |
 
-Bước:
-1. `src/llm/model-resolver.ts` `ROLE_FALLBACK`: D0 đã thêm `code: 'default'`, `embed: undefined`. A kiểm lại; không thêm gì khác.
-2. Viết `docs/guides/providers.md` mục 9: thêm 2 dòng bảng role `@code` (sửa code, rơi về `@default`) và `@embed` (bắt buộc đặt trong `~/.axiom/config.json`, không rơi về đâu; thiếu thì B2 báo lỗi). Ví dụ config:
-   ```json
-   { "modelRoles": { "smol": "anthropic/<model nhỏ>", "code": "anthropic/<model code>", "embed": "ollama/<model embed>" } }
-   ```
-   Chỉ ghi `<...>`, không ghi tên model thật vào `src/`.
-3. Test `tests/model-resolver.test.ts` thêm:
-   - `@code resolves to modelRoles.code when set`
-   - `@code falls back to @default when unset`
-
-Kiểm: `npx tsx --test tests/model-resolver.test.ts && npm run lint`.
+Nghiệm thu: resolver trả `ModelInfo` và không fallback `@embed`; `/cost` báo token vào/ra và cost ước tính theo model cùng tổng phiên; budget mỗi `runTask` độc lập với tổng phiên. Kiểm bằng test resolver, tracker, command và loop; chạy `npm run lint && npm test && npm run build`. Tracker chỉ lưu model ID, không phân biệt provider có cùng ID.
 
 ## A2. Graph triage và `runRoute`
 

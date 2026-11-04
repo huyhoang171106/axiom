@@ -469,10 +469,14 @@ Quy tắc kiểm tra (giống oh-my-pi):
 | `plan` | Planner trong plan mode và spec | `slow` |
 | `review` | Reviewer (UC-06) | `default` |
 | `task` | Subagent | `default` |
+| `code` | Sửa code | `default` |
+| `embed` | Embedding | Bắt buộc cấu hình `modelRoles.embed`; thiếu thì báo lỗi |
 
 ```json
 { "modelRoles": { "default": "zai/glm-5.3", "smol": "@default", "slow": "anthropic/claude-sonnet-5-5" } }
 ```
+
+Ví dụ: `{ "modelRoles": { "code": "anthropic/<model-code>", "embed": "ollama/<model-embed>" } }`.
 
 - `@ten` là alias tới role khác. Có thể thêm hậu tố mức suy nghĩ: `zai/glm-5.3:high` (`off|minimal|low|medium|high|xhigh`).
 - Một role có thể có nhiều selector cách nhau bằng dấu phẩy. Dùng selector **đầu tiên available**. Đây không phải chuỗi thử lại khi lỗi.

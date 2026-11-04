@@ -14,7 +14,7 @@
 | A | An | UC-01 | Role `@code` `@embed`, graph `triage → confirm → route`, eval runner chung, số đo thật UC-01, renderer IssueTicket |
 | B | Bảo | UC-02 | Chunk bằng Python `ast`, embedder, BM25 + vector, index tăng dần, `/ask`, kiểm tra trích dẫn, trích dẫn bấm được |
 | C | Trâm | UC-03 | `bug-06..10`, `apply_patch`, guard sửa test, `run_tests` tắt mạng, Verifier, skill `bug-fix`, graph `/fix`, diff viewer |
-| D | Hoàng | UC-04 | D0 khung, task state, checkpointer SQLite, `/feature` `/resume`, compaction, memory, 3 feature, `/cost`, ghép |
+| D | Hoàng | UC-04 | D0 khung, task state, checkpointer SQLite, `/feature` `/resume`, compaction, memory, 3 feature, ghép; `/cost` chuyển A1 (#6) |
 | E | Bắc | UC-05 | Danh mục rủi ro trong `decide()`, chống lách, `askHuman` bằng `interrupt()`, audit log, `/mode` `/plan` `/audit`, màn hình duyệt có mức rủi ro |
 
 ## 1. Quyết định đã chốt cho Phase 2
@@ -131,7 +131,7 @@ export function pythonBin(): string; // AXIOM_PYTHON, rồi python3 (Windows: py
 | `src/core/memory.ts` | `memoryPath`, `loadMemory`, `addMemory`, `clearMemory` (`phase-2-D.md` D4) | `''` | D4 |
 | `src/core/audit.ts` | `recordDecision(entry: AuditEntry): void`, `readAudit(limit?: number): AuditEntry[]` (`phase-2-E.md` E4) | không làm gì, `[]` | E4 |
 | `src/tools/denied-actions.ts` | `actionKey(name: string, args: Record<string, unknown>): string`, `class DeniedActions { add(key: string): void; has(key: string): boolean }` | key = `name + JSON.stringify(args)` | E2 |
-| `src/commands/{ask,fix,feature,resume,memory,compact,cost,mode,plan,audit}.ts` | `Command` như `src/commands/types.ts`; đăng ký trong `src/commands/index.ts` | `run` throw `'chưa làm'` | B4, C5, D1, D2, D4, D3, D6, E5, E5, E4 |
+| `src/commands/{ask,fix,feature,resume,memory,compact,cost,mode,plan,audit}.ts` | `Command` như `src/commands/types.ts`; đăng ký trong `src/commands/index.ts` | `run` throw `'chưa làm'` | B4, C5, D1, D2, D4, D3, A1, E5, E5, E4 |
 | `evals/types.ts` | Xem 5.4 | (chỉ kiểu) | — |
 | `evals/registry.ts` | `export const UC_RUNNERS: Record<string, UcRunner>`; D0 đăng ký `'01'` bọc code cũ | `'02'`..`'05'` chưa có | A3, rồi B5, C6, D5, E6 thêm dòng |
 | `evals/issues/feat-01..03/README.md` | Mô tả cấu trúc thư mục feature | — | D5 |
