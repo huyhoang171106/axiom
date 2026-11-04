@@ -73,7 +73,7 @@ Bước:
    - `info.api === 'ollama-chat'`: `POST ${baseUrl}/api/embed`, body `{ model: info.id, input: texts }`, đọc `embeddings`.
    - còn lại: `POST ${baseUrl}/embeddings`, body `{ model: info.id, input: texts }`, header `Authorization: Bearer <key>` lấy theo cách `createProviderFor` lấy credential, đọc `data[i].embedding`.
    - Gửi theo lô 64 text. Lỗi HTTP → `ProviderError` (thông điệp qua `redact`).
-2. Thư mục index: `opts.dir ?? path.join(axiomHome(), 'index', sha256(realpath(root)).slice(0, 12))`. File: `chunks.json` (`Chunk[]`), `vectors.json` (`Record<chunkId, number[]>`), `files.json` (`Record<path, sha256>`), `meta.json` (`{ embedModel, dim }`). `embedModel` đổi thì index lại toàn bộ.
+2. Thư mục index: `opts.dir ?? path.join(axiomHome(), 'index', sha256(realpath(root)).slice(0, 12))`. Một file `index.json` = `{ meta: { embedModel, preprocessing, dim }, files: Record<path, sha256>, chunks: Chunk[], vectors: Record<chunkId, number[]> }` (Nhật ký quyết định 2026-11-04, #12, #13). Định danh trong `meta` đổi thì index lại toàn bộ.
 3. `search(query, k)`: điểm cuối = `0.5 * cosine + 0.3 * bm25Norm + 0.2 * symbolMatch`.
    - `bm25Norm` = điểm BM25 chia điểm lớn nhất của truy vấn.
    - `symbolMatch` = 1 nếu một token của query trùng (không phân biệt hoa thường) phần cuối của `symbol` (`insert` khớp `Table.insert`), không thì 0.
@@ -95,10 +95,10 @@ Kiểm: `npx tsx --test tests/rag-search.test.ts && npm run lint`.
 Branch `b/b3-incremental`.
 
 Bước:
-1. `update()`: tính sha256 từng file; so với `files.json`.
-   - File mới → `added`; hash khác → `changed`; có trong `files.json` mà mất → `removed`.
+1. `update()`: tính sha256 từng file; so với `files` trong `index.json`.
+   - File mới → `added`; hash khác → `changed`; có trong `files` mà mất → `removed`.
    - Chỉ chunk và embed lại file `added` + `changed`; xoá chunk + vector của `changed` + `removed` trước.
-   - Ghi 4 file JSON bằng cách ghi file tạm rồi `rename` (tắt giữa chừng không hỏng index).
+   - Publish: ghi cả index vào file tạm, `fsync`, rồi một `rename` thành `index.json`. Lúc mở, file hỏng hoặc chunk/vector/hash không khớp nhau thì bỏ cả index và dựng lại.
 2. `search()` tự gọi `update()` nếu lần `update` cuối cách > 2 giây, để câu hỏi sau khi sửa code ra nội dung mới (đề UC-02 case 5).
 
 Test `tests/rag-incremental.test.ts` (embedder giả đếm số text đã embed):
