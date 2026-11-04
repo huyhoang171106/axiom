@@ -10,6 +10,7 @@ test('push destinations include configured upstream and multiple refspecs', () =
   const git = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { stdio: 'pipe' });
   try {
     git('init', '-b', 'feature');
+    git('-c', 'user.name=Policy Test', '-c', 'user.email=policy@example.invalid', 'commit', '--allow-empty', '-m', 'fixture');
     git('config', 'branch.feature.remote', 'origin');
     git('config', 'branch.feature.merge', 'refs/heads/main');
     for (const command of ['git push', 'git push origin HEAD:main', 'git push origin HEAD:refs/heads/main', 'git push origin feature HEAD:master', 'git push --mirror origin', 'git push origin refs/heads/*:refs/heads/*']) {
@@ -18,5 +19,9 @@ test('push destinations include configured upstream and multiple refspecs', () =
     assert.equal(decide('run_command', { command: 'git push origin feature' }, root).verdict, 'ask');
     git('config', 'remote.origin.push', 'HEAD:refs/heads/master');
     assert.equal(decide('run_command', { command: 'git push origin' }, root).verdict, 'deny');
+    git('worktree', 'add', '-b', 'main', path.join(root, 'worktree'));
+    assert.equal(decide('run_command', { command: 'git -C worktree push origin HEAD' }, root).verdict, 'deny');
+    git('-C', root, 'init', '-b', 'master', 'nested');
+    assert.equal(decide('run_command', { command: 'git -C nested push' }, root).verdict, 'deny');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

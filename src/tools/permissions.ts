@@ -268,8 +268,6 @@ export function isSecretPath(p: string): boolean {
   );
 }
 
-const PUSH_TO_MAIN = /\bgit\s+push\b[^;&|\n]*\b(?:main|master)\b/;
-
 /** Hard denials first (never asked, never run), then the approval rules of `needsApproval`. */
 export function decide(name: string, args: Record<string, unknown>, workspaceRoot: string): PolicyDecision {
   if (name === 'apply_patch') {
@@ -297,7 +295,6 @@ export function decide(name: string, args: Record<string, unknown>, workspaceRoo
     // Token scan over the raw text, quotes included: `cat ".env"` must not slip through.
     const secret = command.split(/[\s;&|<>()`$=]+/).find((t) => t && isSecretPath(t));
     if (secret) return { verdict: 'deny', risk: 'high', reason: `touches a secret file (${secret})` };
-    if (PUSH_TO_MAIN.test(command)) return { verdict: 'deny', risk: 'high', reason: 'pushes to the main branch' };
     const commands = literalCommands(command);
     if (!commands) return { verdict: 'ask', risk: 'high', reason: 'shell syntax cannot be verified without evaluation' };
     for (const words of commands) {
@@ -309,7 +306,7 @@ export function decide(name: string, args: Record<string, unknown>, workspaceRoo
         if (isSecretPath(candidate) || isSecretPath(realTarget(path.resolve(workspaceRoot, candidate)))) {
           return { verdict: 'deny', risk: 'high', reason: 'shell references a secret path' };
         }
-        if ((candidate.includes('/') || candidate.includes('\\')) && escapesWorkspace(candidate, workspaceRoot)) {
+        if (escapesWorkspace(candidate, workspaceRoot)) {
           return { verdict: 'deny', risk: 'high', reason: 'shell references a path outside the workspace' };
         }
       }
@@ -319,8 +316,8 @@ export function decide(name: string, args: Record<string, unknown>, workspaceRoo
       return { verdict: 'ask', risk: 'high', reason: 'destructive command or remote push' };
     }
   }
-  if (PATH_TOOLS[name]) {
-    const raw = typeof args.path === 'string' ? args.path.trim() : '';
+  if (Object.hasOwn(PATH_TOOLS, name) || typeof args.path === 'string' || (name === 'run_tests' && typeof args.target === 'string')) {
+    const raw = typeof args.path === 'string' ? args.path.trim() : typeof args.target === 'string' ? args.target.split('::')[0] : '';
     if (raw && (isSecretPath(raw) || isSecretPath(realTarget(path.resolve(workspaceRoot, raw))))) return { verdict: 'deny', risk: 'high', reason: `secret file (${raw})` };
     if (raw && escapesWorkspace(raw, workspaceRoot) && !(name === 'read_file' && isBundledSkillFile(raw))) {
       return { verdict: 'deny', risk: 'high', reason: `outside the workspace (${path.resolve(workspaceRoot, raw)})` };
