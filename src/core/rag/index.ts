@@ -11,6 +11,8 @@ import type { Chunk, Embedder, IndexDiff, ScoredChunk } from './types.js';
 /** Final score = cosine * vector + normalized BM25 * bm25 + symbol hit * symbol. Tuned in B5 (docs/uc-02.md). */
 export const SEARCH_WEIGHTS = { vector: 0.5, bm25: 0.3, symbol: 0.2 } as const;
 const DEFAULT_K = 5;
+/** A search later than this after the last update re-hashes the repo first, so an answer after an edit sees the edit (UC-02 case 5). */
+const STALE_AFTER_MS = 2000;
 
 interface Meta { embedModel: string; dim: number }
 
@@ -50,7 +52,7 @@ export class RepoIndex {
   private files: Record<string, string> = {};
   private meta: Meta | null = null;
   private bm25: Bm25 | null = null;
-  private isBuilt = false;
+  private lastUpdate = 0;
 
   private constructor(
     readonly root: string,
@@ -85,12 +87,18 @@ export class RepoIndex {
     this.files = readJson<Record<string, string>>(this.file('files.json'), {});
   }
 
+  /** Each file goes to a temp name, then rename: a crash mid-write leaves the old file, never a truncated one. */
   private save(): void {
     fs.mkdirSync(this.dir, { recursive: true });
     const entries: [string, unknown][] = [['chunks.json', this.chunks], ['vectors.json', this.vectors], ['files.json', this.files], ['meta.json', this.meta]];
-    for (const [name, value] of entries) fs.writeFileSync(this.file(name), JSON.stringify(value));
+    for (const [name, value] of entries) {
+      const tmp = `${this.file(name)}.${process.pid}.tmp`;
+      fs.writeFileSync(tmp, JSON.stringify(value));
+      fs.renameSync(tmp, this.file(name));
+    }
   }
 
+  /** Re-chunks and re-embeds only files whose sha256 changed; chunks of changed and removed files go first. */
   async update(): Promise<IndexDiff> {
     const current: Record<string, string> = {};
     const sources: Record<string, string> = {};
@@ -104,21 +112,25 @@ export class RepoIndex {
       changed: Object.keys(current).filter((p) => p in this.files && this.files[p] !== current[p]),
       removed: Object.keys(this.files).filter((p) => !(p in current)),
     };
-    const chunks: Chunk[] = [];
-    for (const rel of Object.keys(current)) chunks.push(...(await chunkFile(rel, sources[rel], this.python)));
-    const embedded = chunks.length ? await this.embedder(chunks.map(searchText)) : [];
-    this.chunks = chunks;
-    this.vectors = Object.fromEntries(chunks.map((c, i) => [c.id, embedded[i]]));
+    this.lastUpdate = Date.now();
+    if (diff.added.length + diff.changed.length + diff.removed.length === 0 && this.meta) return diff;
+
+    const stale = new Set([...diff.changed, ...diff.removed]);
+    for (const c of this.chunks) if (stale.has(c.path)) delete this.vectors[c.id];
+    const fresh: Chunk[] = [];
+    for (const rel of [...diff.added, ...diff.changed]) fresh.push(...(await chunkFile(rel, sources[rel], this.python)));
+    const embedded = fresh.length ? await this.embedder(fresh.map(searchText)) : [];
+    fresh.forEach((c, i) => (this.vectors[c.id] = embedded[i]));
+    this.chunks = [...this.chunks.filter((c) => !stale.has(c.path)), ...fresh].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0) || a.startLine - b.startLine);
     this.files = current;
     this.meta = { embedModel: this.embedModel, dim: embedded[0]?.length ?? this.meta?.dim ?? 0 };
     this.bm25 = null;
-    this.isBuilt = true;
     this.save();
     return diff;
   }
 
   async search(query: string, k = DEFAULT_K): Promise<ScoredChunk[]> {
-    if (!this.isBuilt) await this.update();
+    if (Date.now() - this.lastUpdate > STALE_AFTER_MS) await this.update();
     if (this.chunks.length === 0) return [];
     this.bm25 ??= new Bm25(this.chunks.map((c) => ({ id: c.id, text: searchText(c) })));
     const [queryVector] = await this.embedder([query]);
