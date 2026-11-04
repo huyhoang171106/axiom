@@ -23,8 +23,13 @@ test('push destinations include configured upstream and multiple refspecs', () =
     git('config', 'remote.origin.push', 'HEAD:refs/heads/master');
     assert.equal(decide('run_command', { command: 'git -c remote.origin.push=HEAD:main push origin' }, root).verdict, 'deny');
     assert.equal(decide('run_command', { command: 'git push origin' }, root).verdict, 'deny');
+    git('config', '--unset', 'remote.origin.push');
+    git('config', 'branch.feature.merge', 'refs/heads/feature');
+    assert.equal(decide('run_command', { command: 'git push origin HEAD' }, root).verdict, 'ask');
     git('worktree', 'add', '-b', 'main', path.join(root, 'worktree'));
+    assert.equal(fs.statSync(path.join(root, 'worktree', '.git')).isFile(), true);
     assert.equal(decide('run_command', { command: 'git -C worktree push origin HEAD' }, root).verdict, 'deny');
+    assert.equal(decide('run_command', { command: 'git push' }, path.join(root, 'worktree')).verdict, 'deny');
     git('-C', root, 'init', '-b', 'master', 'nested');
     assert.equal(decide('run_command', { command: 'git -C nested push' }, root).verdict, 'deny');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }

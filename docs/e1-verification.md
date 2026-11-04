@@ -18,7 +18,7 @@ Không sửa E2 denied-actions, E4 audit hay E5 modes. Không thêm dependency h
 PowerShell: đặt `AXIOM_HOME` vào thư mục tạm mới; đặt `AXIOM_PYTHON` tới Python314 thật (PATH mặc định trỏ Windows Store alias).
 
 - `npm.cmd run lint`: exit 0.
-- `npm.cmd test`: exit 0; 395 test, 392 pass, 0 fail, 3 skip có sẵn (lần rà soát bổ sung).
+- `npm.cmd test`: exit 0; 396 test, 393 pass, 0 fail, 3 skip có sẵn (final verification).
 - Skip có sẵn: POSIX permissions trên Windows; tình huống không có rg khi máy có rg; test scrubEnv cần `/bin/bash`.
 - Test E1 mới không skip. Test Git dùng repository/worktree thật, không gọi mạng hoặc push thật.
 - Fixture `tests/core.test.ts` đổi `/tmp/x` thành `x`: test vẫn giữ assertion từ chối vì thiếu approver; outside-root phải DENY theo nghiệm thu mới.
@@ -51,3 +51,14 @@ E1 đủ điều kiện tạo PR để review phạm vi đã nêu. Không tuyên
 - Codex fetch vẫn lỗi `SEC_E_NO_CREDENTIALS`; không có `gh`. Chưa push, tạo PR, chạy CI hoặc ship. Không đánh dấu E1 done.
 
 PR khi đủ điều kiện phải có `Closes #31` và đi qua `scripts/ship.sh`; không push main.
+
+## Final verification
+
+Chạy trực tiếp bảy file `permissions-{catalog,paths,shell,git,bundled,patch}.test.ts` và `policy.test.ts`: 55/55 pass, exit 0, không skip. Full suite và lint exit 0 với AXIOM_HOME tạm và AXIOM_PYTHON thật; lần full suite đầu dùng PATH mặc định thất bại vì Windows Store Python alias vẫn tồn tại trong tiến trình Codex.
+
+Đã tăng độ mạnh của bằng chứng, không đổi production code:
+
+- `push destinations include configured upstream and multiple refspecs`: xóa remote push override trước phần worktree, thêm feature HEAD ASK làm đối chứng, xác nhận `.git` worktree là file và push mặc định ở worktree main DENY. Tránh test pass vì cấu hình từ case trước.
+- `outside cat is denied before approval and execution while workspace reads succeed`: tạo file thật ngoài/trong workspace, xác nhận relative/absolute outside cat DENY/high qua decide và registry, approver không được gọi, không trả sentinel ngoài root; read_file thật trong workspace thành công; junction tới `.ssh` bị DENY.
+
+Các test gọi implementation thật, filesystem thật và Git subprocess thật. Không mock verdict hoặc Git context. Approver trong test chỉ là điểm quan sát để fail nếu bị gọi sai. Test C2 xác nhận fail-closed của stub hiện có, không phải bằng chứng parser hoạt động; kiểm thử parser thật vẫn là trách nhiệm E2 theo tiêu chí 5. Không push, tạo PR hoặc merge trong final verification.
