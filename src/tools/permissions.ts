@@ -300,7 +300,6 @@ export function decide(name: string, args: Record<string, unknown>, workspaceRoo
     for (const words of commands) {
       const push = pushDecision(words, workspaceRoot);
       if (push?.verdict === 'deny') return push;
-      if (words.some((word) => word.includes('*'))) return { verdict: 'ask', risk: 'high', reason: 'shell glob requires approval' };
       for (const word of words.slice(1)) {
         const candidate = word.includes('=') ? word.slice(word.indexOf('=') + 1) : word;
         if (isSecretPath(candidate) || isSecretPath(realTarget(path.resolve(workspaceRoot, candidate)))) {
@@ -311,6 +310,7 @@ export function decide(name: string, args: Record<string, unknown>, workspaceRoo
         }
       }
     }
+    if (commands.some((words) => words.some((word) => word.includes('*')))) return { verdict: 'ask', risk: 'high', reason: 'shell glob requires approval' };
     if (commands.some((words) => pushDecision(words, workspaceRoot))) return { verdict: 'ask', risk: 'high', reason: 'remote push requires approval' };
     if (command.split(SEGMENT_SPLIT).some((s) => /^\s*(?:git\s+(?:push|reset\s+--hard|clean\s+-[a-z]*[fd])|rm\s+-[a-z]*r)/.test(s))) {
       return { verdict: 'ask', risk: 'high', reason: 'destructive command or remote push' };

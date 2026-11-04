@@ -17,6 +17,9 @@ test('push destinations include configured upstream and multiple refspecs', () =
       assert.equal(decide('run_command', { command }, root).verdict, 'deny', command);
     }
     assert.equal(decide('run_command', { command: 'git push origin feature' }, root).verdict, 'ask');
+    for (const command of ['ls * && git push origin main', 'git push --force-with-lease origin main', 'git push -u origin HEAD:refs/heads/master', 'git push --atomic origin feature HEAD:main']) {
+      assert.equal(decide('run_command', { command }, root).verdict, 'deny', command);
+    }
     git('config', 'remote.origin.push', 'HEAD:refs/heads/master');
     assert.equal(decide('run_command', { command: 'git push origin' }, root).verdict, 'deny');
     git('worktree', 'add', '-b', 'main', path.join(root, 'worktree'));

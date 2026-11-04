@@ -13,7 +13,7 @@ export function pushDecision(words: readonly string[], root: string): PolicyDeci
   const deny: PolicyDecision = { verdict: 'deny', risk: 'high', reason: 'push may update main or master' };
   const args = words.slice(i + 1);
   if (args.some((arg) => ['--all', '--mirror', '--prune'].includes(arg) || arg.includes('*') || arg === ':')) return deny;
-  const operands = args.filter((arg) => !['--force', '-f', '--tags', '--delete', '-d', '--dry-run', '-n', '--verbose', '-v'].includes(arg));
+  const operands = args.filter((arg) => !['--', '--force', '--force-with-lease', '--force-if-includes', '-f', '--tags', '--delete', '-d', '--dry-run', '-n', '--verbose', '-v', '--atomic', '--porcelain', '--no-verify', '--set-upstream', '-u'].includes(arg) && !arg.startsWith('--force-with-lease='));
   if (operands.some((arg) => arg.startsWith('-'))) return ask;
   const git = (...argv: string[]) => {
     try { return execFileSync('git', ['-C', cwd, ...argv], { encoding: 'utf8', timeout: 2000, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
