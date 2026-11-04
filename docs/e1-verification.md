@@ -1,6 +1,6 @@
 # E1: triển khai và bằng chứng local
 
-Baseline: `2dac16c661687e8e1452b94097b433905f4a4d96`, branch `e/e1-risk-catalog`.
+Baseline sau rebase: `c74e3ef548c0214d373ac4119c7b4735530fb555` (`origin/main` local), branch `e/e1-risk-catalog`. Baseline trước rebase: `2dac16c661687e8e1452b94097b433905f4a4d96`.
 
 ## Phạm vi
 
@@ -18,7 +18,7 @@ Không sửa E2 denied-actions, E4 audit hay E5 modes. Không thêm dependency h
 PowerShell: đặt `AXIOM_HOME` vào thư mục tạm mới; đặt `AXIOM_PYTHON` tới Python314 thật (PATH mặc định trỏ Windows Store alias).
 
 - `npm.cmd run lint`: exit 0.
-- `npm.cmd test`: exit 0; 396 test, 393 pass, 0 fail, 3 skip có sẵn (final verification).
+- `npm.cmd test`: exit 0; 400 test, 397 pass, 0 fail, 3 skip có sẵn (kiểm tra lại sau rebase).
 - Skip có sẵn: POSIX permissions trên Windows; tình huống không có rg khi máy có rg; test scrubEnv cần `/bin/bash`.
 - Test E1 mới không skip. Test Git dùng repository/worktree thật, không gọi mạng hoặc push thật.
 - Fixture `tests/core.test.ts` đổi `/tmp/x` thành `x`: test vẫn giữ assertion từ chối vì thiếu approver; outside-root phải DENY theo nghiệm thu mới.
@@ -39,7 +39,7 @@ Sau khi C2 merge, E2 cần thay test xác nhận parser chưa sẵn sàng bằng
 | Bundled trust giới hạn | PASS | `permissions-bundled.test.ts`: tài liệu thật được đọc, ghi/list bị chặn, giả mạo và junction alias bị chặn |
 | Ranh giới parser C2/E2 | PASS phần E1 | `permissions-patch.test.ts` kiểm tra trạng thái parser thật hiện tại; checklist E2 cụ thể ở trên, không test skip hoặc mock parser |
 
-Ba commit rà soát code/test: `b356192`, `beab883`, `fa7741d`. Giữ nguyên bảy commit trước. Sửa hai lỗi DENY bị che bởi ASK và lỗi quoted options che tác dụng ghi/chạy helper; thêm xử lý `git -c`.
+Ba commit rà soát code/test sau rebase: `aec3910`, `e86c9d4`, `974e149`. Người dùng đã rebase lịch sử lên main mới; lần hoàn thiện này không sửa lại lịch sử. Sửa hai lỗi DENY bị che bởi ASK và lỗi quoted options che tác dụng ghi/chạy helper; thêm xử lý `git -c`.
 
 E1 đủ điều kiện tạo PR để review phạm vi đã nêu. Không tuyên bố đã merge hoặc đã kiểm thử parser C2. Tích hợp parser thật thuộc E2 theo nghiệm thu mới, không dùng để chặn PR E1.
 
@@ -48,7 +48,7 @@ E1 đủ điều kiện tạo PR để review phạm vi đã nêu. Không tuyên
 - Chưa chạy bộ test trên Linux; bằng chứng E1 là kiểm thử quyết định policy và filesystem/Git thật trên Windows. Không coi Linux là tiêu chí E1 mới.
 - Tùy chọn Git ngoài tập phân tích, đường dẫn động và shell wrapper không được tự ALLOW. ASK không có nghĩa đã xác minh destination an toàn; không tuyên bố parser hỗ trợ toàn bộ Bash/Git.
 - Chưa truy cập được nội dung Issue #31 trực tiếp: GitHub HTTP 404; dùng nghiệm thu trong prompt.
-- Codex fetch vẫn lỗi `SEC_E_NO_CREDENTIALS`; không có `gh`. Chưa push, tạo PR, chạy CI hoặc ship. Không đánh dấu E1 done.
+- Codex fetch vẫn lỗi `SEC_E_NO_CREDENTIALS`; không có `gh`. Chưa push, tạo PR, chạy CI hoặc ship. Dòng E1 trong lane plan đã đánh dấu `done` theo quy ước nhóm sau khi đạt kỹ thuật; không có nghĩa Issue #31 đã đóng hoặc PR đã merge.
 
 PR khi đủ điều kiện phải có `Closes #31` và đi qua `scripts/ship.sh`; không push main.
 
@@ -62,3 +62,9 @@ Chạy trực tiếp bảy file `permissions-{catalog,paths,shell,git,bundled,pa
 - `outside cat is denied before approval and execution while workspace reads succeed`: tạo file thật ngoài/trong workspace, xác nhận relative/absolute outside cat DENY/high qua decide và registry, approver không được gọi, không trả sentinel ngoài root; read_file thật trong workspace thành công; junction tới `.ssh` bị DENY.
 
 Các test gọi implementation thật, filesystem thật và Git subprocess thật. Không mock verdict hoặc Git context. Approver trong test chỉ là điểm quan sát để fail nếu bị gọi sai. Test C2 xác nhận fail-closed của stub hiện có, không phải bằng chứng parser hoạt động; kiểm thử parser thật vẫn là trách nhiệm E2 theo tiêu chí 5. Không push, tạo PR hoặc merge trong final verification.
+
+## Xác minh sau rebase
+
+HEAD code kiểm thử: `3b9e1bb`. `git merge-base --is-ancestor origin/main HEAD` exit 0; working tree sạch trước cập nhật tài liệu, không unmerged entries, không thư mục rebase-merge/rebase-apply. Thay đổi mới trên main không sửa các module policy E1; toàn bộ test E1 nằm trong full suite đã pass. Không cần sửa production code hoặc test sau rebase. Chỉ dòng trạng thái E1 được đổi, E2–E6 giữ nguyên.
+
+Đã đọc `scripts/ship.sh`: script có thể rebase, push và merge. Chưa chạy vì không thể xác minh PR/CI từ môi trường Codex. PR phải có `Closes #31`; trước khi gọi script cần xác minh đúng base/head, các check `check`, `secrets`, `pr-title` đều pass và mọi phê duyệt bắt buộc đã đạt. Không đóng Issue thủ công.
