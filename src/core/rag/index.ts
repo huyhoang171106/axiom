@@ -14,7 +14,14 @@ const DEFAULT_K = 5;
 /** A search later than this after the last update re-hashes the repo first, so an answer after an edit sees the edit (UC-02 case 5). */
 const STALE_AFTER_MS = 2000;
 
-interface Meta { embedModel: string; dim: number }
+/**
+ * How files become embedded text: chunker rules (ast spans, 120-line split, headings) and `searchText`.
+ * Bump it when either changes, so stored vectors of the old text are rebuilt instead of mixed with new ones.
+ */
+export const PREPROCESSING_VERSION = 'chunk-ast-120+search-text-path-symbol/1';
+
+/** Index identity: embedder identity (`embedIdentity`), preprocessing and vector dimension. Any difference rebuilds. */
+interface Meta { embedModel: string; preprocessing: string; dim: number }
 
 function sha256(text: string | Buffer): string {
   return createHash('sha256').update(text).digest('hex');
@@ -69,8 +76,8 @@ export class RepoIndex {
   ) {}
 
   /**
-   * `embedModel` names the model behind `embedder` (the `modelRoles.embed` selector); a different one than the stored
-   * index was built with discards every vector, since vectors of two models are not comparable.
+   * `embedModel` identifies the embedder (`embedIdentity`: provider, wire, endpoint, model tag); a different one than the
+   * stored index was built with discards every vector, since vectors of two models are not comparable.
    * `teamDir` adds the team's conventions (e.g. TEAM_DOCS_DIR) as source 'team'; without it only the repo is indexed.
    */
   static async open(root: string, embedder: Embedder, opts?: { dir?: string; embedModel?: string; python?: string; teamDir?: string }): Promise<RepoIndex> {
@@ -87,7 +94,7 @@ export class RepoIndex {
 
   private load(): void {
     const meta = readJson<Meta | null>(this.file('meta.json'), null);
-    if (!meta || meta.embedModel !== this.embedModel) return;
+    if (!meta || meta.embedModel !== this.embedModel || meta.preprocessing !== PREPROCESSING_VERSION) return;
     this.meta = meta;
     this.chunks = readJson<Chunk[]>(this.file('chunks.json'), []);
     this.vectors = readJson<Record<string, number[]>>(this.file('vectors.json'), {});
@@ -136,7 +143,7 @@ export class RepoIndex {
     fresh.forEach((c, i) => (this.vectors[c.id] = embedded[i]));
     this.chunks = [...this.chunks.filter((c) => !stale.has(fileKey(c))), ...fresh].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0) || a.startLine - b.startLine);
     this.files = current;
-    this.meta = { embedModel: this.embedModel, dim: embedded[0]?.length ?? this.meta?.dim ?? 0 };
+    this.meta = { embedModel: this.embedModel, preprocessing: PREPROCESSING_VERSION, dim: embedded[0]?.length ?? this.meta?.dim ?? 0 };
     this.bm25 = null;
     this.save();
     return diff;

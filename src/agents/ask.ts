@@ -17,7 +17,7 @@ export interface AskOptions {
   bus?: EventBus;
   /** Records every chat call (eval tokens and cost per case); defaults to defaultCostTracker. */
   costTracker?: CostTracker;
-  /** The `modelRoles.embed` selector; a different one than the stored index rebuilds it. */
+  /** Identity of the embedder (`embedIdentity`: provider, wire, endpoint, model tag); a different one than the stored index rebuilds it. */
   embedModel?: string;
   /** Where the index lives; default `~/.axiom/index/<hash of root>`. Eval keeps it inside its temp dir. */
   indexDir?: string;
