@@ -10,7 +10,10 @@ export function isBundledSkillFile(target: string): boolean {
   const relative = path.relative(BUNDLED_SKILLS_DIR, target);
   const parts = relative.split(path.sep);
   if (parts.length !== 2 || parts[0] === '..' || parts[1] !== 'SKILL.md') return false;
+  if (!['bug-fix', 'issue-triage'].includes(parts[0])) return false;
   try {
+    if (!fs.lstatSync(BUNDLED_SKILLS_DIR).isDirectory()) return false;
+    if (fs.realpathSync(target) !== path.join(fs.realpathSync(BUNDLED_SKILLS_DIR), ...parts)) return false;
     return fs.lstatSync(path.join(BUNDLED_SKILLS_DIR, parts[0])).isDirectory() &&
       fs.lstatSync(target).isFile() && !path.isAbsolute(relative);
   } catch {
