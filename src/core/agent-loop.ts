@@ -88,6 +88,9 @@ export class AgentLoop {
   public async runTask(prompt: string, signal?: AbortSignal): Promise<TaskResult> {
     this.signal = signal ?? this.signal;
     this.guard.reset();
+    // Tracker phiên được dùng chung giữa các lượt và có thể nhận usage từ run khác.
+    // Tạo tracker riêng cho lần runTask này để kiểm tra budget không tính nhầm
+    // chi phí cũ hoặc chi phí phát sinh đồng thời từ một run khác.
     const runCosts = new CostTracker();
     const session = this.sessionManager.getSession() ?? this.sessionManager.createSession(prompt);
     if (!session.messages.some((m) => m.role === 'system')) {
@@ -128,6 +131,8 @@ export class AgentLoop {
         return this.finish('failed', `LLM provider error: ${err instanceof Error ? err.message : String(err)}`);
       }
 
+      // Ghi vào cả hai tracker: tracker phiên phục vụ /cost, tracker run chỉ
+      // phục vụ giới hạn ngân sách. Không reset tracker phiên khi bắt đầu run.
       this.costTracker.record(model, response.usage);
       runCosts.record(model, response.usage);
       this.sessionManager.updateCost(response.usage.costEstimate, response.usage);
