@@ -186,4 +186,17 @@ describe('rag search', () => {
       fs.rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it('vectors of another dimension rebuild the index', needsPython, async () => {
+    const root = tempRepo(REPO);
+    const dir = path.join(root, '.idx');
+    try {
+      await (await RepoIndex.open(root, fakeEmbedder(64), { dir })).update();
+      const hits = await (await RepoIndex.open(root, fakeEmbedder(32), { dir })).search('insert', 1);
+      assert.equal(hits[0].symbol, 'Table.insert');
+      assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8')).dim, 32);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

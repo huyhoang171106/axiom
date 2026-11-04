@@ -132,8 +132,15 @@ export class RepoIndex {
   async search(query: string, k = DEFAULT_K): Promise<ScoredChunk[]> {
     if (Date.now() - this.lastUpdate > STALE_AFTER_MS) await this.update();
     if (this.chunks.length === 0) return [];
-    this.bm25 ??= new Bm25(this.chunks.map((c) => ({ id: c.id, text: searchText(c) })));
     const [queryVector] = await this.embedder([query]);
+    if (this.meta?.dim && queryVector.length !== this.meta.dim) {
+      // The model behind an unchanged selector changed (or no embedModel was given): stored vectors no longer compare.
+      this.files = {};
+      this.chunks = [];
+      this.vectors = {};
+      await this.update();
+    }
+    this.bm25 ??= new Bm25(this.chunks.map((c) => ({ id: c.id, text: searchText(c) })));
     const keyword = this.bm25.score(query);
     const maxKeyword = Math.max(0, ...keyword.values());
     const words = new Set([...(query.toLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? []), ...tokenize(query)]);
