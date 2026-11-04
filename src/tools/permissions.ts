@@ -2,6 +2,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { isBundledSkillFile } from './bundled-skills.js';
+import { literalCommands } from './policy-shell.js';
+import { pushDecision } from './policy-git.js';
+import { parseUnifiedDiff } from './apply-patch.js';
 
 export type Verdict = 'allow' | 'ask' | 'deny';
 export type Risk = 'low' | 'medium' | 'high';
@@ -119,8 +122,6 @@ const SHELL_SYNTAX = /[<>]|\$\(|`|\n/;
 /** Separators that start a new command, including a single `&` (background). */
 const SEGMENT_SPLIT = /&&|\|\||;|\||&|\n|\r|\(|\)|\{|\}/;
 
-const escapesWorkspaceCache = new Map<string, string>();
-
 function realpathOrSelf(target: string): string {
   try {
     return fs.realpathSync.native(target);
@@ -150,14 +151,9 @@ function realTarget(target: string): string {
  */
 export function escapesWorkspace(target: string, workspaceRoot: string): boolean {
   const root = realpathOrSelf(path.resolve(workspaceRoot));
-  const cacheKey = `${root}\0${target}`;
-  const cached = escapesWorkspaceCache.get(cacheKey);
-  if (cached !== undefined) return cached === 'yes';
   const real = realTarget(path.resolve(workspaceRoot, target));
   const rel = path.relative(root, real);
-  const escaped = rel.startsWith('..') || path.isAbsolute(rel);
-  if (escapesWorkspaceCache.size > 500) escapesWorkspaceCache.clear();
-  escapesWorkspaceCache.set(cacheKey, escaped ? 'yes' : 'no');
+  const escaped = rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel);
   return escaped;
 }
 
@@ -272,24 +268,74 @@ export function isSecretPath(p: string): boolean {
   );
 }
 
-const PUSH_TO_MAIN = /\bgit\s+push\b[^;&|\n]*\b(?:main|master)\b/;
-
 /** Hard denials first (never asked, never run), then the approval rules of `needsApproval`. */
 export function decide(name: string, args: Record<string, unknown>, workspaceRoot: string): PolicyDecision {
+  if (name === 'apply_patch') {
+    try {
+      const patches = parseUnifiedDiff(typeof args.patch === 'string' ? args.patch : '');
+      if (!patches.length) return { verdict: 'ask', risk: 'medium', reason: 'patch has no verified file changes' };
+      let result: PolicyDecision = { verdict: 'allow', risk: 'low', reason: 'small workspace patch' };
+      for (const patch of patches) {
+        for (const target of [patch.oldPath, patch.newPath]) {
+          if (target === null) continue;
+          const decision = decide('edit', { path: target }, workspaceRoot);
+          if (decision.verdict === 'deny') return decision;
+          if (decision.risk === 'high') result = decision;
+        }
+      }
+      if (result.risk === 'high') return result;
+      return patches.length > 5 || patches.some((patch) => patch.newPath === null)
+        ? { verdict: 'ask', risk: 'medium', reason: 'large patch or file deletion' } : result;
+    } catch {
+      return { verdict: 'ask', risk: 'medium', reason: 'patch parser unavailable or patch invalid; C2/E2 integration required' };
+    }
+  }
   if (name === 'run_command') {
     const command = typeof args.command === 'string' ? args.command : '';
     // Token scan over the raw text, quotes included: `cat ".env"` must not slip through.
     const secret = command.split(/[\s;&|<>()`$=]+/).find((t) => t && isSecretPath(t));
-    if (secret) return { verdict: 'deny', reason: `touches a secret file (${secret})` };
-    if (PUSH_TO_MAIN.test(command)) return { verdict: 'deny', reason: 'pushes to the main branch' };
+    if (secret) return { verdict: 'deny', risk: 'high', reason: `touches a secret file (${secret})` };
+    const commands = literalCommands(command);
+    if (!commands) return { verdict: 'ask', risk: 'high', reason: 'shell syntax cannot be verified without evaluation' };
+    for (const words of commands) {
+      const push = pushDecision(words, workspaceRoot);
+      if (push?.verdict === 'deny') return push;
+      for (const word of words.slice(1)) {
+        const candidate = word.includes('=') ? word.slice(word.indexOf('=') + 1) : word;
+        if (isSecretPath(candidate) || isSecretPath(realTarget(path.resolve(workspaceRoot, candidate)))) {
+          return { verdict: 'deny', risk: 'high', reason: 'shell references a secret path' };
+        }
+        if (escapesWorkspace(candidate, workspaceRoot)) {
+          return { verdict: 'deny', risk: 'high', reason: 'shell references a path outside the workspace' };
+        }
+      }
+    }
+    if (commands.some((words) => words.some((word) => word.includes('*')))) return { verdict: 'ask', risk: 'high', reason: 'shell glob requires approval' };
+    if (commands.some((words) => pushDecision(words, workspaceRoot))) return { verdict: 'ask', risk: 'high', reason: 'remote push requires approval' };
+    // Quoting an option must not hide its write/execute semantics from the allowlist.
+    for (const words of commands) {
+      const normalized = words.join(' ');
+      const rule = READ_ONLY_COMMANDS.find((candidate) => candidate.match.test(normalized));
+      if (rule?.deny?.test(normalized)) return { verdict: 'ask', risk: 'medium', reason: 'command options may write or execute helpers' };
+    }
+    if (command.split(SEGMENT_SPLIT).some((s) => /^\s*(?:git\s+(?:push|reset\s+--hard|clean\s+-[a-z]*[fd])|rm\s+-[a-z]*r)/.test(s))) {
+      return { verdict: 'ask', risk: 'high', reason: 'destructive command or remote push' };
+    }
   }
-  if (PATH_TOOLS[name]) {
-    const raw = typeof args.path === 'string' ? args.path.trim() : '';
-    if (raw && isSecretPath(raw)) return { verdict: 'deny', reason: `secret file (${raw})` };
+  if (Object.hasOwn(PATH_TOOLS, name) || typeof args.path === 'string' || (name === 'run_tests' && typeof args.target === 'string')) {
+    const raw = typeof args.path === 'string' ? args.path.trim() : typeof args.target === 'string' ? args.target.split('::')[0] : '';
+    if (raw && (isSecretPath(raw) || isSecretPath(realTarget(path.resolve(workspaceRoot, raw))))) return { verdict: 'deny', risk: 'high', reason: `secret file (${raw})` };
     if (raw && escapesWorkspace(raw, workspaceRoot) && !(name === 'read_file' && isBundledSkillFile(raw))) {
-      return { verdict: 'deny', reason: `outside the workspace (${path.resolve(workspaceRoot, raw)})` };
+      return { verdict: 'deny', risk: 'high', reason: `outside the workspace (${path.resolve(workspaceRoot, raw)})` };
+    }
+    if ((name === 'write_file' || name === 'edit') && /(^|[\\/])(?:\.github(?:[\\/]|$)|pyproject\.toml$|setup\.(?:py|cfg)$|requirements[^\\/]*\.txt$|package\.json$|[^\\/]*lock[^\\/]*$|SECURITY\.md$)/i.test(raw)) {
+      return { verdict: 'ask', risk: 'high', reason: 'changes security or dependency configuration' };
     }
   }
   const reason = needsApproval(name, args, workspaceRoot);
-  return reason ? { verdict: 'ask', reason } : { verdict: 'allow', reason: 'allowed by policy' };
+  if (reason) return { verdict: 'ask', risk: 'medium', reason };
+  const known = ['run_command', 'read_file', 'list_dir', 'search_code', 'write_file', 'edit', 'run_tests', 'submit_issue_ticket'];
+  return known.includes(name)
+    ? { verdict: 'allow', risk: 'low', reason: 'allowed by policy' }
+    : { verdict: 'ask', risk: 'medium', reason: 'tool is not in the risk catalog' };
 }

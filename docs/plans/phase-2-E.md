@@ -4,7 +4,7 @@
 
 | # | Ngày | Việc | Trạng thái |
 |---|---|---|---|
-| E1 | 04/11 | Danh mục rủi ro trong `decide()` | |
+| E1 | 04/11 | Danh mục rủi ro trong `decide()` | done |
 | E2 | 05/11 | Chống lách sau khi bị từ chối | |
 | E3 | 06/11 | `askHuman`, `runGraph`, approver headless | |
 | E4 | 07/11 | Audit log, `/audit` | |

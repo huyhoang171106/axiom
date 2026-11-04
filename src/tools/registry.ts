@@ -192,7 +192,7 @@ export class ToolRegistry {
         refusal: `Refusing "${name}" (${policy.reason}): no approver is installed and unattended execution was not enabled.`,
       };
     }
-    const answer = await approver({ name, args, reason: policy.reason });
+    const answer = await approver({ name, args, reason: policy.reason, risk: policy.risk });
     if (answer === 'deny') {
       return {
         args,
