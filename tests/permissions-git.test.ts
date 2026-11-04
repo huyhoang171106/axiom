@@ -21,6 +21,7 @@ test('push destinations include configured upstream and multiple refspecs', () =
       assert.equal(decide('run_command', { command }, root).verdict, 'deny', command);
     }
     git('config', 'remote.origin.push', 'HEAD:refs/heads/master');
+    assert.equal(decide('run_command', { command: 'git -c remote.origin.push=HEAD:main push origin' }, root).verdict, 'deny');
     assert.equal(decide('run_command', { command: 'git push origin' }, root).verdict, 'deny');
     git('worktree', 'add', '-b', 'main', path.join(root, 'worktree'));
     assert.equal(decide('run_command', { command: 'git -C worktree push origin HEAD' }, root).verdict, 'deny');

@@ -7,16 +7,24 @@ const protectedRef = (ref: string) => /^(?:refs\/heads\/)?(?:main|master)$/.test
 export function pushDecision(words: readonly string[], root: string): PolicyDecision | null {
   if (words[0] !== 'git') return null;
   let i = 1, cwd = root;
-  while (words[i] === '-C') { cwd = path.resolve(cwd, words[i + 1] ?? ''); i += 2; }
+  const config: string[] = [];
+  while (words[i] === '-C' || words[i] === '-c') {
+    if (words[i] === '-C') cwd = path.resolve(cwd, words[i + 1] ?? '');
+    else config.push('-c', words[i + 1] ?? '');
+    i += 2;
+  }
   if (words[i] !== 'push') return null;
   const ask: PolicyDecision = { verdict: 'ask', risk: 'high', reason: 'remote push requires approval' };
   const deny: PolicyDecision = { verdict: 'deny', risk: 'high', reason: 'push may update main or master' };
   const args = words.slice(i + 1);
   if (args.some((arg) => ['--all', '--mirror', '--prune'].includes(arg) || arg.includes('*') || arg === ':')) return deny;
   const operands = args.filter((arg) => !['--', '--force', '--force-with-lease', '--force-if-includes', '-f', '--tags', '--delete', '-d', '--dry-run', '-n', '--verbose', '-v', '--atomic', '--porcelain', '--no-verify', '--set-upstream', '-u'].includes(arg) && !arg.startsWith('--force-with-lease='));
-  if (operands.some((arg) => arg.startsWith('-'))) return ask;
+  if (operands.some((arg) => arg.startsWith('-'))) {
+    if (operands.some((arg) => protectedRef(arg.replace(/^\+/, '').split(':').at(-1) ?? ''))) return deny;
+    return ask;
+  }
   const git = (...argv: string[]) => {
-    try { return execFileSync('git', ['-C', cwd, ...argv], { encoding: 'utf8', timeout: 2000, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
+    try { return execFileSync('git', ['-C', cwd, ...config, ...argv], { encoding: 'utf8', timeout: 2000, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
     catch { return ''; } // Missing context must never produce allow.
   };
   const branch = git('symbolic-ref', '--quiet', '--short', 'HEAD');

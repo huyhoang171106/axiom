@@ -312,6 +312,12 @@ export function decide(name: string, args: Record<string, unknown>, workspaceRoo
     }
     if (commands.some((words) => words.some((word) => word.includes('*')))) return { verdict: 'ask', risk: 'high', reason: 'shell glob requires approval' };
     if (commands.some((words) => pushDecision(words, workspaceRoot))) return { verdict: 'ask', risk: 'high', reason: 'remote push requires approval' };
+    // Quoting an option must not hide its write/execute semantics from the allowlist.
+    for (const words of commands) {
+      const normalized = words.join(' ');
+      const rule = READ_ONLY_COMMANDS.find((candidate) => candidate.match.test(normalized));
+      if (rule?.deny?.test(normalized)) return { verdict: 'ask', risk: 'medium', reason: 'command options may write or execute helpers' };
+    }
     if (command.split(SEGMENT_SPLIT).some((s) => /^\s*(?:git\s+(?:push|reset\s+--hard|clean\s+-[a-z]*[fd])|rm\s+-[a-z]*r)/.test(s))) {
       return { verdict: 'ask', risk: 'high', reason: 'destructive command or remote push' };
     }
