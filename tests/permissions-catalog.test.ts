@@ -4,6 +4,12 @@ import { decide } from '../src/tools/permissions.js';
 import { ToolRegistry } from '../src/tools/registry.js';
 
 const root = process.cwd();
+test('every standard registered tool has an explicit catalog expectation', () => {
+  const expected: Record<string, string> = { run_command: 'ask', read_file: 'allow', write_file: 'allow', edit: 'allow', list_dir: 'allow', search_code: 'allow', apply_patch: 'ask', run_tests: 'allow' };
+  const names = new ToolRegistry().getDefinitions().map((tool) => tool.name);
+  assert.deepEqual([...names].sort(), Object.keys(expected).sort());
+  for (const name of names) assert.equal(decide(name, { path: 'src/example.ts' }, root).verdict, expected[name], name);
+});
 for (const name of ['', 'unknown_tool', 'constructor', 'submit_unknown', 'bash', 'read']) {
   test(`unmapped tool ${JSON.stringify(name)} asks`, () => {
     const result = decide(name, {}, root);
