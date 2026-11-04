@@ -3,6 +3,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { z } from 'zod';
 import { axiomHome, pythonBin } from '../paths.js';
 import { Bm25, tokenize } from './bm25.js';
 import { chunkFile, listRepoFiles, listTeamDocs } from './chunker.js';
@@ -20,8 +21,34 @@ const STALE_AFTER_MS = 2000;
  */
 export const PREPROCESSING_VERSION = 'chunk-ast-120+search-text-path-symbol/1';
 
+/** The whole index is one file, so publishing it is one rename. */
+const INDEX_FILE = 'index.json';
+/** Layout before #13: four files renamed one by one, which a crash between renames could leave mixed. Deleted on publish. */
+const LEGACY_FILES = ['chunks.json', 'vectors.json', 'files.json', 'meta.json'];
+
 /** Index identity: embedder identity (`embedIdentity`), preprocessing and vector dimension. Any difference rebuilds. */
-interface Meta { embedModel: string; preprocessing: string; dim: number }
+const MetaSchema = z.object({ embedModel: z.string(), preprocessing: z.string(), dim: z.number().int().nonnegative() });
+type Meta = z.infer<typeof MetaSchema>;
+
+const ChunkSchema = z.object({
+  id: z.string(),
+  path: z.string(),
+  source: z.enum(['repo', 'team']).optional(),
+  symbol: z.string().nullable(),
+  kind: z.enum(['function', 'class', 'method', 'module', 'doc']),
+  startLine: z.number().int().positive(),
+  endLine: z.number().int().positive(),
+  fileType: z.enum(['python', 'markdown', 'text']),
+  text: z.string(),
+});
+
+const IndexFileSchema = z.object({
+  meta: MetaSchema,
+  files: z.record(z.string(), z.string()),
+  chunks: z.array(ChunkSchema),
+  vectors: z.record(z.string(), z.array(z.number())),
+});
+type IndexFile = z.infer<typeof IndexFileSchema>;
 
 function sha256(text: string | Buffer): string {
   return createHash('sha256').update(text).digest('hex');
@@ -44,18 +71,34 @@ function searchText(c: Chunk): string {
   return `${c.path} ${c.symbol ?? ''}\n${c.text}`;
 }
 
-/** Key in `files.json` and diffs: a team doc and a repo file may share a path. */
+/** Key in `files` and diffs: a team doc and a repo file may share a path. */
 function fileKey(c: { path: string; source?: ChunkSource }): string {
   return c.source === 'team' ? `team:${c.path}` : c.path;
 }
 
-function readJson<T>(file: string, fallback: T): T {
-  try {
-    return JSON.parse(fs.readFileSync(file, 'utf8')) as T;
-  } catch {
-    // Missing or unreadable index file: start from empty, the next update rebuilds it.
-    return fallback;
+/** Why a parsed index cannot be trusted, or null. `save` only publishes consistent indexes, so anything else is damage. */
+function findInconsistency(index: IndexFile): string | null {
+  const ids = new Set<string>();
+  for (const c of index.chunks) {
+    if (ids.has(c.id)) return `duplicate chunk ${c.id}`;
+    ids.add(c.id);
+    if (!(fileKey(c) in index.files)) return `chunk ${c.id} has no file hash`;
+    if (index.vectors[c.id]?.length !== index.meta.dim) return `chunk ${c.id} has no vector of dimension ${index.meta.dim}`;
   }
+  return Object.keys(index.vectors).length === ids.size ? null : 'vectors without a chunk';
+}
+
+/** The stored index, or null when it is missing, unparsable or inconsistent: then nothing is trusted and update rebuilds all. */
+function readIndexFile(file: string): IndexFile | null {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    // Missing or truncated file: same as no index.
+    return null;
+  }
+  const parsed = IndexFileSchema.safeParse(raw);
+  return parsed.success && findInconsistency(parsed.data) === null ? parsed.data : null;
 }
 
 export class RepoIndex {
@@ -93,23 +136,37 @@ export class RepoIndex {
   }
 
   private load(): void {
-    const meta = readJson<Meta | null>(this.file('meta.json'), null);
-    if (!meta || meta.embedModel !== this.embedModel || meta.preprocessing !== PREPROCESSING_VERSION) return;
-    this.meta = meta;
-    this.chunks = readJson<Chunk[]>(this.file('chunks.json'), []);
-    this.vectors = readJson<Record<string, number[]>>(this.file('vectors.json'), {});
-    this.files = readJson<Record<string, string>>(this.file('files.json'), {});
+    const stored = readIndexFile(this.file(INDEX_FILE));
+    if (!stored || stored.meta.embedModel !== this.embedModel || stored.meta.preprocessing !== PREPROCESSING_VERSION) return;
+    this.meta = stored.meta;
+    this.chunks = stored.chunks;
+    this.vectors = stored.vectors;
+    this.files = stored.files;
   }
 
-  /** Each file goes to a temp name, then rename: a crash mid-write leaves the old file, never a truncated one. */
-  private save(): void {
+  /**
+   * Publishes the whole index with one rename, so a reader sees the previous generation or this one, never a mix.
+   * A crash before the rename leaves the previous index.json untouched; fsync first so the rename never points at unwritten data.
+   */
+  private save(meta: Meta): void {
     fs.mkdirSync(this.dir, { recursive: true });
-    const entries: [string, unknown][] = [['chunks.json', this.chunks], ['vectors.json', this.vectors], ['files.json', this.files], ['meta.json', this.meta]];
-    for (const [name, value] of entries) {
-      const tmp = `${this.file(name)}.${process.pid}.tmp`;
-      fs.writeFileSync(tmp, JSON.stringify(value));
-      fs.renameSync(tmp, this.file(name));
+    const target = this.file(INDEX_FILE);
+    const tmp = `${target}.${process.pid}.tmp`;
+    const body: IndexFile = { meta, files: this.files, chunks: this.chunks, vectors: this.vectors };
+    try {
+      const fd = fs.openSync(tmp, 'w');
+      try {
+        fs.writeSync(fd, JSON.stringify(body));
+        fs.fsyncSync(fd);
+      } finally {
+        fs.closeSync(fd);
+      }
+      fs.renameSync(tmp, target);
+    } catch (error) {
+      fs.rmSync(tmp, { force: true });
+      throw error;
     }
+    for (const name of LEGACY_FILES) fs.rmSync(this.file(name), { force: true });
   }
 
   /** Re-chunks and re-embeds only files whose sha256 changed; chunks of changed and removed files go first. */
@@ -143,9 +200,10 @@ export class RepoIndex {
     fresh.forEach((c, i) => (this.vectors[c.id] = embedded[i]));
     this.chunks = [...this.chunks.filter((c) => !stale.has(fileKey(c))), ...fresh].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0) || a.startLine - b.startLine);
     this.files = current;
-    this.meta = { embedModel: this.embedModel, preprocessing: PREPROCESSING_VERSION, dim: embedded[0]?.length ?? this.meta?.dim ?? 0 };
+    const meta: Meta = { embedModel: this.embedModel, preprocessing: PREPROCESSING_VERSION, dim: embedded[0]?.length ?? this.meta?.dim ?? 0 };
+    this.meta = meta;
     this.bm25 = null;
-    this.save();
+    this.save(meta);
     return diff;
   }
 

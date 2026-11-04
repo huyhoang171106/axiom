@@ -73,9 +73,69 @@ describe('rag incremental index', () => {
     assert.deepEqual(embeddedTexts, ['alpha'], 'only the query itself is embedded');
   });
 
-  it('writes the index without leaving temp files', needsPython, async () => {
+  it('publishes the whole index as one file without leaving temp files', needsPython, async () => {
     await (await open()).update();
-    assert.deepEqual(fs.readdirSync(path.join(root, '.idx')).sort(), ['chunks.json', 'files.json', 'meta.json', 'vectors.json']);
+    assert.deepEqual(fs.readdirSync(path.join(root, '.idx')), ['index.json']);
+  });
+});
+
+describe('rag index crash safety', () => {
+  const indexFile = () => path.join(root, '.idx', 'index.json');
+  const editAlpha = () => fs.writeFileSync(path.join(root, 'pkg/alpha.py'), 'def alpha():\n    return "second version"\n');
+
+  it('a crash before the rename keeps the previous index whole', needsPython, async () => {
+    await (await open()).update();
+    const before = fs.readFileSync(indexFile(), 'utf8');
+    editAlpha();
+    const rename = mock.method(fs, 'renameSync', () => {
+      throw new Error('simulated crash');
+    });
+    try {
+      await assert.rejects((await open()).update(), /simulated crash/);
+    } finally {
+      rename.mock.restore();
+    }
+    assert.equal(fs.readFileSync(indexFile(), 'utf8'), before, 'the published index is untouched');
+    assert.deepEqual(fs.readdirSync(path.join(root, '.idx')), ['index.json'], 'the temp file is removed');
+
+    embeddedTexts = [];
+    assert.deepEqual(await (await open()).update(), { added: [], changed: ['pkg/alpha.py'], removed: [] }, 'the next run sees the old generation and redoes only the edit');
+    assert.equal(embeddedTexts.length, 1);
+  });
+
+  it('a temp file left by a killed process is ignored', needsPython, async () => {
+    await (await open()).update();
+    fs.writeFileSync(`${indexFile()}.99999.tmp`, '{"meta":{"embedModel":"fake"');
+    embeddedTexts = [];
+    assert.deepEqual(await (await open()).update(), { added: [], changed: [], removed: [] });
+    assert.equal(embeddedTexts.length, 0);
+  });
+
+  it('a truncated index file is rebuilt from scratch', needsPython, async () => {
+    await (await open()).update();
+    const text = fs.readFileSync(indexFile(), 'utf8');
+    fs.writeFileSync(indexFile(), text.slice(0, text.length / 2));
+    embeddedTexts = [];
+    assert.deepEqual((await (await open()).update()).added.sort(), ['pkg/alpha.py', 'pkg/beta.py']);
+    assert.equal(embeddedTexts.length, 3, 'every chunk embedded again');
+  });
+
+  it('an index whose chunks and vectors disagree is rebuilt from scratch', needsPython, async () => {
+    await (await open()).update();
+    const stored = JSON.parse(fs.readFileSync(indexFile(), 'utf8')) as { vectors: Record<string, number[]> };
+    delete stored.vectors[Object.keys(stored.vectors)[0]];
+    fs.writeFileSync(indexFile(), JSON.stringify(stored));
+    embeddedTexts = [];
+    assert.deepEqual((await (await open()).update()).added.sort(), ['pkg/alpha.py', 'pkg/beta.py']);
+    assert.equal(embeddedTexts.length, 3);
+  });
+
+  it('a four-file index from before #13 is rebuilt and its files removed', needsPython, async () => {
+    const dir = path.join(root, '.idx');
+    fs.mkdirSync(dir);
+    for (const name of ['chunks.json', 'vectors.json', 'files.json', 'meta.json']) fs.writeFileSync(path.join(dir, name), '{}');
+    assert.deepEqual((await (await open()).update()).added.sort(), ['pkg/alpha.py', 'pkg/beta.py']);
+    assert.deepEqual(fs.readdirSync(dir), ['index.json']);
   });
 });
 

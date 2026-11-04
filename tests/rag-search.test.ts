@@ -227,7 +227,7 @@ describe('rag search', () => {
       const diff = await other.update();
       assert.deepEqual(diff.added.sort(), ['README.md', 'db/storage.py', 'db/table.py']);
       assert.equal(embedded, chunkCount, 'every chunk embedded again');
-      assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8')).embedModel, 'model-b');
+      assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'index.json'), 'utf8')).meta.embedModel, 'model-b');
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -243,10 +243,10 @@ describe('rag search', () => {
     };
     try {
       await (await RepoIndex.open(root, counting, { dir, embedModel: 'm' })).update();
-      const metaFile = path.join(dir, 'meta.json');
-      const meta = JSON.parse(fs.readFileSync(metaFile, 'utf8')) as { preprocessing: string };
-      assert.equal(meta.preprocessing, PREPROCESSING_VERSION);
-      fs.writeFileSync(metaFile, JSON.stringify({ ...meta, preprocessing: 'older-chunker' }));
+      const indexFile = path.join(dir, 'index.json');
+      const stored = JSON.parse(fs.readFileSync(indexFile, 'utf8')) as { meta: { preprocessing: string } };
+      assert.equal(stored.meta.preprocessing, PREPROCESSING_VERSION);
+      fs.writeFileSync(indexFile, JSON.stringify({ ...stored, meta: { ...stored.meta, preprocessing: 'older-chunker' } }));
       const chunkCount = embedded;
       embedded = 0;
       const diff = await (await RepoIndex.open(root, counting, { dir, embedModel: 'm' })).update();
@@ -264,7 +264,7 @@ describe('rag search', () => {
       await (await RepoIndex.open(root, fakeEmbedder(64), { dir })).update();
       const hits = await (await RepoIndex.open(root, fakeEmbedder(32), { dir })).search('insert', 1);
       assert.equal(hits[0].symbol, 'Table.insert');
-      assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8')).dim, 32);
+      assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'index.json'), 'utf8')).meta.dim, 32);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
