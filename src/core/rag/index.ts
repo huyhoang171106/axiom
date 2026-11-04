@@ -5,8 +5,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { axiomHome, pythonBin } from '../paths.js';
 import { Bm25, tokenize } from './bm25.js';
-import { chunkFile, listRepoFiles } from './chunker.js';
-import type { Chunk, Embedder, IndexDiff, ScoredChunk } from './types.js';
+import { chunkFile, listRepoFiles, listTeamDocs } from './chunker.js';
+import type { Chunk, ChunkSource, Embedder, IndexDiff, ScoredChunk } from './types.js';
 
 /** Final score = cosine * vector + normalized BM25 * bm25 + symbol hit * symbol. Tuned in B5 (docs/uc-02.md). */
 export const SEARCH_WEIGHTS = { vector: 0.5, bm25: 0.3, symbol: 0.2 } as const;
@@ -37,6 +37,11 @@ function searchText(c: Chunk): string {
   return `${c.path} ${c.symbol ?? ''}\n${c.text}`;
 }
 
+/** Key in `files.json` and diffs: a team doc and a repo file may share a path. */
+function fileKey(c: { path: string; source?: ChunkSource }): string {
+  return c.source === 'team' ? `team:${c.path}` : c.path;
+}
+
 function readJson<T>(file: string, fallback: T): T {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8')) as T;
@@ -59,17 +64,19 @@ export class RepoIndex {
     private readonly embedder: Embedder,
     readonly dir: string,
     private readonly embedModel: string,
-    private readonly python: string
+    private readonly python: string,
+    private readonly teamDir: string | undefined
   ) {}
 
   /**
    * `embedModel` names the model behind `embedder` (the `modelRoles.embed` selector); a different one than the stored
    * index was built with discards every vector, since vectors of two models are not comparable.
+   * `teamDir` adds the team's conventions (e.g. TEAM_DOCS_DIR) as source 'team'; without it only the repo is indexed.
    */
-  static async open(root: string, embedder: Embedder, opts?: { dir?: string; embedModel?: string; python?: string }): Promise<RepoIndex> {
+  static async open(root: string, embedder: Embedder, opts?: { dir?: string; embedModel?: string; python?: string; teamDir?: string }): Promise<RepoIndex> {
     const real = fs.realpathSync(root);
     const dir = opts?.dir ?? path.join(axiomHome(), 'index', sha256(real).slice(0, 12));
-    const index = new RepoIndex(real, embedder, dir, opts?.embedModel ?? 'unknown', opts?.python ?? pythonBin());
+    const index = new RepoIndex(real, embedder, dir, opts?.embedModel ?? 'unknown', opts?.python ?? pythonBin(), opts?.teamDir);
     index.load();
     return index;
   }
@@ -101,12 +108,15 @@ export class RepoIndex {
   /** Re-chunks and re-embeds only files whose sha256 changed; chunks of changed and removed files go first. */
   async update(): Promise<IndexDiff> {
     const current: Record<string, string> = {};
-    const sources: Record<string, string> = {};
-    for (const rel of listRepoFiles(this.root)) {
-      const buf = fs.readFileSync(path.join(this.root, rel));
-      current[rel] = sha256(buf);
-      sources[rel] = buf.toString('utf8');
-    }
+    const sources: Record<string, { path: string; source: ChunkSource; text: string }> = {};
+    const read = (dir: string, rel: string, source: ChunkSource): void => {
+      const buf = fs.readFileSync(path.join(dir, rel));
+      const key = fileKey({ path: rel, source });
+      current[key] = sha256(buf);
+      sources[key] = { path: rel, source, text: buf.toString('utf8') };
+    };
+    for (const rel of listRepoFiles(this.root)) read(this.root, rel, 'repo');
+    if (this.teamDir) for (const rel of listTeamDocs(this.teamDir)) read(this.teamDir, rel, 'team');
     const diff: IndexDiff = {
       added: Object.keys(current).filter((p) => !(p in this.files)),
       changed: Object.keys(current).filter((p) => p in this.files && this.files[p] !== current[p]),
@@ -116,12 +126,15 @@ export class RepoIndex {
     if (diff.added.length + diff.changed.length + diff.removed.length === 0 && this.meta) return diff;
 
     const stale = new Set([...diff.changed, ...diff.removed]);
-    for (const c of this.chunks) if (stale.has(c.path)) delete this.vectors[c.id];
+    for (const c of this.chunks) if (stale.has(fileKey(c))) delete this.vectors[c.id];
     const fresh: Chunk[] = [];
-    for (const rel of [...diff.added, ...diff.changed]) fresh.push(...(await chunkFile(rel, sources[rel], this.python)));
+    for (const key of [...diff.added, ...diff.changed]) {
+      const f = sources[key];
+      fresh.push(...(await chunkFile(f.path, f.text, this.python, f.source)));
+    }
     const embedded = fresh.length ? await this.embedder(fresh.map(searchText)) : [];
     fresh.forEach((c, i) => (this.vectors[c.id] = embedded[i]));
-    this.chunks = [...this.chunks.filter((c) => !stale.has(c.path)), ...fresh].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0) || a.startLine - b.startLine);
+    this.chunks = [...this.chunks.filter((c) => !stale.has(fileKey(c))), ...fresh].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0) || a.startLine - b.startLine);
     this.files = current;
     this.meta = { embedModel: this.embedModel, dim: embedded[0]?.length ?? this.meta?.dim ?? 0 };
     this.bm25 = null;

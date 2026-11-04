@@ -3,12 +3,17 @@
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { isSecretPath } from '../../tools/permissions.js';
 import { pythonBin } from '../paths.js';
 import { scrubEnv } from '../secrets.js';
-import type { Chunk } from './types.js';
+import type { Chunk, ChunkSource } from './types.js';
 
 export const DOC_FILES = /^(README|CONTRIBUTING|CHANGELOG|AGENTS)(\.\w+)?$|^docs\/.+\.(md|rst|txt)$/i;
+
+/** The team's conventions (topic section 2.3), shipped with Axiom; indexed as source 'team', never as a repo path. */
+export const TEAM_DOCS_DIR = fileURLToPath(new URL('../../../knowledge/', import.meta.url));
+const TEAM_DOC_FILES = /\.(md|rst|txt)$/i;
 
 const SKIPPED_DIRS = new Set(['.venv', '__pycache__', '.git', 'node_modules']);
 const MAX_FILE_BYTES = 200 * 1024;
@@ -170,11 +175,23 @@ export function listRepoFiles(root: string): string[] {
     .sort();
 }
 
-/** Chunks of one file by type; the caller has already checked it is indexed. */
-export async function chunkFile(relPath: string, source: string, python: string): Promise<Chunk[]> {
-  if (relPath.endsWith('.py')) return chunkPython(relPath, source, python);
-  if (/\.md$/i.test(relPath)) return chunkMarkdown(relPath, source);
-  return chunkText(relPath, source);
+/** Team doc files under `dir`, relative with '/' separators; same secret and size limits as the repo. */
+export function listTeamDocs(dir: string): string[] {
+  if (!fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory()) return [];
+  return walk(dir)
+    .filter((rel) => TEAM_DOC_FILES.test(rel) && !isSkipped(rel))
+    .filter((rel) => fs.statSync(path.join(dir, rel)).size <= MAX_FILE_BYTES)
+    .sort();
+}
+
+/** Chunks of one file by type; the caller has already checked it is indexed. Team chunks get a `team:` id so they never collide with a repo file of the same path. */
+export async function chunkFile(relPath: string, source: string, python: string, from: ChunkSource = 'repo'): Promise<Chunk[]> {
+  const chunks = relPath.endsWith('.py')
+    ? await chunkPython(relPath, source, python)
+    : /\.md$/i.test(relPath)
+      ? chunkMarkdown(relPath, source)
+      : chunkText(relPath, source);
+  return from === 'team' ? chunks.map((c) => ({ ...c, id: `team:${c.id}`, source: 'team' })) : chunks;
 }
 
 export async function chunkRepo(root: string, opts?: { python?: string }): Promise<Chunk[]> {

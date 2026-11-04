@@ -78,3 +78,26 @@ describe('rag incremental index', () => {
     assert.deepEqual(fs.readdirSync(path.join(root, '.idx')).sort(), ['chunks.json', 'files.json', 'meta.json', 'vectors.json']);
   });
 });
+
+describe('rag team docs source', () => {
+  it('team docs are indexed as source team with a clean path, apart from a repo file of the same name', needsPython, async () => {
+    const team = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-team-'));
+    try {
+      fs.writeFileSync(path.join(root, 'README.md'), '# Repo\nrepo readme text\n');
+      fs.writeFileSync(path.join(team, 'README.md'), '# Review\nevery patch needs a failing test first\n');
+      const index = await RepoIndex.open(root, counting, { dir: path.join(root, '.idx'), embedModel: 'fake', teamDir: team });
+      assert.deepEqual((await index.update()).added.sort(), ['README.md', 'pkg/alpha.py', 'pkg/beta.py', 'team:README.md']);
+      const hits = await index.search('failing test first patch', 10);
+      const teamHit = hits.find((c) => c.source === 'team');
+      assert.deepEqual([teamHit?.path, teamHit?.id], ['README.md', 'team:README.md:1-2']);
+      assert.ok(hits.some((c) => c.path === 'README.md' && c.source === undefined), 'the repo README stays a repo chunk');
+
+      embeddedTexts = [];
+      fs.writeFileSync(path.join(team, 'README.md'), '# Review\nevery patch needs a failing test and a review\n');
+      assert.deepEqual(await index.update(), { added: [], changed: ['team:README.md'], removed: [] });
+      assert.equal(embeddedTexts.length, 1, 'only the edited team doc is re-embedded');
+    } finally {
+      fs.rmSync(team, { recursive: true, force: true });
+    }
+  });
+});
