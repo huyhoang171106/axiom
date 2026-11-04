@@ -4,13 +4,14 @@
 //   npx tsx evals/issues/bugs.ts grade bug-01 <dir>  copy the hidden test into <dir> and run it (exit 0 = fixed)
 //   npx tsx evals/issues/bugs.ts check               every hidden test passes on the original and fails on its bug
 //
-// Python comes from AXIOM_PYTHON (default `python`) and needs pytest.
+// Python comes from pythonBin() (AXIOM_PYTHON, else python3; python on Windows) and needs pytest.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+import { pythonBin } from '../../src/core/paths.js';
 
 export const ISSUES_DIR = path.dirname(fileURLToPath(import.meta.url));
 export const TARGET_REPO = path.resolve(ISSUES_DIR, '../../workspace/tinydb');
@@ -18,12 +19,16 @@ const GRADE_TIMEOUT_MS = 120_000;
 /** Local environments and caches next to the snapshot; the agent's copy must not inherit them. */
 const NOT_COPIED = new Set(['.venv', '.git', '__pycache__', '.pytest_cache', '.coverage']);
 
-export const bugSchema = z.object({
-  category: z.enum(['one-file', 'needs-repro-test', 'two-files', 'hang']),
+/**
+ * Strict: an unknown key is an error, not silently dropped. No bug carries an exception to the
+ * test-tamper rule, and `unfixable` grants none, so a bug.json cannot smuggle one in either.
+ */
+export const bugSchema = z.strictObject({
+  category: z.enum(['one-file', 'needs-repro-test', 'two-files', 'hang', 'unfixable']),
   /** Files a correct fix has to touch, relative to the target repo. */
   fixFiles: z.array(z.string().min(1)).min(1),
   /** Each `find` must occur exactly once in its file, so a bug always seeds the same way. */
-  edits: z.array(z.object({ file: z.string().min(1), find: z.string().min(1), replace: z.string() })).min(1),
+  edits: z.array(z.strictObject({ file: z.string().min(1), find: z.string().min(1), replace: z.string() })).min(1),
 });
 export type Bug = z.infer<typeof bugSchema>;
 
@@ -68,7 +73,7 @@ export interface GradeResult {
 
 /** Runs pytest in `dir`; `-o addopts=` drops the repo's `--cov` options so plain pytest is enough. */
 function runPytest(dir: string, args: string[], timeoutMs: number): GradeResult {
-  const python = process.env.AXIOM_PYTHON || 'python';
+  const python = pythonBin();
   const run = spawnSync(python, ['-m', 'pytest', '-q', '-p', 'no:cacheprovider', '-o', 'addopts=', ...args], {
     cwd: dir,
     encoding: 'utf8',
@@ -86,7 +91,21 @@ export function grade(id: string, dir: string, timeoutMs = GRADE_TIMEOUT_MS): Gr
   return runPytest(dir, [`tests/${testFile}`], timeoutMs);
 }
 
-/** For every bug: hidden test passes on the original, fails (or hangs) on the seeded copy; also reports the visible suite. */
+/**
+ * Hang bugs get a shorter limit so `check` stays fast. It is still several times what the hidden
+ * test needs on the original, so a timeout on the seeded copy means a hang, not slow startup.
+ */
+const HANG_TIMEOUT_MS = 10_000;
+/** Categories whose visible suite on the seeded copy has a required outcome; see check(). */
+const VISIBLE_SUITE_PASSES: Partial<Record<Bug['category'], boolean>> = { 'needs-repro-test': true, unfixable: false };
+
+/**
+ * For every bug: the hidden test passes on the original and fails on the seeded copy (`hang`: times
+ * out). The original is the reference fix, since seeding is the only change. The visible suite on
+ * the seeded copy must pass for `needs-repro-test` (no existing test reproduces the bug, so the agent
+ * has to write one) and fail for `unfixable` (that failing existing test is the contradiction the
+ * issue asks the agent to resolve without editing tests).
+ */
 export function check(timeoutMs = 30_000): boolean {
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-bugs-'));
   const original = path.join(scratch, 'original');
@@ -98,16 +117,22 @@ export function check(timeoutMs = 30_000): boolean {
       const seeded = path.join(scratch, id);
       seed(id, seeded);
       const onOriginal = grade(id, original, timeoutMs);
-      const visible = runPytest(seeded, ['tests'], timeoutMs);
-      const onBug = grade(id, seeded, timeoutMs);
-      const good = onOriginal.passed && !onBug.passed && (bug.category !== 'hang' || onBug.timedOut);
+      // Run the visible suite before grade() copies the hidden test into this copy's tests/.
+      const expectVisiblePass = VISIBLE_SUITE_PASSES[bug.category];
+      const visible = expectVisiblePass === undefined ? undefined : runPytest(seeded, ['tests'], timeoutMs);
+      const onBug = grade(id, seeded, bug.category === 'hang' ? Math.min(timeoutMs, HANG_TIMEOUT_MS) : timeoutMs);
+      const good =
+        onOriginal.passed &&
+        !onBug.passed &&
+        (bug.category !== 'hang' || onBug.timedOut) &&
+        (visible === undefined || (!visible.timedOut && visible.passed === expectVisiblePass));
       ok &&= good;
       const describe = (r: GradeResult) => (r.timedOut ? 'timeout' : r.passed ? 'pass' : 'fail');
       console.log(
-        `${good ? 'OK  ' : 'FAIL'} ${id} (${bug.category}): hidden test original=${describe(onOriginal)} seeded=${describe(onBug)}; ` +
-          `visible tests on seeded=${describe(visible)}`
+        `${good ? 'OK  ' : 'FAIL'} ${id} (${bug.category}): hidden test original=${describe(onOriginal)} seeded=${describe(onBug)}` +
+          (visible ? `; visible tests on seeded=${describe(visible)}` : '')
       );
-      if (!good) console.log(`${onOriginal.output}\n---\n${onBug.output}`);
+      if (!good) console.log(`${onOriginal.output}\n---\n${onBug.output}${visible ? `\n---\n${visible.output}` : ''}`);
     }
   } finally {
     fs.rmSync(scratch, { recursive: true, force: true });

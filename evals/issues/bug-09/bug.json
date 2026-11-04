@@ -1,0 +1,11 @@
+{
+  "category": "hang",
+  "fixFiles": ["tinydb/table.py"],
+  "edits": [
+    {
+      "file": "tinydb/table.py",
+      "find": "                for doc_id in list(table.keys()):\n                    if _cond(table[doc_id]):\n                        # Add document ID to list of removed document IDs\n                        removed_ids.append(doc_id)\n\n                        # Remove document from the table\n                        table.pop(doc_id)\n",
+      "replace": "                pending = list(table.keys())\n                while pending:\n                    doc_id = pending[0]\n                    if _cond(table[doc_id]):\n                        # Add document ID to list of removed document IDs\n                        removed_ids.append(doc_id)\n\n                        # Remove document from the table\n                        table.pop(doc_id)\n                        pending.pop(0)\n"
+    }
+  ]
+}
