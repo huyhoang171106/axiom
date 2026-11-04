@@ -280,16 +280,26 @@ export function decide(name: string, args: Record<string, unknown>, workspaceRoo
     const command = typeof args.command === 'string' ? args.command : '';
     // Token scan over the raw text, quotes included: `cat ".env"` must not slip through.
     const secret = command.split(/[\s;&|<>()`$=]+/).find((t) => t && isSecretPath(t));
-    if (secret) return { verdict: 'deny', reason: `touches a secret file (${secret})` };
-    if (PUSH_TO_MAIN.test(command)) return { verdict: 'deny', reason: 'pushes to the main branch' };
+    if (secret) return { verdict: 'deny', risk: 'high', reason: `touches a secret file (${secret})` };
+    if (PUSH_TO_MAIN.test(command)) return { verdict: 'deny', risk: 'high', reason: 'pushes to the main branch' };
+    if (command.split(SEGMENT_SPLIT).some((s) => /^\s*(?:git\s+(?:push|reset\s+--hard|clean\s+-[a-z]*[fd])|rm\s+-[a-z]*r)/.test(s))) {
+      return { verdict: 'ask', risk: 'high', reason: 'destructive command or remote push' };
+    }
   }
   if (PATH_TOOLS[name]) {
     const raw = typeof args.path === 'string' ? args.path.trim() : '';
-    if (raw && isSecretPath(raw)) return { verdict: 'deny', reason: `secret file (${raw})` };
+    if (raw && isSecretPath(raw)) return { verdict: 'deny', risk: 'high', reason: `secret file (${raw})` };
     if (raw && escapesWorkspace(raw, workspaceRoot) && !(name === 'read_file' && isBundledSkillFile(raw))) {
-      return { verdict: 'deny', reason: `outside the workspace (${path.resolve(workspaceRoot, raw)})` };
+      return { verdict: 'deny', risk: 'high', reason: `outside the workspace (${path.resolve(workspaceRoot, raw)})` };
+    }
+    if ((name === 'write_file' || name === 'edit') && /(^|[\\/])(?:\.github(?:[\\/]|$)|pyproject\.toml$|setup\.(?:py|cfg)$|requirements[^\\/]*\.txt$|package\.json$|[^\\/]*lock[^\\/]*$|SECURITY\.md$)/i.test(raw)) {
+      return { verdict: 'ask', risk: 'high', reason: 'changes security or dependency configuration' };
     }
   }
   const reason = needsApproval(name, args, workspaceRoot);
-  return reason ? { verdict: 'ask', reason } : { verdict: 'allow', reason: 'allowed by policy' };
+  if (reason) return { verdict: 'ask', risk: 'medium', reason };
+  const known = ['run_command', 'read_file', 'list_dir', 'search_code', 'write_file', 'edit', 'run_tests', 'submit_issue_ticket'];
+  return known.includes(name)
+    ? { verdict: 'allow', risk: 'low', reason: 'allowed by policy' }
+    : { verdict: 'ask', risk: 'medium', reason: 'tool is not in the risk catalog' };
 }
