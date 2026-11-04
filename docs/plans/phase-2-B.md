@@ -4,11 +4,11 @@
 
 | # | Ngày | Việc | Trạng thái |
 |---|---|---|---|
-| B1 | 04/11 | Chunk Python bằng `ast`, tài liệu theo heading | |
-| B2 | 05/11 | Embedder, BM25, `RepoIndex.search` | |
-| B3 | 06/11 | Index tăng dần theo hash file | |
-| B4 | 07/11 | `answerQuestion`, `/ask`, kiểm tra trích dẫn, link bấm được | |
-| B5 | 08/11 | Eval UC-02 ≥ 20 câu | |
+| B1 | 04/11 | Chunk Python bằng `ast`, tài liệu theo heading | done |
+| B2 | 05/11 | Embedder, BM25, `RepoIndex.search` | done |
+| B3 | 06/11 | Index tăng dần theo hash file | done |
+| B4 | 07/11 | `answerQuestion`, `/ask`, kiểm tra trích dẫn, link bấm được | done |
+| B5 | 08/11 | Eval UC-02 ≥ 20 câu | chờ A3 và eval thật |
 
 Kiểu dữ liệu (`Chunk`, `ScoredChunk`, `Citation`, `IndexDiff`, `Embedder`) cố định ở `phase-2.md` mục 5.3.
 
