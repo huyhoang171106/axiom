@@ -91,6 +91,8 @@ export interface ModelUsageSummary {
   costDollars: number;
   tokens: number;
   totalTokens: number;
+  promptTokens: number;
+  completionTokens: number;
 }
 
 export interface SessionSummary {
@@ -161,11 +163,13 @@ export class CostTracker {
     this.cachedTokens += cached;
 
     if (!this.breakdown[model]) {
-      this.breakdown[model] = { calls: 0, cost: 0, costDollars: 0, tokens: 0, totalTokens: 0 };
+      this.breakdown[model] = { calls: 0, cost: 0, costDollars: 0, tokens: 0, totalTokens: 0, promptTokens: 0, completionTokens: 0 };
     }
 
     const item = this.breakdown[model];
     item.calls += 1;
+    item.promptTokens += prompt;
+    item.completionTokens += completion;
     item.cost = Number((item.cost + cost).toFixed(6));
     item.costDollars = item.cost;
     item.tokens += tokens;
@@ -178,7 +182,7 @@ export class CostTracker {
   getSessionSummary(): SessionSummary {
     const totalCost = Number(this.totalCost.toFixed(6));
     const cacheHitRatio = this.promptTokens > 0 ? Number((this.cachedTokens / this.promptTokens).toFixed(4)) : 0;
-    const breakdownCopy = { ...this.breakdown };
+    const breakdownCopy = Object.fromEntries(Object.entries(this.breakdown).map(([model, usage]) => [model, { ...usage }]));
     return {
       totalTokens: this.totalTokens,
       totalCost,

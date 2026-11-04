@@ -23,6 +23,16 @@ test('an unset role falls back along the table: @smol -> @default, @plan -> @slo
   assert.equal(resolveModel('@plan', catalogWith('deepseek', 'groq'), withSlow).provider, 'groq');
 });
 
+test('code uses its own model or falls back to default, embed must be configured', () => {
+  const roles = { default: 'deepseek/deepseek-v4-pro', code: `groq/${defaultOf('groq')}`, embed: `ollama/${defaultOf('ollama')}` };
+  assert.equal(resolveModel('@code', catalogWith('groq', 'deepseek'), config({ modelRoles: roles })).provider, 'groq');
+  assert.equal(resolveModel('@code', catalogWith('deepseek'), config({ modelRoles: { default: roles.default } })).id, 'deepseek-v4-pro');
+  const embedded = resolveModel('@embed', catalogWith('ollama'), config({ modelRoles: roles }));
+  assert.equal(embedded.provider, 'ollama');
+  assert.equal(embedded.id, defaultOf('ollama'));
+  assert.throws(() => resolveModel('@embed', catalogWith('deepseek'), config({ modelRoles: { default: roles.default } })), /modelRoles\.embed/);
+});
+
 test('a role alias loop is an error, not a hang', () => {
   const cfg = config({ modelRoles: { default: '@smol', smol: '@slow', slow: '@default' } });
   assert.throws(() => resolveModel('@default', catalogWith('deepseek'), cfg), /alias cycle: @default -> @smol -> @slow -> @default/);

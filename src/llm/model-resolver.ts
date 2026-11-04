@@ -62,6 +62,7 @@ function resolveRole(name: string, catalog: Catalog, config: AxiomConfig, roles:
   const chain = [...roles, role];
   const value = config.modelRoles?.[role];
   if (value) return resolveList(value, catalog, config, chain);
+  if (role === 'embed') throw new Error('Configure modelRoles.embed in config.json before using @embed.');
   const fallback = ROLE_FALLBACK[role];
   return fallback ? resolveRole(fallback, catalog, config, chain) : startupModel(catalog, config);
 }

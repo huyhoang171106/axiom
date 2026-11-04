@@ -24,6 +24,18 @@ function setup(responses: ConstructorParameters<typeof MockProvider>[1], opts: {
   return { agent, root };
 }
 
+test('budget is scoped to each run while session usage is retained', async () => {
+  const { agent } = setup([
+    { content: 'first', usage: { costEstimate: 6 } },
+    { content: '', usage: { costEstimate: 5 }, toolCalls: [{ id: 't', name: 'read_file', arguments: { path: 'missing' } }] },
+  ]);
+  assert.equal((await agent.runTask('first')).status, 'completed');
+  const second = await agent.runTask('second');
+  assert.equal(second.status, 'failed');
+  assert.match(second.error!, /Budget limit reached/);
+  assert.equal(agent.costTracker.getSessionSummary().totalCost, 11);
+});
+
 test('plain answer completes', async () => {
   const { agent } = setup(['hello']);
   const r = await agent.runTask('hi');
