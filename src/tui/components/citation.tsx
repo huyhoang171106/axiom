@@ -1,16 +1,16 @@
 // src/tui/components/citation.tsx - `ask-answer` result: answer text with clickable `path:Lx-Ly` citations
 import { Box, Text } from 'ink';
 import type { AskAnswer } from '../../agents/ask.js';
-import { CITATION_RE, fileLink } from '../../core/rag/citations.js';
+import { CITATION_RE, citationKey, fileLink, parseCitations } from '../../core/rag/citations.js';
 import type { Citation } from '../../core/rag/types.js';
 import { createTheme } from '../theme.js';
 
 /** Only validated citations become links; anything else stays plain text so a link never points at an unchecked range. */
 export function linkCitations(text: string, root: string, citations: readonly Citation[]): string {
-  const valid = new Set(citations.map((c) => `${c.path}:${c.startLine}-${c.endLine}`));
-  return text.replace(CITATION_RE, (match, file: string, start: string, end: string | undefined) => {
-    const c = { path: file.replace(/^\.\//, ''), startLine: Number(start), endLine: Number(end ?? start) };
-    return valid.has(`${c.path}:${c.startLine}-${c.endLine}`) ? fileLink(root, c) : match;
+  const valid = new Set(citations.map(citationKey));
+  return text.replace(CITATION_RE, (match) => {
+    const [c] = parseCitations(match);
+    return valid.has(citationKey(c)) ? fileLink(root, c) : match;
   });
 }
 
