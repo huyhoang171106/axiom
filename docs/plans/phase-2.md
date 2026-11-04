@@ -141,9 +141,11 @@ export function pythonBin(): string; // AXIOM_PYTHON, rồi python3 (Windows: py
 
 ```ts
 // src/core/rag/types.ts
+export type ChunkSource = 'repo' | 'team';   // team: quy ước code của nhóm (đề mục 2.3), ở knowledge/ của Axiom
 export interface Chunk {
-  id: string;                 // `${path}:${startLine}-${endLine}`
-  path: string;               // tương đối với workspaceRoot, dấu '/'
+  id: string;                 // `${path}:${startLine}-${endLine}`, tài liệu team có tiền tố `team:`
+  path: string;               // tương đối với workspaceRoot (hoặc thư mục team), dấu '/'
+  source?: ChunkSource;       // thiếu = 'repo'
   symbol: string | null;      // 'TinyDB.insert', 'Query.search', null với tài liệu
   kind: 'function' | 'class' | 'method' | 'module' | 'doc';
   startLine: number;          // 1-based, gồm cả decorator
@@ -152,7 +154,7 @@ export interface Chunk {
   text: string;
 }
 export interface ScoredChunk extends Chunk { score: number }
-export interface Citation { path: string; startLine: number; endLine: number }
+export interface Citation { path: string; startLine: number; endLine: number; source?: ChunkSource }
 export interface IndexDiff { added: string[]; changed: string[]; removed: string[] }
 export type Embedder = (texts: readonly string[]) => Promise<number[][]>;
 ```
