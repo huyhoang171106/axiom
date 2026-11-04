@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { isBundledSkillFile } from './bundled-skills.js';
 import { literalCommands } from './policy-shell.js';
+import { pushDecision } from './policy-git.js';
 
 export type Verdict = 'allow' | 'ask' | 'deny';
 export type Risk = 'low' | 'medium' | 'high';
@@ -279,6 +280,9 @@ export function decide(name: string, args: Record<string, unknown>, workspaceRoo
     const commands = literalCommands(command);
     if (!commands) return { verdict: 'ask', risk: 'high', reason: 'shell syntax cannot be verified without evaluation' };
     for (const words of commands) {
+      const push = pushDecision(words, workspaceRoot);
+      if (push?.verdict === 'deny') return push;
+      if (words.some((word) => word.includes('*'))) return { verdict: 'ask', risk: 'high', reason: 'shell glob requires approval' };
       for (const word of words.slice(1)) {
         const candidate = word.includes('=') ? word.slice(word.indexOf('=') + 1) : word;
         if (isSecretPath(candidate) || isSecretPath(realTarget(path.resolve(workspaceRoot, candidate)))) {
@@ -289,6 +293,7 @@ export function decide(name: string, args: Record<string, unknown>, workspaceRoo
         }
       }
     }
+    if (commands.some((words) => pushDecision(words, workspaceRoot))) return { verdict: 'ask', risk: 'high', reason: 'remote push requires approval' };
     if (command.split(SEGMENT_SPLIT).some((s) => /^\s*(?:git\s+(?:push|reset\s+--hard|clean\s+-[a-z]*[fd])|rm\s+-[a-z]*r)/.test(s))) {
       return { verdict: 'ask', risk: 'high', reason: 'destructive command or remote push' };
     }

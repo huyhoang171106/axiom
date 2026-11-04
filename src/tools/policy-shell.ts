@@ -18,7 +18,7 @@ export function literalCommands(command: string): string[][] | null {
     }
     if (quote) { if (ch === quote) quote = ''; else word += ch; continue; }
     if (ch === '"' || ch === "'") { quote = ch; started = true; continue; }
-    if ('<>()[{}*?!~#'.includes(ch) || ch === '\0') return null;
+    if ('<>()[{}?!~#'.includes(ch) || ch === '\0') return null;
     if (';&|\n\r'.includes(ch)) { flush(); if (words.length) commands.push(words); words = []; continue; }
     if (/\s/.test(ch)) { flush(); continue; }
     word += ch; started = true;
