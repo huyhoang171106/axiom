@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { isBundledSkillFile } from './bundled-skills.js';
+import { literalCommands } from './policy-shell.js';
 
 export type Verdict = 'allow' | 'ask' | 'deny';
 export type Risk = 'low' | 'medium' | 'high';
@@ -119,8 +120,6 @@ const SHELL_SYNTAX = /[<>]|\$\(|`|\n/;
 /** Separators that start a new command, including a single `&` (background). */
 const SEGMENT_SPLIT = /&&|\|\||;|\||&|\n|\r|\(|\)|\{|\}/;
 
-const escapesWorkspaceCache = new Map<string, string>();
-
 function realpathOrSelf(target: string): string {
   try {
     return fs.realpathSync.native(target);
@@ -150,14 +149,9 @@ function realTarget(target: string): string {
  */
 export function escapesWorkspace(target: string, workspaceRoot: string): boolean {
   const root = realpathOrSelf(path.resolve(workspaceRoot));
-  const cacheKey = `${root}\0${target}`;
-  const cached = escapesWorkspaceCache.get(cacheKey);
-  if (cached !== undefined) return cached === 'yes';
   const real = realTarget(path.resolve(workspaceRoot, target));
   const rel = path.relative(root, real);
-  const escaped = rel.startsWith('..') || path.isAbsolute(rel);
-  if (escapesWorkspaceCache.size > 500) escapesWorkspaceCache.clear();
-  escapesWorkspaceCache.set(cacheKey, escaped ? 'yes' : 'no');
+  const escaped = rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel);
   return escaped;
 }
 
@@ -282,13 +276,26 @@ export function decide(name: string, args: Record<string, unknown>, workspaceRoo
     const secret = command.split(/[\s;&|<>()`$=]+/).find((t) => t && isSecretPath(t));
     if (secret) return { verdict: 'deny', risk: 'high', reason: `touches a secret file (${secret})` };
     if (PUSH_TO_MAIN.test(command)) return { verdict: 'deny', risk: 'high', reason: 'pushes to the main branch' };
+    const commands = literalCommands(command);
+    if (!commands) return { verdict: 'ask', risk: 'high', reason: 'shell syntax cannot be verified without evaluation' };
+    for (const words of commands) {
+      for (const word of words.slice(1)) {
+        const candidate = word.includes('=') ? word.slice(word.indexOf('=') + 1) : word;
+        if (isSecretPath(candidate) || isSecretPath(realTarget(path.resolve(workspaceRoot, candidate)))) {
+          return { verdict: 'deny', risk: 'high', reason: 'shell references a secret path' };
+        }
+        if ((candidate.includes('/') || candidate.includes('\\')) && escapesWorkspace(candidate, workspaceRoot)) {
+          return { verdict: 'deny', risk: 'high', reason: 'shell references a path outside the workspace' };
+        }
+      }
+    }
     if (command.split(SEGMENT_SPLIT).some((s) => /^\s*(?:git\s+(?:push|reset\s+--hard|clean\s+-[a-z]*[fd])|rm\s+-[a-z]*r)/.test(s))) {
       return { verdict: 'ask', risk: 'high', reason: 'destructive command or remote push' };
     }
   }
   if (PATH_TOOLS[name]) {
     const raw = typeof args.path === 'string' ? args.path.trim() : '';
-    if (raw && isSecretPath(raw)) return { verdict: 'deny', risk: 'high', reason: `secret file (${raw})` };
+    if (raw && (isSecretPath(raw) || isSecretPath(realTarget(path.resolve(workspaceRoot, raw))))) return { verdict: 'deny', risk: 'high', reason: `secret file (${raw})` };
     if (raw && escapesWorkspace(raw, workspaceRoot) && !(name === 'read_file' && isBundledSkillFile(raw))) {
       return { verdict: 'deny', risk: 'high', reason: `outside the workspace (${path.resolve(workspaceRoot, raw)})` };
     }
