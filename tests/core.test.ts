@@ -62,7 +62,7 @@ test('step limit fails a looping agent', async () => {
 
 test('risky call is refused without approver', async () => {
   const { agent } = setup([
-    { content: '', toolCalls: [{ id: 't', name: 'run_command', arguments: { command: 'rm -rf /tmp/x' } }] },
+    { content: '', toolCalls: [{ id: 't', name: 'run_command', arguments: { command: 'rm -rf x' } }] },
     'ok',
   ]);
   agent.toolRegistry.allowWithoutApprover = false;

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { isBundledSkillFile } from './bundled-skills.js';
 import { literalCommands } from './policy-shell.js';
 import { pushDecision } from './policy-git.js';
+import { parseUnifiedDiff } from './apply-patch.js';
 
 export type Verdict = 'allow' | 'ask' | 'deny';
 export type Risk = 'low' | 'medium' | 'high';
@@ -271,6 +272,26 @@ const PUSH_TO_MAIN = /\bgit\s+push\b[^;&|\n]*\b(?:main|master)\b/;
 
 /** Hard denials first (never asked, never run), then the approval rules of `needsApproval`. */
 export function decide(name: string, args: Record<string, unknown>, workspaceRoot: string): PolicyDecision {
+  if (name === 'apply_patch') {
+    try {
+      const patches = parseUnifiedDiff(typeof args.patch === 'string' ? args.patch : '');
+      if (!patches.length) return { verdict: 'ask', risk: 'medium', reason: 'patch has no verified file changes' };
+      let result: PolicyDecision = { verdict: 'allow', risk: 'low', reason: 'small workspace patch' };
+      for (const patch of patches) {
+        for (const target of [patch.oldPath, patch.newPath]) {
+          if (target === null) continue;
+          const decision = decide('edit', { path: target }, workspaceRoot);
+          if (decision.verdict === 'deny') return decision;
+          if (decision.risk === 'high') result = decision;
+        }
+      }
+      if (result.risk === 'high') return result;
+      return patches.length > 5 || patches.some((patch) => patch.newPath === null)
+        ? { verdict: 'ask', risk: 'medium', reason: 'large patch or file deletion' } : result;
+    } catch {
+      return { verdict: 'ask', risk: 'medium', reason: 'patch parser unavailable or patch invalid; C2/E2 integration required' };
+    }
+  }
   if (name === 'run_command') {
     const command = typeof args.command === 'string' ? args.command : '';
     // Token scan over the raw text, quotes included: `cat ".env"` must not slip through.
