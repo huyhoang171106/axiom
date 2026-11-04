@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { chunkMarkdown, chunkPython, chunkRepo } from '../src/core/rag/chunker.js';
+import { chunkFile, chunkMarkdown, chunkPython, chunkRepo, listTeamDocs, TEAM_DOCS_DIR } from '../src/core/rag/chunker.js';
 import { pythonBin } from '../src/core/paths.js';
 
 const python = pythonBin();
@@ -107,5 +107,16 @@ describe('rag chunker', () => {
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe('rag team docs', () => {
+  it('the team conventions ship with Axiom and are listed from TEAM_DOCS_DIR', () => {
+    assert.ok(listTeamDocs(TEAM_DOCS_DIR).includes('team-conventions.md'));
+  });
+
+  it('team chunks get a team id and source but keep the plain path', async () => {
+    const chunks = await chunkFile('guide.md', '# Rules\nno test edits\n', python, 'team');
+    assert.deepEqual(chunks.map((c) => [c.id, c.path, c.source]), [['team:guide.md:1-2', 'guide.md', 'team']]);
   });
 });
