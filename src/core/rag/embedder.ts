@@ -35,6 +35,20 @@ function parseOpenAI(body: unknown): EmbedResponse | null {
   return { vectors, promptTokens: typeof b.usage?.prompt_tokens === 'number' ? b.usage.prompt_tokens : 0 };
 }
 
+/** A vector store only works if every vector has one dimension and no NaN/Infinity (JSON can carry 1e999). */
+function checkVectors(info: ModelInfo, vectors: readonly number[][]): void {
+  const dims = [...new Set(vectors.map((v) => v.length))];
+  if (dims.length !== 1 || dims[0] === 0) {
+    throw new ProviderError(`${info.provider} embeddings for ${info.id} have dimensions ${dims.join(', ')}; expected one non-zero dimension`, { provider: info.provider, model: info.id });
+  }
+  if (!vectors.every((v) => v.every(Number.isFinite))) {
+    throw new ProviderError(`${info.provider} embeddings for ${info.id} contain a non-finite value`, { provider: info.provider, model: info.id });
+  }
+}
+
+/** Status codes a server gives for a model it cannot embed with (a chat model, a wrong tag). */
+const NOT_AN_EMBED_MODEL = new Set([400, 404, 422, 501]);
+
 /** `costTracker` records embedding usage of the run (eval tokens and cost per case). */
 export function createEmbedder(info: ModelInfo, opts?: { fetchImpl?: typeof fetch; costTracker?: CostTracker }): Embedder {
   const fetchImpl = opts?.fetchImpl ?? fetch;
@@ -59,7 +73,8 @@ export function createEmbedder(info: ModelInfo, opts?: { fetchImpl?: typeof fetc
     }
     if (!response.ok) {
       const { detail, code } = await describeErrorResponse(response);
-      throw new ProviderError(redact(`${info.provider} embeddings error (${response.status}): ${detail}`), { provider: info.provider, model: info.id, status: response.status, code });
+      const hint = NOT_AN_EMBED_MODEL.has(response.status) ? `. Check that ${info.provider}/${info.id} is an embedding model and the tag exists (modelRoles.embed)` : '';
+      throw new ProviderError(redact(`${info.provider} embeddings error (${response.status}): ${detail}${hint}`), { provider: info.provider, model: info.id, status: response.status, code });
     }
     const body: unknown = await response.json().catch(() => null);
     const parsed = isOllama ? parseOllama(body) : parseOpenAI(body);
@@ -74,8 +89,14 @@ export function createEmbedder(info: ModelInfo, opts?: { fetchImpl?: typeof fetc
   return async (texts) => {
     const vectors: number[][] = [];
     for (let i = 0; i < texts.length; i += BATCH_SIZE) vectors.push(...(await embedBatch(texts.slice(i, i + BATCH_SIZE))));
+    if (vectors.length > 0) checkVectors(info, vectors);
     return vectors;
   };
+}
+
+/** Everything that decides what a vector means: provider, wire, endpoint and exact model id/tag. Indexes built under two identities never mix. */
+export function embedIdentity(info: ModelInfo): string {
+  return `${info.provider}|${info.api}|${info.baseUrl.replace(/\/+$/, '')}|${info.id}`;
 }
 
 /** FNV-1a: stable across runs and platforms, unlike anything seeded. */
@@ -99,7 +120,11 @@ export function fakeEmbedder(dim = FAKE_DIM): Embedder {
 export const MISSING_EMBED_MESSAGE = 'Set modelRoles.embed in ~/.axiom/config.json (see docs/guides/providers.md section 9)';
 
 /** The @embed model has no fallback: a chat model posted to /embeddings fails late and confusingly. */
-export function embedderFromConfig(config: AxiomConfig, opts?: { costTracker?: CostTracker }): Embedder {
+export function embedModelFromConfig(config: AxiomConfig): ModelInfo {
   if (!config.modelRoles?.embed) throw new Error(MISSING_EMBED_MESSAGE);
-  return createEmbedder(resolveModel('@embed', loadCatalog(), config), opts);
+  return resolveModel('@embed', loadCatalog(), config);
+}
+
+export function embedderFromConfig(config: AxiomConfig, opts?: { costTracker?: CostTracker }): Embedder {
+  return createEmbedder(embedModelFromConfig(config), opts);
 }

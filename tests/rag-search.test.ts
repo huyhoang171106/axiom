@@ -7,8 +7,8 @@ import assert from 'node:assert/strict';
 import { DEFAULT_CONFIG } from '../src/core/config.js';
 import { pythonBin } from '../src/core/paths.js';
 import { Bm25, tokenize } from '../src/core/rag/bm25.js';
-import { createEmbedder, embedderFromConfig, fakeEmbedder, MISSING_EMBED_MESSAGE } from '../src/core/rag/embedder.js';
-import { RepoIndex } from '../src/core/rag/index.js';
+import { createEmbedder, embedderFromConfig, embedIdentity, fakeEmbedder, MISSING_EMBED_MESSAGE } from '../src/core/rag/embedder.js';
+import { PREPROCESSING_VERSION, RepoIndex } from '../src/core/rag/index.js';
 import type { Embedder } from '../src/core/rag/types.js';
 import type { ModelInfo } from '../src/llm/catalog/index.js';
 import { CostTracker } from '../src/llm/cost-tracker.js';
@@ -155,6 +155,52 @@ describe('rag search', () => {
     }
   });
 
+  it('vectors of mixed dimension are rejected', async () => {
+    const server = await startFakeServer((_req, res) => {
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ embeddings: [[1, 0], [1]] }));
+    });
+    try {
+      const embed = createEmbedder(model('ollama-chat', server.url, 'ollama'));
+      await assert.rejects(embed(['a', 'b']), (error: unknown) => error instanceof ProviderError && /dimensions 2, 1/.test(error.message));
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('non-finite vector values are rejected', async () => {
+    const server = await startFakeServer((_req, res) => {
+      res.setHeader('content-type', 'application/json');
+      res.end('{"embeddings":[[1e999, 0]]}');
+    });
+    try {
+      const embed = createEmbedder(model('ollama-chat', server.url, 'ollama'));
+      await assert.rejects(embed(['a']), (error: unknown) => error instanceof ProviderError && /non-finite/.test(error.message));
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('a model that cannot embed fails with a hint to check modelRoles.embed', async () => {
+    const server = await startFakeServer((_req, res) => {
+      res.statusCode = 404;
+      res.end(JSON.stringify({ error: { message: 'model "llama3.2" does not support embeddings' } }));
+    });
+    try {
+      const embed = createEmbedder(model('openai-completions', server.url, 'ollama'));
+      await assert.rejects(embed(['a']), /ollama\/embed-test is an embedding model.*modelRoles\.embed/);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('embed identity covers provider, wire, endpoint and the exact model tag', () => {
+    const base = { ...model('openai-completions', 'http://127.0.0.1:11434/v1/', 'ollama'), id: 'qwen3-embedding:0.6b' };
+    assert.equal(embedIdentity(base), 'ollama|openai-completions|http://127.0.0.1:11434/v1|qwen3-embedding:0.6b');
+    const variants = [{ ...base, provider: 'other' }, { ...base, api: 'ollama-chat' as const }, { ...base, baseUrl: 'http://127.0.0.1:11435/v1' }, { ...base, id: 'qwen3-embedding:4b' }];
+    assert.equal(new Set([base, ...variants].map(embedIdentity)).size, 5);
+  });
+
   it('missing modelRoles.embed throws a fix-it message', () => {
     assert.throws(() => embedderFromConfig({ ...DEFAULT_CONFIG, modelRoles: { default: 'openai/gpt-4o' } }), { message: MISSING_EMBED_MESSAGE });
   });
@@ -182,6 +228,30 @@ describe('rag search', () => {
       assert.deepEqual(diff.added.sort(), ['README.md', 'db/storage.py', 'db/table.py']);
       assert.equal(embedded, chunkCount, 'every chunk embedded again');
       assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8')).embedModel, 'model-b');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('an index built with other preprocessing is rebuilt', needsPython, async () => {
+    const root = tempRepo(REPO);
+    const dir = path.join(root, '.idx');
+    let embedded = 0;
+    const counting: Embedder = async (texts) => {
+      embedded += texts.length;
+      return fakeEmbedder()(texts);
+    };
+    try {
+      await (await RepoIndex.open(root, counting, { dir, embedModel: 'm' })).update();
+      const metaFile = path.join(dir, 'meta.json');
+      const meta = JSON.parse(fs.readFileSync(metaFile, 'utf8')) as { preprocessing: string };
+      assert.equal(meta.preprocessing, PREPROCESSING_VERSION);
+      fs.writeFileSync(metaFile, JSON.stringify({ ...meta, preprocessing: 'older-chunker' }));
+      const chunkCount = embedded;
+      embedded = 0;
+      const diff = await (await RepoIndex.open(root, counting, { dir, embedModel: 'm' })).update();
+      assert.deepEqual(diff.added.sort(), ['README.md', 'db/storage.py', 'db/table.py']);
+      assert.equal(embedded, chunkCount, 'every chunk embedded again');
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
