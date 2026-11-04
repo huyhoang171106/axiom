@@ -49,7 +49,7 @@ Còn nợ từ Phase 1: video demo (`phase-1.md` mục Ghép). D quay ở D7.
 | 2 · T5 05/11 | A2 | B2 | C2, C4 | D2 | E2 |
 | 3 · T6 06/11 | A3 | B3 | C3 | D3, D4 | E3 |
 | 4 · T7 07/11 | A4 | B4 | C5 | D5 | E4, E5 |
-| 5 · CN 08/11 | A5 | B5 | C6, C7 | D6, D7 ghép | E6 |
+| 5 · CN 08/11 | A5 | B5 | C6, C7 | D7 ghép | E6 |
 | T2–T3 09–10/11 | Sửa lỗi, eval thật UC-01, `docs/uc-01.md` | Như A cho UC-02 | Như A cho UC-03 | Eval `--all`, video, tag | Như A cho UC-05 |
 
 Task đầu của A, B, C, E (A1, B1, C1, E1) không cần file của D0, làm được ngay 04/11 kể cả khi D0 trễ.

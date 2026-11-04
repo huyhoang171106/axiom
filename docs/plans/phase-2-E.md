@@ -6,7 +6,7 @@
 |---|---|---|---|
 | E1 | 04/11 | Danh mục rủi ro trong `decide()` | done |
 | E2 | 05/11 | Chống lách sau khi bị từ chối | |
-| E3 | 06/11 | `askHuman`, `runGraph`, approver headless | |
+| E3 | 06/11 | `runGraph` hỏi lại, nối TUI, test duyệt tool call | |
 | E4 | 07/11 | Audit log, `/audit` | |
 | E5 | 07/11 | `/mode`, `/plan`, màn hình duyệt có mức rủi ro | |
 | E6 | 08/11 | Eval UC-05 | |
@@ -78,29 +78,17 @@ Test `tests/denied-actions.test.ts`:
 - `a different file is not affected by the denial`
 - `denied action never reaches the approver a second time`
 
-## E3. `askHuman`, `runGraph`, approver headless
+## E3. Hỏi lại trong `runGraph`, nối TUI
 
 Branch `e/e3-human-gate`. Cần D0.
 
-```ts
-// src/core/human-gate.ts
-export function askHuman(question: string, choices: readonly string[]): string;
-// trong node: return interrupt({ question, choices }) as string; ngoài graph: throw
-export function runGraph<S>(graph: CompiledGraph, input: Partial<S> | null, opts: { threadId: string; ui: CommandUI; signal?: AbortSignal }): Promise<S>;
-// lặp: invoke → có __interrupt__ → ui.confirm (2 lựa chọn yes/no) hoặc ui.ask (khác) → invoke(new Command({ resume: answer })) → đến khi không còn interrupt
-export function headlessApprover(opts: { yes: boolean }): Approver;
-// yes: true → 'approve' (cờ --yes); false → 'deny' với audit approver 'headless'
-```
+D0 đã làm thân thật `askHuman` và `runGraph` (`src/core/human-gate.ts`): yes/no qua `ui.confirm`, lựa chọn khác qua `ui.ask`, câu trả lời không hợp lệ thành lựa chọn cuối. Không có `headlessApprover`: headless không TTY và không `--yes` thì registry không có approver nên hành động `ask` bị từ chối; `--yes` đặt `allowWithoutApprover` (`DESIGN.md` mục 9, 2026-11-04).
 
 Bước:
 1. `runGraph`: câu trả lời không thuộc `choices` → hỏi lại tối đa 3 lần rồi chọn `choices.at(-1)` (lựa chọn an toàn đặt cuối: `no`).
-2. Headless (`src/cli`): không có TTY và không `--yes` → `registry.approver = headlessApprover({ yes: false })`.
-3. TUI: `ui.confirm` của TUI dùng hộp duyệt có sẵn.
+2. TUI: `ui.confirm` của TUI dùng hộp duyệt có sẵn; `CommandContext.tools` là registry của chat.
 
-Test `tests/human-gate.test.ts` (graph giả 3 node `a → gate → b`, đếm số lần chạy mỗi node, `MemorySaver`):
-- `graph pauses at askHuman and resumes with the answer`
-- `nodes before the interrupt do not run again after resume`
-- `answer no takes the no branch`
+Test `tests/human-gate.test.ts` (D0 đã có test dừng, resume, trả lời `no`), thêm:
 - `an invalid answer is asked again, then falls back to the last choice`
 - `headless without --yes denies risky tool calls`
 
