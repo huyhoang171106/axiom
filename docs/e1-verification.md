@@ -18,7 +18,7 @@ Không sửa E2 denied-actions, E4 audit hay E5 modes. Không thêm dependency h
 PowerShell: đặt `AXIOM_HOME` vào thư mục tạm mới; đặt `AXIOM_PYTHON` tới Python314 thật (PATH mặc định trỏ Windows Store alias).
 
 - `npm.cmd run lint`: exit 0.
-- `npm.cmd test`: exit 0; 392 test, 389 pass, 0 fail, 3 skip có sẵn.
+- `npm.cmd test`: exit 0; 395 test, 392 pass, 0 fail, 3 skip có sẵn (lần rà soát bổ sung).
 - Skip có sẵn: POSIX permissions trên Windows; tình huống không có rg khi máy có rg; test scrubEnv cần `/bin/bash`.
 - Test E1 mới không skip. Test Git dùng repository/worktree thật, không gọi mạng hoặc push thật.
 - Fixture `tests/core.test.ts` đổi `/tmp/x` thành `x`: test vẫn giữ assertion từ chối vì thiếu approver; outside-root phải DENY theo nghiệm thu mới.
@@ -29,10 +29,24 @@ PowerShell: đặt `AXIOM_HOME` vào thư mục tạm mới; đặt `AXIOM_PYTHO
 
 Sau khi C2 merge, E2 cần thay test xác nhận parser chưa sẵn sàng bằng kiểm thử parser thật: patch nhỏ ALLOW/low; >5 file hoặc xóa file ASK/medium; config ASK/high; cả oldPath/newPath ngoài root, secret, traversal và symlink DENY/high; rename, malformed patch và test-tamper guard. Đây là điều kiện tích hợp chưa được chứng minh, không phải test đã pass.
 
-## Còn phải kiểm chứng trước nghiệm thu
+## Đối chiếu năm tiêu chí E1
 
-- Bộ test trên môi trường Linux có `/bin/bash`, đặc biệt hành vi shell thực thi; hiện chỉ kiểm chứng quyết định policy trên Windows.
-- Rà soát thêm các tùy chọn Git không thuộc tập phân tích (hiện không ALLOW), đường dẫn động và shell wrapper. ASK không có nghĩa đã xác minh destination an toàn.
+| Tiêu chí | Kết quả trong phạm vi E1 | Bằng chứng |
+|---|---|---|
+| Catalog, tool đăng ký, alias, submit, unknown ASK | PASS | `permissions-catalog.test.ts`: so danh mục với registry thật, tên không ánh xạ ASK, submit hiện có low; registry không cung cấp alias tool |
+| Workspace/secret và shell expansion | PASS | `permissions-paths.test.ts`, `permissions-shell.test.ts`, `policy.test.ts`: junction đổi sau lần kiểm tra, traversal, outside cat, substitution, quoted helper options; cú pháp không phân tích được không ALLOW |
+| Destination Git, nested repo, worktree, -C | PASS cho các dạng được kiểm thử | `permissions-git.test.ts`: Git context thật, upstream/config, refspec nhiều đích, wildcard, mirror, -C, -c, force-with-lease, atomic, glob trước push; feature push vẫn ASK/high |
+| Bundled trust giới hạn | PASS | `permissions-bundled.test.ts`: tài liệu thật được đọc, ghi/list bị chặn, giả mạo và junction alias bị chặn |
+| Ranh giới parser C2/E2 | PASS phần E1 | `permissions-patch.test.ts` kiểm tra trạng thái parser thật hiện tại; checklist E2 cụ thể ở trên, không test skip hoặc mock parser |
+
+Ba commit rà soát code/test: `b356192`, `beab883`, `fa7741d`. Giữ nguyên bảy commit trước. Sửa hai lỗi DENY bị che bởi ASK và lỗi quoted options che tác dụng ghi/chạy helper; thêm xử lý `git -c`.
+
+E1 đủ điều kiện tạo PR để review phạm vi đã nêu. Không tuyên bố đã merge hoặc đã kiểm thử parser C2. Tích hợp parser thật thuộc E2 theo nghiệm thu mới, không dùng để chặn PR E1.
+
+## Giới hạn bằng chứng và trạng thái ship
+
+- Chưa chạy bộ test trên Linux; bằng chứng E1 là kiểm thử quyết định policy và filesystem/Git thật trên Windows. Không coi Linux là tiêu chí E1 mới.
+- Tùy chọn Git ngoài tập phân tích, đường dẫn động và shell wrapper không được tự ALLOW. ASK không có nghĩa đã xác minh destination an toàn; không tuyên bố parser hỗ trợ toàn bộ Bash/Git.
 - Chưa truy cập được nội dung Issue #31 trực tiếp: GitHub HTTP 404; dùng nghiệm thu trong prompt.
 - Codex fetch vẫn lỗi `SEC_E_NO_CREDENTIALS`; không có `gh`. Chưa push, tạo PR, chạy CI hoặc ship. Không đánh dấu E1 done.
 
