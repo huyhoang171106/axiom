@@ -1,0 +1,16 @@
+{
+  "category": "two-files",
+  "fixFiles": ["tinydb/database.py", "tinydb/table.py"],
+  "edits": [
+    {
+      "file": "tinydb/table.py",
+      "find": "        # Clear the query cache, as the table contents have changed\n        self.clear_cache()\n",
+      "replace": ""
+    },
+    {
+      "file": "tinydb/database.py",
+      "find": "        # If the table is currently opened, we need to forget the table class\n        # instance\n        if name in self._tables:\n            del self._tables[name]\n\n",
+      "replace": ""
+    }
+  ]
+}

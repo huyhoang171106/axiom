@@ -1,0 +1,7 @@
+{
+  "category": "needs-repro-test",
+  "fixFiles": ["tinydb/table.py"],
+  "edits": [
+    { "file": "tinydb/table.py", "find": "            return cached_results[:]\n", "replace": "            return cached_results\n" }
+  ]
+}
