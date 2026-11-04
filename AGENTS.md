@@ -101,3 +101,4 @@ Proceed without asking when the task is trivial and reversible, or when reading 
 When the user corrects your approach, add a concrete one-line rule here ("Always use X for Y"). Tighten an existing line instead of adding a duplicate. Remove lines that no longer apply.
 
 - Với code do An yêu cầu, viết comment tiếng Việt giải thích rõ cách hoạt động để dễ đọc về sau; giữ tên API theo contract hiện có.
+- After a PR that closes a task issue merges, tick every verified acceptance checkbox in that issue (`gh issue edit -R se373agenticengineering/nhom-30`); leave one unticked only with a comment saying why.

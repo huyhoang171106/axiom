@@ -10,7 +10,6 @@
 | D3 | 06/11 | Compaction, `/compact` | |
 | D4 | 06/11 | Memory, `/memory` | |
 | D5 | 07/11 | 3 feature + eval UC-04 | |
-| D6 | 08/11 | `/resume` liệt kê, `/memory`, `/cost` trong TUI | |
 | D7 | 08/11 | Ghép, video, tag `v0.2-phase2` | |
 
 ## D0. Khung (merge trước 12:00 T4 04/11)
@@ -89,13 +88,14 @@ Branch `d/d2-checkpointer`.
 2. Mọi graph compile với checkpointer này; `thread_id` = `TaskState.threadId`.
 3. `resumeTask`: `loadTaskState` → `graph.invoke(null, { configurable: { thread_id } })` chạy tiếp từ node cuối đã checkpoint. Bước `doing` lúc tắt: đánh lại `todo` và chạy lại bước đó (bước `done` không chạy lại).
 4. Một cơ chế resume (`DESIGN.md` mục 2): xoá đường resume bằng `Checkpoint.stateSnapshot` trong `session.ts` (không ai đọc ngoài `session.ts`); checkpoint session chỉ còn giữ `filesSnapshot` cho `/undo`. `state-machine.ts` giữ vai trò theo dõi pha của `AgentLoop`, không lưu xuống đĩa. Ghi 1 dòng Nhật ký quyết định.
-5. Lệnh `/resume [threadId]`: không có `threadId` → `listTasks()` lọc task còn bước `todo`/`doing`; 1 task thì chạy luôn, nhiều thì `ui.ask` chọn số.
+5. Lệnh `/resume [threadId]`: không có `threadId` → `listTasks()` lọc task còn bước `todo`/`doing`; 1 task thì chạy luôn, nhiều thì in bảng (`threadId`, mục tiêu cắt 1 dòng, `done/total`, `updatedAt`, mới nhất trước) rồi `ui.ask` chọn số.
 
 Test `tests/resume.test.ts`:
 - `killing after step 2 of 5 and resuming runs steps 3 to 5 only` (tiến trình con `tsx` bị `SIGKILL` khi `progress.log` có dòng step 2 xong)
 - `goal and acceptance survive resume unchanged`
 - `a step marked doing at crash is re-run once`
 - `resume with no unfinished task says so`
+- `/resume lists unfinished tasks newest first`
 - `checkpoints persist across processes in checkpoints.db`
 
 ## D3. Compaction
@@ -144,6 +144,7 @@ Test `tests/memory.test.ts`:
 - `clear removes memory from the next prompt`
 - `memory for two repos with the same name is separate`
 - `secret values are redacted before saving`
+- `/memory clear asks before deleting`
 
 ## D5. Feature và eval UC-04
 
@@ -164,19 +165,6 @@ Branch `d/d5-eval`.
 4. Thêm `'04': runUc04` vào `evals/registry.ts`. Ghi `docs/uc-04.md`.
 
 Đạt: `featurePassRate ≥ 2/3`; 5/5 case đạt.
-
-## D6. TUI cho `/resume`, `/memory`, `/cost`
-
-Branch `d/d6-tui-cmds`.
-
-1. `/resume` không tham số: bảng `threadId`, mục tiêu cắt 1 dòng, `done/total`, `updatedAt`.
-2. `/cost`: `defaultCostTracker` → token vào/ra, chi phí theo provider và model, tổng phiên. `kind: 'cost'`.
-3. Nhắn E kind `feature-report`, `cost`.
-
-Test `tests/commands-phase2.test.ts` qua `CommandRouter`:
-- `/resume lists unfinished tasks newest first`
-- `/memory clear asks before deleting`
-- `/cost prints tokens and dollars per provider`
 
 ## D7. Ghép 10/11
 
