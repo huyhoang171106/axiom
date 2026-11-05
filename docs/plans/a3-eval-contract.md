@@ -77,7 +77,7 @@ Provenance lấy từ model được resolve và đường chạy thật/mock th
 
 1. **Tài liệu contract**: ghi đề xuất và các điểm cần D0 xác nhận. Không đổi runtime/API/CI.
 2. **Helper đo case**: `evals/measure.ts` + `tests/eval-measure.test.ts`; test success, failure có usage, lỗi rỗng/non-Error, redaction, token prompt/completion, tracker độc lập và clock tất định.
-3. **Runner UC-01**: sau khi contract được chốt, tách `evals/uc01/run.ts`, dùng helper và giảm registry còn đăng ký runner. Giữ 10 fixture và injection gate; không viết runner của B/C/D/E.
+3. **Runner UC-01**: có thể chuẩn bị tách `evals/uc01/run.ts`, dùng helper và giảm registry còn đăng ký runner khi giữ nguyên contract hiện hành. Sau khi D0 chốt mới bổ sung gates/provenance và nối điều phối CLI mới. Giữ 10 fixture, bảo toàn injection gate của CLI cũ; không viết runner của B/C/D/E.
 4. **Điều phối CLI/artifact**: parse args, registry, workDir từng UC, averages, kết quả có cấu trúc; test qua runner fake và entry point, không gọi mạng thật.
 5. **Release gates**: test missing runner, zero case, threshold fail, missing/duplicate/skipped case, thiếu credential, provenance mock sai và không fallback.
 6. **CI/tài liệu nghiệm thu**: chỉ sửa đúng bước CI được D0 giao; chạy lint, full tests, build và smoke phù hợp các runner hiện có. Không dùng partial/mock làm bằng chứng hoàn tất release.
@@ -95,4 +95,9 @@ Mỗi commit code đi kèm test và comment tiếng Việt giải thích ý đ�
 - Bước 1: đã commit đề xuất (`e8e9506`); chưa có xác nhận từ D0.
 - Bước 2: đã viết `evals/measure.ts` đúng chữ ký hiện hành, có comment tiếng Việt và 10 test ở `tests/eval-measure.test.ts`; test mới không skip.
 - Kiểm tra bước 2: `npm run lint`, `npm run build` pass. Full suite với Python/pytest qua `AXIOM_PYTHON`: 553 test, 540 pass, 13 skip môi trường Windows, 0 fail. Không coi skip Linux/bwrap là bằng chứng sandbox.
-- Chưa sửa `evals/types.ts`, CLI, registry hay CI; bước 3–6 chờ D0 chốt contract. Các phép đo chat/embedding/compaction ở test helper là usage giả để kiểm tổng hợp, chưa phải nối workflow/eval thật.
+- Phần chuẩn bị bước 3: tách `evals/uc01/run.ts`, registry chỉ đăng ký runner, thay phần đo lặp bằng `measureCase`. Giữ nguyên `UcRunner`/result/summary hiện hành. `evals/run.ts` vẫn là CLI cũ và còn giữ các helper được runner import; chuyển hẳn CLI sang registry thuộc bước điều phối sau khi chốt contract.
+- Thêm 5 test trong `tests/eval-uc01.test.ts`: đủ 10 fixture, registry trỏ đúng hàm, provider/tracker độc lập, giữ usage qua schema retry/provider failure và từ chối provider đã tắt thay vì fallback mock. Test dùng mock để kiểm pipeline, không phải số đo accuracy thật.
+- Kiểm phần chuẩn bị bước 3: 27 test eval liên quan pass, 0 skip; lint/build pass. Full suite với Python/pytest: 558 test, 545 pass, 13 skip môi trường, 0 fail.
+- Chưa sửa `evals/types.ts`, CLI hay CI; gates/provenance/release vẫn chờ D0 chốt. Runner tách riêng hiện chưa thể hiện injection gate trong result chung, không được dùng thay nghiệm thu release của issue #8.
+- Phát hiện khi thử lỗi có chuỗi nhạy cảm giả: `EventBus.installDefaultErrorHandler` (`src/core/event-bus.ts`) in message lỗi ra console mà chưa `redact`. `measureCase` che lỗi ở result nhưng không che được log đã phát trước đó. Cần D0 xử lý logger chung trước release; không tự sửa file chung trong commit tách runner.
+- Các phép đo chat/embedding/compaction ở test helper là usage giả để kiểm tổng hợp, chưa phải nối workflow/eval thật.
