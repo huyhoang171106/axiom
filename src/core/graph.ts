@@ -1,8 +1,10 @@
 // src/core/graph.ts - Shared LangGraph pieces: checkpointer, thread IDs, node tracing
 
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import path from 'node:path';
-import { MemorySaver, type BaseCheckpointSaver, type LangGraphRunnableConfig } from '@langchain/langgraph';
+import { type BaseCheckpointSaver, type LangGraphRunnableConfig } from '@langchain/langgraph';
+import { SqliteSaver } from '@langchain/langgraph-checkpoint-sqlite';
 import type { EventBus } from './event-bus.js';
 import { axiomHome } from './paths.js';
 
@@ -10,8 +12,10 @@ export type GraphNode<S> = (s: S, config: LangGraphRunnableConfig) => Promise<Pa
 
 /** Every workflow compiles with this, so resume works the same for all of them. */
 export function createCheckpointer(dbPath: string = path.join(axiomHome(), 'checkpoints.db')): BaseCheckpointSaver {
-  // TODO(D2): SqliteSaver.fromConnString(dbPath); until then checkpoints live only as long as the process.
-  return new MemorySaver();
+  if (dbPath !== ':memory:') {
+    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+  }
+  return SqliteSaver.fromConnString(dbPath);
 }
 
 /** `<kind>-YYYYMMDD-HHmmss-<6 hex>` in UTC: sortable by start time, unique within a second. */
