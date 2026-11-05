@@ -4,7 +4,7 @@ import { fixIssue } from './fix.js';
 import { runFeature } from './feature.js';
 import { loadCatalog } from '../llm/catalog/index.js';
 import { resolveModel, createProviderFor } from '../llm/model-resolver.js';
-import { embedderFromConfig } from '../core/rag/embedder.js';
+import { createEmbedder, embedIdentity, embedModelFromConfig } from '../core/rag/embedder.js';
 
 import type { CommandUI, ExecutionContext } from '../core/execution-context.js';
 import type { AxiomConfig } from '../core/types.js';
@@ -46,10 +46,12 @@ export async function runRoute(ticket: IssueTicket, issue: string, ctx: RouteCon
     tools: ctx.tools, costTracker: ctx.costTracker, ui: ctx.ui, signal: ctx.signal };
   if (ticket.route === 'answer') {
     // Chỉ RAG cần @embed; fix/implement vẫn chạy được khi chưa cấu hình model embedding.
-    // Gửi cả tên model để index nhận biết thay đổi model và tracker tính usage vào phiên.
+    // Resolve một lần để embedder và định danh index luôn cùng provider, wire, endpoint và model.
+    // Selector/alias không đủ: đổi endpoint mà giữ selector vẫn phải dựng lại index.
+    const embedInfo = embedModelFromConfig(ctx.config);
     const data = await deps.answer(issue, { ...opts,
-      embedder: embedderFromConfig(ctx.config, { costTracker: ctx.costTracker }),
-      embedModel: ctx.config.modelRoles?.embed });
+      embedder: createEmbedder(embedInfo, { costTracker: ctx.costTracker }),
+      embedModel: embedIdentity(embedInfo) });
     return { route: ticket.route, text: data.text, data };
   }
   if (ticket.route === 'fix') {

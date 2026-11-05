@@ -19,10 +19,14 @@ import { TuiStore } from '../src/tui/store.js';
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-triage-integration-'));
 process.env.AXIOM_HOME = root;
 process.env.AXIOM_CONFIG_PATH = path.join(root, 'config.json');
-fs.writeFileSync(path.join(root, 'models.json'), JSON.stringify({ providers: { 'test-a2': {
-  api: 'openai-completions', baseUrl: 'http://127.0.0.1:1/v1', auth: 'none',
-  models: ['triage-model', 'answer-model', 'code-model', 'embed-model'].map(id => ({ id, contextWindow: 128000 })),
-} } }));
+let providerBaseUrl: string;
+function writeProvider(baseUrl: string): void {
+  providerBaseUrl = baseUrl;
+  fs.writeFileSync(path.join(root, 'models.json'), JSON.stringify({ providers: { 'test-a2': {
+    api: 'openai-completions', baseUrl, auth: 'none',
+    models: ['triage-model', 'answer-model', 'code-model', 'embed-model'].map(id => ({ id, contextWindow: 128000 })),
+  } } }));
+}
 after(() => fs.rmSync(root, { recursive: true, force: true }));
 
 const config = { ...DEFAULT_CONFIG, defaultModel: 'test-a2/answer-model',
@@ -38,7 +42,8 @@ const deps: RouteDeps = {
   answer: async (_issue, opts) => {
     calls.push('answer'); contexts.push(opts);
     assert.equal(opts.model, 'answer-model');
-    assert.equal(opts.embedModel, 'test-a2/embed-model');
+    // Index phải nhận định danh đã resolve, không nhận selector/alias trong config.
+    assert.equal(opts.embedModel, `test-a2|openai-completions|${providerBaseUrl}|embed-model`);
     assert.deepEqual(await opts.embedder(['question']), [[1, 0]]);
     return { text: 'Answer from workflow', citations: [], found: true };
   },
@@ -65,10 +70,11 @@ const deps: RouteDeps = {
 // Endpoint loopback giả bắt cả payload model và embedding, không gọi provider bên ngoài.
 beforeEach(t => {
   selected = 'fix'; calls = []; requests = []; contexts = []; failWorkflow = false;
+  writeProvider('http://127.0.0.1:1/v1');
   fs.writeFileSync(process.env.AXIOM_CONFIG_PATH!, JSON.stringify(config));
   t.mock.method(triageCommand, 'run', createTriageCommand(deps).run);
   t.mock.method(globalThis, 'fetch', async (url: string, init: RequestInit) => {
-    assert.ok(String(url).startsWith('http://127.0.0.1:1/v1/'), `Unexpected URL: ${url}`);
+    assert.ok(String(url).startsWith(`${providerBaseUrl}/`), `Unexpected URL: ${url}`);
     const request = JSON.parse(String(init.body)); requests.push(request);
     if (String(url).endsWith('/embeddings')) {
       assert.equal(request.model, 'embed-model');
@@ -129,6 +135,31 @@ for (const route of ['ask_user', 'reject'] as const) {
     assert.deepEqual(calls, []); assert.equal(requests.length, 1);
   });
 }
+
+test('answer resolves an embedding role alias before identifying the index', async () => {
+  selected = 'answer';
+  const ctx = context(true);
+  ctx.config = { ...config, modelRoles: { ...config.modelRoles, embed: '@task', task: 'test-a2/embed-model' } };
+  await triageCommand.run('issue', ctx);
+  assert.deepEqual(calls, ['answer']);
+  assert.ok(requests.some(r => r.model === 'embed-model'));
+});
+
+test('answer changes index identity when the endpoint changes under the same selector', async () => {
+  selected = 'answer';
+  const ctx = context(true);
+  await triageCommand.run('issue', ctx);
+  const firstIdentity = (contexts[0] as { embedModel: string }).embedModel;
+  // Cùng provider/model và số chiều, nhưng endpoint mới có thể tạo vector khác nghĩa.
+  // Route phải truyền identity mới để RepoIndex có thể dựng lại thay vì tái sử dụng index.
+  writeProvider('http://127.0.0.1:2/v1');
+  await triageCommand.run('issue', ctx);
+  const secondIdentity = (contexts[1] as { embedModel: string }).embedModel;
+  assert.notEqual(firstIdentity, secondIdentity);
+  assert.equal(ctx.config.modelRoles?.embed, 'test-a2/embed-model');
+  assert.deepEqual(calls, ['answer', 'answer']);
+  assert.equal(requests.filter(r => r.model === 'embed-model').length, 2);
+});
 
 test('missing embed configuration errors before invoking answer workflow', async () => {
   selected = 'answer';

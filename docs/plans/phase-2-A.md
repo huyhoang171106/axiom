@@ -5,7 +5,7 @@
 | # | Ngày | Việc | Trạng thái |
 |---|---|---|---|
 | A1 | 04/11 | Role `@code`/`@embed`, `/cost` theo model và budget theo run (#6) | done |
-| A2 | 05/11 | Graph `triage → confirm`, gọi `runRoute` ngoài graph (#7) | |
+| A2 | 05/11 | Graph `triage → confirm`, gọi `runRoute` ngoài graph (#7) | in progress |
 | A3 | 06/11 | `UC_RUNNERS`, `--uc NN`, `--all`, chỉ số mục 6.2 | |
 | A4 | 07/11 | Số đo thật UC-01 | |
 | A5 | 08/11 | Renderer IssueTicket trong TUI | |
@@ -40,11 +40,13 @@ Kiểm: test triage, command, graph và human-gate; `npm run lint`, `npm test`, 
 ### Bằng chứng trên nhánh `laneA` (chưa nghiệm thu Done)
 
 - Code và test có comment tiếng Việt giải thích ranh giới graph/route, điều kiện hoàn tất không dùng abort, registry phiên và fake workflow seam.
-- Chia commit theo phần việc: kết thúc AgentLoop, dispatch route/model, graph và command, test tích hợp CLI/TUI, tài liệu. Theo yêu cầu của An, chỉ push `laneA`, chưa mở PR hay merge `main`.
+- Chia commit theo phần việc: kết thúc AgentLoop, dispatch route/model, graph và command, test tích hợp CLI/TUI, tài liệu, sửa định danh embedding. PR từ `laneA` dùng để đối chiếu nghiệm thu và xin D xác nhận thay đổi core trước khi merge; chưa đánh dấu Done.
 - Đã rebase lên `origin/main` tại `641dece`; giữ cả các dòng quyết định của main và quyết định A2 khi giải quyết conflict tài liệu.
-- Lệnh kiểm A2: `npx tsx --test tests/agent-loop-completion.test.ts tests/triage.test.ts tests/triage-command.test.ts tests/triage-graph.test.ts tests/triage-integration.test.ts tests/human-gate.test.ts`: 53 pass, 0 skip.
-- Full suite sau rebase: 541 test, 528 pass, 13 skip, 0 fail. Máy Windows cần venv Python có pytest và `AXIOM_PYTHON` trỏ tới Python của venv; 13 skip là điều kiện môi trường, gồm 8 test cần Linux/bwrap. Không coi các skip này là bằng chứng sandbox trên Linux.
-- Trước nghiệm thu cần rà soát `runRoute` theo hợp đồng RAG mới trên main: `AskOptions.embedModel` nhận định danh từ `embedModelFromConfig`, không chỉ selector cấu hình; hiện route và test vẫn truyền/kiểm selector. Cần phối hợp D cho thay đổi `AgentLoopOptions.isComplete`, PR và CI trước khi đánh dấu `done`/đóng #7.
+- Lệnh kiểm A2: `npx tsx --test tests/agent-loop-completion.test.ts tests/triage.test.ts tests/triage-command.test.ts tests/triage-graph.test.ts tests/triage-integration.test.ts tests/human-gate.test.ts`: 55 pass, 0 skip. `npm run lint` và `npm run build` pass.
+- Full suite sau sửa định danh embedding: 543 test, 530 pass, 13 skip, 0 fail. Máy Windows cần venv Python có pytest và `AXIOM_PYTHON` trỏ tới Python của venv; 13 skip là điều kiện môi trường, gồm 8 test cần Linux/bwrap. Không coi các skip này là bằng chứng sandbox trên Linux.
+- Đã sửa `runRoute` theo hợp đồng RAG mới: resolve `embedModelFromConfig` một lần, dùng cùng `ModelInfo` cho `createEmbedder` và `embedIdentity`, như `/ask`. Test kiểm selector thường, alias `@task` và đổi endpoint trong khi selector giữ nguyên; trước sửa có 3 test fail vì route truyền selector/alias thay identity, sau sửa đều pass.
+- Bàn giao D: `AgentLoopOptions.isComplete?: () => boolean` được kiểm sau lượt tool và sau kiểm abort; không truyền thì giữ luồng cũ. Test `agent-loop-completion` phủ hoàn tất ngay bước cuối, tiếp tục khi chưa đủ đầu ra và abort được ưu tiên; test TUI chứng minh ticket hợp lệ không phát lỗi giả. Quyết định đã ghi trong `DESIGN.md`, chưa có xác nhận ownership từ D.
+- Điều kiện chốt: D xác nhận thay đổi core trên PR có `Closes #7`, mọi CI bắt buộc xanh, cập nhật trạng thái `done` trong PR rồi merge qua `scripts/ship.sh`. Chỉ pull main sau khi merge, không merge trước chỉ để D xem code. Không coi kết quả local hoặc fake workflow là bằng chứng release thật.
 
 ## A3. Eval runner chung
 
