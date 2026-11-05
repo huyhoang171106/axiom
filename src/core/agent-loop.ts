@@ -26,6 +26,8 @@ export interface AgentLoopOptions {
   /** Model for this role; defaults to `config.defaultModel`. */
   model?: string;
   signal?: AbortSignal;
+  /** Workflow xác nhận đã nhận đầu ra cuối cùng sau lượt tool; không dùng abort để báo thành công. */
+  isComplete?: () => boolean;
 }
 
 export interface TaskResult {
@@ -77,6 +79,7 @@ export class AgentLoop {
   public readonly toolRegistry: ToolRegistry;
   private readonly providerRegistry: ProviderRegistry;
   private readonly provider?: BaseLLMProvider;
+  private readonly isComplete?: () => boolean;
   private readonly guard = new RepetitionGuard();
   private readonly maxSteps: number;
   private readonly budgetLimitDollars: number;
@@ -85,6 +88,7 @@ export class AgentLoop {
   private signal?: AbortSignal;
 
   constructor(options: AgentLoopOptions) {
+    this.isComplete = options.isComplete;
     this.config = options.config;
     this.eventBus = options.eventBus ?? defaultEventBus;
     this.stateMachine = new ExecutionStateMachine(this.eventBus);
@@ -168,6 +172,14 @@ export class AgentLoop {
         return this.finish('completed');
       }
       await this.runTools(toolCalls);
+      // Chờ cả lượt tool ghi xong kết quả vào transcript rồi mới xét đầu ra cuối cùng.
+      // Hủy thật luôn được ưu tiên; nhận được ticket không biến một lượt đã hủy thành thành công.
+      if (this.signal?.aborted) return this.finish('aborted', 'Task aborted via AbortSignal');
+      // Workflow có thể đã đủ đầu ra sau tool, không cần tốn thêm một lượt gọi model.
+      if (this.isComplete?.()) {
+        this.sessionManager.saveSession();
+        return this.finish('completed');
+      }
     }
     return this.finish('failed', `Exceeded maximum steps (${this.maxSteps}).`);
   }

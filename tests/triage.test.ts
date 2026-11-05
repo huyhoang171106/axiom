@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { ToolCall } from '../src/core/types.js';
 import { issueTicketSchema, runTriage, validateTicket, type IssueTicket } from '../src/agents/triage.js';
 import { MockProvider } from '../src/llm/providers/mock.js';
+import { EventBus } from '../src/core/event-bus.js';
 
 // runTriage stores its throwaway session under axiomHome(); keep it in a temp dir per run.
 process.env.AXIOM_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-home-'));
@@ -54,11 +55,19 @@ test('a valid ticket is accepted and the loop stops at one model turn', async ()
     { content: '', toolCalls: [submitCall(ticket())] },
     'this turn must never run',
   ]);
-  const result = await runTriage({ issue: 'the cli crashes', workspaceRoot: root, provider });
+  // Nhận ticket hợp lệ phải phát completed, không phát lỗi abort làm TUI báo thất bại.
+  const bus = new EventBus();
+  const errors: string[] = [];
+  const states: string[] = [];
+  bus.on('error', e => errors.push(e.message));
+  bus.on('state_change', e => states.push(e.to));
+  const result = await runTriage({ issue: 'the cli crashes', workspaceRoot: root, provider, bus, maxSteps: 1 });
   assert.equal(result.ticket.type, 'bug');
   assert.deepEqual(result.ticket.affected_files, ['app.py']);
   assert.deepEqual(result.warnings, []);
-  assert.equal(provider.callHistory.length, 1, 'abort after accept stops the loop');
+  assert.equal(provider.callHistory.length, 1, 'submission completes even on the last allowed step');
+  assert.deepEqual(errors, []);
+  assert.equal(states.at(-1), 'completed');
 });
 
 test('non-existent and outside-workspace files are dropped with warnings', async () => {

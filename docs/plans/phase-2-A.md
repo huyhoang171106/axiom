@@ -5,7 +5,7 @@
 | # | Ngày | Việc | Trạng thái |
 |---|---|---|---|
 | A1 | 04/11 | Role `@code`/`@embed`, `/cost` theo model và budget theo run (#6) | done |
-| A2 | 05/11 | Graph `triage → confirm → route`, điền `runRoute` | |
+| A2 | 05/11 | Graph `triage → confirm`, gọi `runRoute` ngoài graph (#7) | in progress |
 | A3 | 06/11 | `UC_RUNNERS`, `--uc NN`, `--all`, chỉ số mục 6.2 | |
 | A4 | 07/11 | Số đo thật UC-01 | |
 | A5 | 08/11 | Renderer IssueTicket trong TUI | |
@@ -26,55 +26,27 @@ Nghiệm thu: resolver trả `ModelInfo` và không fallback `@embed`; `/cost` b
 
 ## A2. Graph triage và `runRoute`
 
-Branch `a/a2-triage-graph`. Cần D0 (`graph.ts`, `human-gate.ts`, `route.ts` stub).
+Branch `laneA` (theo yêu cầu của An). Nghiệm thu theo issue #7.
 
-Hợp đồng (D0 đã tạo, A điền thân):
+- Graph `triage → confirm` dùng checkpointer chung và `askHuman`; command gọi `runRoute` sau graph khi đã duyệt. Workflow nằm ngoài node để resume không lặp thao tác sửa.
+- `answer` dùng `@default` và embedder `@embed`; `fix`/`implement` dùng `@code`. Resolve thành `ModelInfo.id` trước provider call, chỉ tạo embedder cho `answer`.
+- `ask_user`/`reject` không gọi workflow/model khác; hiển thị type, priority, missing_info theo schema hiện tại (không có `summary`).
+- Truyền registry, bus, tracker, UI và signal của phiên. Triage lấy scoped registry, giữ approver của phiên.
+- Trace `triage`, `confirm` và route bên ngoài graph có cùng thread ID. Headless và TUI đi qua `runGraph`/`ui.confirm` chung.
+- `RouteDeps` cho phép test bằng fake workflow khi C5/D1 chưa sẵn sàng. Fake không phải bằng chứng eval thật.
 
-```ts
-// src/agents/route.ts
-export interface RouteContext { workspaceRoot: string; config: AxiomConfig; ui: CommandUI; signal: AbortSignal; bus: EventBus }
-export interface RouteResult { route: IssueTicket['route']; text: string; data?: unknown }
-export interface RouteDeps {           // thêm mới, A sở hữu; test truyền hàm giả
-  answer: typeof answerQuestion;
-  fix: typeof fixIssue;
-  feature: typeof runFeature;
-}
-export function runRoute(ticket: IssueTicket, issue: string, ctx: RouteContext, deps?: RouteDeps): Promise<RouteResult>;
+Kiểm: test triage, command, graph và human-gate; `npm run lint`, `npm test`, `npm run build`.
 
-// src/agents/triage.ts — thêm, giữ nguyên runTriage cũ
-export interface TriageGraphState { issue: string; ticket: IssueTicket | null; warnings: string[]; confirmed: boolean; result: RouteResult | null }
-export function buildTriageGraph(opts: TriageOptions & { ctx: RouteContext; deps?: RouteDeps }): CompiledStateGraph;
-```
+### Bằng chứng trên nhánh `laneA` (chưa nghiệm thu Done)
 
-Bước:
-1. `buildTriageGraph`: 3 node, mỗi node bọc `traceNode(bus, 'triage', '<tên>', fn)`.
-   - `triage`: gọi `runTriage(opts)` cũ, ghi `ticket`, `warnings`.
-   - `confirm`: nếu `route` là `ask_user` hoặc `reject` thì `confirmed = true` không hỏi. Ngược lại `askHuman('Chạy route đề xuất (<route>)?', ['yes', 'no'])`; `confirmed = answer === 'yes'`.
-   - `route`: `confirmed` thì `runRoute`, không thì `result = { route, text: 'Đã dừng theo yêu cầu.' }`.
-   - Compile với `checkpointer: createCheckpointer()`, `thread_id = newThreadId('triage')`.
-2. `runRoute`:
-
-   | `route` | Làm | `text` |
-   |---|---|---|
-   | `answer` | `deps.answer(issue, { workspaceRoot, provider, model: '@default', embedder, signal, bus })` | `AskAnswer.text` |
-   | `fix` | `deps.fix({ issue, workspaceRoot, ... })` | `FixReport.summary` |
-   | `implement` | `deps.feature(issue, { ... })` | `FeatureReport.summary` |
-   | `ask_user` | không gọi model | mỗi câu trong `ticket.missing_info` một dòng `- <câu>` |
-   | `reject` | không gọi model | `ticket.summary` |
-
-   `deps` mặc định là hàm thật import từ `ask.ts`, `fix.ts`, `feature.ts`.
-3. `src/commands/triage.ts`: chạy graph qua `runGraph(graph, { issue }, { threadId, ui: ctx.ui, signal: ctx.signal })`. Trả `CommandResult { kind: 'issue-ticket', data: { ticket, warnings, result }, text }`.
-4. Headless (`axiom triage ...`): `ui.confirm` trả `false` khi không có TTY nên không chạy route; thêm cờ `--yes` để chạy luôn.
-
-Test `tests/triage-graph.test.ts` (`MockProvider` trả tool call `submit_issue_ticket`, `deps` là spy, `AXIOM_HOME` tạm):
-- `routes a bug ticket to fix after the user confirms`
-- `does not call any workflow when the user answers no`
-- `answer, implement each reach their workflow once` (2 case trong một test bảng)
-- `ask_user prints missing_info questions without a model call`
-- `reject returns the ticket summary`
-- `trace has node enter and exit for triage, confirm, route`
-
-Kiểm: `npx tsx --test tests/triage-graph.test.ts tests/triage.test.ts && npm run lint`.
+- Code và test có comment tiếng Việt giải thích ranh giới graph/route, điều kiện hoàn tất không dùng abort, registry phiên và fake workflow seam.
+- Chia commit theo phần việc: kết thúc AgentLoop, dispatch route/model, graph và command, test tích hợp CLI/TUI, tài liệu, sửa định danh embedding. PR từ `laneA` dùng để đối chiếu nghiệm thu và xin D xác nhận thay đổi core trước khi merge; chưa đánh dấu Done.
+- Đã rebase lên `origin/main` tại `641dece`; giữ cả các dòng quyết định của main và quyết định A2 khi giải quyết conflict tài liệu.
+- Lệnh kiểm A2: `npx tsx --test tests/agent-loop-completion.test.ts tests/triage.test.ts tests/triage-command.test.ts tests/triage-graph.test.ts tests/triage-integration.test.ts tests/human-gate.test.ts`: 55 pass, 0 skip. `npm run lint` và `npm run build` pass.
+- Full suite sau sửa định danh embedding: 543 test, 530 pass, 13 skip, 0 fail. Máy Windows cần venv Python có pytest và `AXIOM_PYTHON` trỏ tới Python của venv; 13 skip là điều kiện môi trường, gồm 8 test cần Linux/bwrap. Không coi các skip này là bằng chứng sandbox trên Linux.
+- Đã sửa `runRoute` theo hợp đồng RAG mới: resolve `embedModelFromConfig` một lần, dùng cùng `ModelInfo` cho `createEmbedder` và `embedIdentity`, như `/ask`. Test kiểm selector thường, alias `@task` và đổi endpoint trong khi selector giữ nguyên; trước sửa có 3 test fail vì route truyền selector/alias thay identity, sau sửa đều pass.
+- Bàn giao D: `AgentLoopOptions.isComplete?: () => boolean` được kiểm sau lượt tool và sau kiểm abort; không truyền thì giữ luồng cũ. Test `agent-loop-completion` phủ hoàn tất ngay bước cuối, tiếp tục khi chưa đủ đầu ra và abort được ưu tiên; test TUI chứng minh ticket hợp lệ không phát lỗi giả. Quyết định đã ghi trong `DESIGN.md`, chưa có xác nhận ownership từ D.
+- Điều kiện chốt: D xác nhận thay đổi core trên PR có `Closes #7`, mọi CI bắt buộc xanh, cập nhật trạng thái `done` trong PR rồi merge qua `scripts/ship.sh`. Chỉ pull main sau khi merge, không merge trước chỉ để D xem code. Không coi kết quả local hoặc fake workflow là bằng chứng release thật.
 
 ## A3. Eval runner chung
 
