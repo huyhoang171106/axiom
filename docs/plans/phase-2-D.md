@@ -8,7 +8,7 @@
 | D1 | 04/11 | `task-state.ts`, graph `/feature` | done |
 | D2 | 05/11 | Checkpointer SQLite, `/resume` | done |
 | D3 | 06/11 | Compaction, `/compact` | done |
-| D4 | 06/11 | Memory, `/memory` | |
+| D4 | 06/11 | Memory, `/memory` | done |
 | D5 | 07/11 | 3 feature + eval UC-04 | |
 | D7 | 08/11 | Ghép, video, tag `v0.2-phase2` | |
 

@@ -14,6 +14,7 @@ import { axiomHome } from '../core/paths.js';
 import { buildSystemPrompt } from '../core/prompt.js';
 import { SessionManager } from '../core/session.js';
 import { snapshotFiles, restoreFiles } from '../core/snapshot.js';
+import { addMemory } from '../core/memory.js';
 import {
   appendProgress,
   canonicalWorkspace,
@@ -56,6 +57,7 @@ export interface FeatureReport {
   steps: PlanStep[];
   filesChanged: string[];
   summary: string;
+  conventions?: string[];
 }
 
 export const planStepSchema = z.object({
@@ -142,6 +144,10 @@ const FeatureState = Annotation.Root({
   approved: Annotation<boolean>,
   error: Annotation<string | undefined>,
   filesChanged: Annotation<string[]>({
+    reducer: (curr, update) => Array.from(new Set([...(curr ?? []), ...(update ?? [])])),
+    default: () => [],
+  }),
+  conventions: Annotation<string[]>({
     reducer: (curr, update) => Array.from(new Set([...(curr ?? []), ...(update ?? [])])),
     default: () => [],
   }),
@@ -377,12 +383,25 @@ export function buildFeatureWorkflow(
       summary = 'Feature implementation incomplete.';
     }
 
+    const conventions = s.conventions ?? [];
+    if (status === 'completed' && conventions.length > 0) {
+      for (const conv of conventions) {
+        const approved = opts.ui?.confirm
+          ? await opts.ui.confirm(`Lưu quy ước mới vào memory dự án: "${conv}"?`)
+          : false;
+        if (approved) {
+          addMemory(opts.workspaceRoot, conv);
+        }
+      }
+    }
+
     const report: FeatureReport = {
       threadId: activeThreadId,
       status,
       steps: currentTaskState?.steps ?? [],
       filesChanged: s.filesChanged ?? [],
       summary,
+      conventions,
     };
 
     return { finalReport: report };
