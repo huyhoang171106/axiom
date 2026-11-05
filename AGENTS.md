@@ -102,3 +102,4 @@ When the user corrects your approach, add a concrete one-line rule here ("Always
 
 - Với code do An yêu cầu, viết comment tiếng Việt giải thích rõ cách hoạt động để dễ đọc về sau; giữ tên API theo contract hiện có.
 - After a PR that closes a task issue merges, tick every verified acceptance checkbox in that issue (`gh issue edit -R se373agenticengineering/nhom-30`); leave one unticked only with a comment saying why.
+- Chỉ commit khi An yêu cầu rõ ràng; yêu cầu tạo branch, viết code hoặc chạy test không cho phép tự commit/push/merge.
