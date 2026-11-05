@@ -1,5 +1,6 @@
 // src/agents/feature.ts - UC-04: plan, approve, then run steps one by one with a checkpoint after each
 
+import fs from 'node:fs';
 import path from 'node:path';
 import { Annotation, END, START, StateGraph, type BaseCheckpointSaver } from '@langchain/langgraph';
 import { z } from 'zod';
@@ -12,12 +13,14 @@ import { askHuman, runGraph } from '../core/human-gate.js';
 import { axiomHome } from '../core/paths.js';
 import { buildSystemPrompt } from '../core/prompt.js';
 import { SessionManager } from '../core/session.js';
+import { snapshotFiles, restoreFiles } from '../core/snapshot.js';
 import {
   appendProgress,
   canonicalWorkspace,
   listTasks,
   loadTaskState,
   saveTaskState,
+  taskDir,
   type PlanStep,
   type TaskState,
 } from '../core/task-state.js';
@@ -157,6 +160,256 @@ const defaultCommandUI: CommandUI = {
   },
 };
 
+/** Builds the state graph for the feature workflow. */
+export function buildFeatureWorkflow(
+  opts: FeatureOptions,
+  fallbackThreadId: string,
+  request?: string
+) {
+  const planNode = async (s: FeatureStateType, config: { configurable?: { thread_id?: string } }) => {
+    const activeThreadId = config?.configurable?.thread_id ?? s.threadId ?? fallbackThreadId;
+    const diskState = loadTaskState(activeThreadId);
+    if (diskState) return { threadId: activeThreadId, taskState: diskState };
+    if (s.taskState) return { threadId: activeThreadId, taskState: s.taskState };
+
+    const planController = new AbortController();
+    if (opts.signal) {
+      if (opts.signal.aborted) planController.abort();
+      else opts.signal.addEventListener('abort', () => planController.abort(), { once: true });
+    }
+
+    let acceptedPlan: PlanSubmission | undefined;
+    const submitTool = new SubmitPlanTool((plan) => {
+      acceptedPlan = plan;
+      planController.abort();
+    });
+
+    const planTools = opts.tools.scoped(['read_file', 'list_dir', 'search_code', 'submit_plan']);
+    planTools.registerTool(submitTool);
+
+    const agent = new AgentLoop({
+      config: { ...DEFAULT_CONFIG, workspaceRoot: opts.workspaceRoot },
+      provider: opts.provider,
+      toolRegistry: planTools,
+      sessionManager: new SessionManager({
+        workspaceRoot: opts.workspaceRoot,
+        sessionsDir: path.join(axiomHome(), 'sessions'),
+        autoSave: false,
+      }),
+      costTracker: opts.costTracker ?? new CostTracker(),
+      eventBus: opts.bus,
+      systemPrompt: buildSystemPrompt(FEATURE_PLAN_SYSTEM_PROMPT, opts.workspaceRoot),
+      model: opts.model,
+      maxSteps: 12,
+      signal: planController.signal,
+    });
+
+    const result = await agent.runTask(s.request ?? request ?? '', planController.signal);
+    if (!acceptedPlan && submitTool.submittedPlan) acceptedPlan = submitTool.submittedPlan;
+
+    if (!acceptedPlan) {
+      const errorMsg = submitTool.lastError ?? result.error ?? 'Planning failed: submit_plan was not called';
+      return { threadId: activeThreadId, error: errorMsg };
+    }
+
+    const taskState: TaskState = {
+      threadId: activeThreadId,
+      workspaceRoot: canonicalWorkspace(opts.workspaceRoot),
+      goal: acceptedPlan.goal,
+      constraints: acceptedPlan.constraints ?? [],
+      acceptance: acceptedPlan.acceptance,
+      steps: acceptedPlan.steps.map((st, idx) => ({
+        id: idx + 1,
+        title: st.title,
+        files: st.files ?? [],
+        status: 'todo',
+      })),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    saveTaskState(taskState);
+    return { threadId: activeThreadId, taskState };
+  };
+
+  const approveNode = async (s: FeatureStateType) => {
+    if (s.approved !== undefined) return { approved: s.approved };
+    if (s.error || !s.taskState) return { approved: false };
+    const answer = askHuman('Duyệt kế hoạch?', ['yes', 'no']);
+    return { approved: answer === 'yes' };
+  };
+
+  const stepNode = async (s: FeatureStateType, config: { configurable?: { thread_id?: string } }) => {
+    const activeThreadId = config?.configurable?.thread_id ?? s.threadId ?? fallbackThreadId;
+    const currentTaskState = loadTaskState(activeThreadId) ?? s.taskState;
+    if (!currentTaskState) return { error: 'Missing task state in step node' };
+
+    const step = currentTaskState.steps.find((st) => st.status === 'todo' || st.status === 'doing');
+    if (!step) return {};
+
+    // P7: Chụp snapshot files trước khi chuyển sang 'doing'
+    const snapDir = path.join(taskDir(currentTaskState.threadId), `snap-${step.id}`);
+    snapshotFiles(opts.workspaceRoot, snapDir);
+
+    step.status = 'doing';
+    currentTaskState.updatedAt = new Date().toISOString();
+    saveTaskState(currentTaskState);
+
+    const completed = currentTaskState.steps.filter((st) => st.status === 'done');
+    const stepPrompt = [
+      `Feature Goal: ${currentTaskState.goal}`,
+      currentTaskState.constraints.length > 0 ? `Constraints:\n${currentTaskState.constraints.map((c) => `- ${c}`).join('\n')}` : '',
+      `Acceptance Criteria:\n${currentTaskState.acceptance.map((a) => `- ${a}`).join('\n')}`,
+      completed.length > 0
+        ? `Completed Steps:\n${completed.map((st) => `- Step ${st.id}: ${st.title} (done)`).join('\n')}`
+        : '',
+      `Current Step (${step.id}/${currentTaskState.steps.length}): ${step.title}`,
+      step.files.length > 0 ? `Target Files: ${step.files.join(', ')}` : '',
+      'Implement this step. Modify files as needed and verify your changes.',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+
+    const stepTools = opts.tools.scoped([
+      'read_file',
+      'search_code',
+      'list_dir',
+      'edit',
+      'write_file',
+      'apply_patch',
+      'run_tests',
+    ]);
+
+    const agent = new AgentLoop({
+      config: { ...DEFAULT_CONFIG, workspaceRoot: opts.workspaceRoot },
+      provider: opts.provider,
+      toolRegistry: stepTools,
+      sessionManager: new SessionManager({
+        workspaceRoot: opts.workspaceRoot,
+        sessionsDir: path.join(axiomHome(), 'sessions'),
+        autoSave: false,
+      }),
+      costTracker: opts.costTracker ?? new CostTracker(),
+      eventBus: opts.bus,
+      systemPrompt: buildSystemPrompt(FEATURE_STEP_SYSTEM_PROMPT, opts.workspaceRoot),
+      model: opts.model,
+      maxSteps: 20,
+      signal: opts.signal,
+    });
+
+    const loopResult = await agent.runTask(stepPrompt, opts.signal);
+
+    // Verifier seam fail-closed: bước chỉ hoàn tất khi verifier xác nhận đạt
+    let stepOk = false;
+    let failReason: string | undefined;
+
+    if (loopResult.status === 'completed') {
+      if (opts.verifier) {
+        try {
+          const v = await opts.verifier(step, { workspaceRoot: opts.workspaceRoot, threadId: currentTaskState.threadId });
+          stepOk = v.ok;
+          failReason = v.reason;
+        } catch (err) {
+          stepOk = false;
+          failReason = err instanceof Error ? err.message : String(err);
+        }
+      } else {
+        // Default verifier gọi runPytest trong sandbox; fail-closed nếu lỗi hoặc chưa cài
+        try {
+          const testRun = await runPytest(opts.workspaceRoot, { signal: opts.signal });
+          stepOk = testRun.exitCode === 0 && testRun.failed.length === 0 && !testRun.timedOut;
+          if (!stepOk) {
+            failReason = `Pytest verification failed (exitCode=${testRun.exitCode}, failed=${testRun.failed.length})`;
+          }
+        } catch (err) {
+          stepOk = false;
+          failReason = err instanceof Error ? err.message : String(err);
+        }
+      }
+    } else {
+      stepOk = false;
+      failReason = loopResult.error ?? `Agent loop finished with status: ${loopResult.status}`;
+    }
+
+    if (stepOk) {
+      step.status = 'done';
+      step.note = undefined;
+    } else {
+      step.status = 'failed';
+      step.note = failReason ?? 'Verification failed';
+    }
+
+    currentTaskState.updatedAt = new Date().toISOString();
+    saveTaskState(currentTaskState);
+    appendProgress(currentTaskState.threadId, `step ${step.id} ${step.status}: ${step.title}`);
+
+    return {
+      taskState: currentTaskState,
+      filesChanged: loopResult.filesChanged,
+    };
+  };
+
+  const reportNode = async (s: FeatureStateType, config: { configurable?: { thread_id?: string } }) => {
+    const activeThreadId = config?.configurable?.thread_id ?? s.threadId ?? fallbackThreadId;
+    const currentTaskState = loadTaskState(activeThreadId) ?? s.taskState;
+    let status: FeatureReport['status'] = 'completed';
+    let summary = '';
+
+    if (s.approved === false) {
+      status = 'rejected';
+      summary = 'Kế hoạch bị từ chối.';
+    } else if (s.error) {
+      status = 'failed';
+      summary = s.error;
+    } else if (currentTaskState?.steps.some((st) => st.status === 'failed')) {
+      status = 'failed';
+      const failedStep = currentTaskState.steps.find((st) => st.status === 'failed');
+      summary = `Feature implementation failed at step ${failedStep?.id}: ${failedStep?.note ?? 'unknown error'}`;
+    } else if (
+      currentTaskState &&
+      currentTaskState.steps.length > 0 &&
+      currentTaskState.steps.every((st) => st.status === 'done')
+    ) {
+      status = 'completed';
+      summary = `Feature implementation completed successfully across all ${currentTaskState.steps.length} steps.`;
+    } else {
+      status = 'failed';
+      summary = 'Feature implementation incomplete.';
+    }
+
+    const report: FeatureReport = {
+      threadId: activeThreadId,
+      status,
+      steps: currentTaskState?.steps ?? [],
+      filesChanged: s.filesChanged ?? [],
+      summary,
+    };
+
+    return { finalReport: report };
+  };
+
+  return new StateGraph(FeatureState)
+    .addNode('plan', traceNode(opts.bus, 'feature', 'plan', planNode))
+    .addNode('approve', traceNode(opts.bus, 'feature', 'approve', approveNode))
+    .addNode('step', traceNode(opts.bus, 'feature', 'step', stepNode))
+    .addNode('report', traceNode(opts.bus, 'feature', 'report', reportNode))
+    .addEdge(START, 'plan')
+    .addEdge('plan', 'approve')
+    .addConditionalEdges('approve', (s) => (s.approved ? 'step' : 'report'), ['step', 'report'])
+    .addConditionalEdges(
+      'step',
+      (s) => {
+        const tState = (s.threadId ? loadTaskState(s.threadId) : null) ?? s.taskState;
+        const hasFailed = tState?.steps.some((st) => st.status === 'failed');
+        const hasTodo = tState?.steps.some((st) => st.status === 'todo' || st.status === 'doing');
+        if (!hasFailed && hasTodo) return 'step';
+        return 'report';
+      },
+      ['step', 'report']
+    )
+    .addEdge('report', END);
+}
+
 /** Builds and runs the multi-step feature implementation graph. */
 export async function runFeature(request: string, opts: FeatureOptions): Promise<FeatureReport> {
   const origApprover = opts.tools.approver;
@@ -168,235 +421,8 @@ export async function runFeature(request: string, opts: FeatureOptions): Promise
 
   try {
     const threadId = newThreadId('feature');
-
-    const planNode = async (s: FeatureStateType, config: { configurable?: { thread_id?: string } }) => {
-      const activeThreadId = config?.configurable?.thread_id ?? s.threadId ?? threadId;
-      if (s.taskState) return { threadId: activeThreadId };
-
-      const planController = new AbortController();
-      if (opts.signal) {
-        if (opts.signal.aborted) planController.abort();
-        else opts.signal.addEventListener('abort', () => planController.abort(), { once: true });
-      }
-
-      let acceptedPlan: PlanSubmission | undefined;
-      const submitTool = new SubmitPlanTool((plan) => {
-        acceptedPlan = plan;
-        planController.abort();
-      });
-
-      const planTools = opts.tools.scoped(['read_file', 'list_dir', 'search_code', 'submit_plan']);
-      planTools.registerTool(submitTool);
-
-      const agent = new AgentLoop({
-        config: { ...DEFAULT_CONFIG, workspaceRoot: opts.workspaceRoot },
-        provider: opts.provider,
-        toolRegistry: planTools,
-        sessionManager: new SessionManager({
-          workspaceRoot: opts.workspaceRoot,
-          sessionsDir: path.join(axiomHome(), 'sessions'),
-          autoSave: false,
-        }),
-        costTracker: opts.costTracker ?? new CostTracker(),
-        eventBus: opts.bus,
-        systemPrompt: buildSystemPrompt(FEATURE_PLAN_SYSTEM_PROMPT, opts.workspaceRoot),
-        model: opts.model,
-        maxSteps: 12,
-        signal: planController.signal,
-      });
-
-      const result = await agent.runTask(s.request ?? request, planController.signal);
-      if (!acceptedPlan && submitTool.submittedPlan) acceptedPlan = submitTool.submittedPlan;
-
-      if (!acceptedPlan) {
-        const errorMsg = submitTool.lastError ?? result.error ?? 'Planning failed: submit_plan was not called';
-        return { threadId: activeThreadId, error: errorMsg };
-      }
-
-      const taskState: TaskState = {
-        threadId: activeThreadId,
-        workspaceRoot: canonicalWorkspace(opts.workspaceRoot),
-        goal: acceptedPlan.goal,
-        constraints: acceptedPlan.constraints ?? [],
-        acceptance: acceptedPlan.acceptance,
-        steps: acceptedPlan.steps.map((st, idx) => ({
-          id: idx + 1,
-          title: st.title,
-          files: st.files ?? [],
-          status: 'todo',
-        })),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      saveTaskState(taskState);
-      return { threadId: activeThreadId, taskState };
-    };
-
-    const approveNode = async (s: FeatureStateType) => {
-      if (s.error || !s.taskState) return { approved: false };
-      const answer = askHuman('Duyệt kế hoạch?', ['yes', 'no']);
-      return { approved: answer === 'yes' };
-    };
-
-    const stepNode = async (s: FeatureStateType) => {
-      if (!s.taskState) return { error: 'Missing task state in step node' };
-
-      const step = s.taskState.steps.find((st) => st.status === 'todo' || st.status === 'doing');
-      if (!step) return {};
-
-      step.status = 'doing';
-      s.taskState.updatedAt = new Date().toISOString();
-      saveTaskState(s.taskState);
-
-      const completed = s.taskState.steps.filter((st) => st.status === 'done');
-      const stepPrompt = [
-        `Feature Goal: ${s.taskState.goal}`,
-        s.taskState.constraints.length > 0 ? `Constraints:\n${s.taskState.constraints.map((c) => `- ${c}`).join('\n')}` : '',
-        `Acceptance Criteria:\n${s.taskState.acceptance.map((a) => `- ${a}`).join('\n')}`,
-        completed.length > 0
-          ? `Completed Steps:\n${completed.map((st) => `- Step ${st.id}: ${st.title} (done)`).join('\n')}`
-          : '',
-        `Current Step (${step.id}/${s.taskState.steps.length}): ${step.title}`,
-        step.files.length > 0 ? `Target Files: ${step.files.join(', ')}` : '',
-        'Implement this step. Modify files as needed and verify your changes.',
-      ]
-        .filter(Boolean)
-        .join('\n\n');
-
-      const stepTools = opts.tools.scoped([
-        'read_file',
-        'search_code',
-        'list_dir',
-        'edit',
-        'write_file',
-        'apply_patch',
-        'run_tests',
-      ]);
-
-      const agent = new AgentLoop({
-        config: { ...DEFAULT_CONFIG, workspaceRoot: opts.workspaceRoot },
-        provider: opts.provider,
-        toolRegistry: stepTools,
-        sessionManager: new SessionManager({
-          workspaceRoot: opts.workspaceRoot,
-          sessionsDir: path.join(axiomHome(), 'sessions'),
-          autoSave: false,
-        }),
-        costTracker: opts.costTracker ?? new CostTracker(),
-        eventBus: opts.bus,
-        systemPrompt: buildSystemPrompt(FEATURE_STEP_SYSTEM_PROMPT, opts.workspaceRoot),
-        model: opts.model,
-        maxSteps: 20,
-        signal: opts.signal,
-      });
-
-      const loopResult = await agent.runTask(stepPrompt, opts.signal);
-
-      // Verifier seam fail-closed: bước chỉ hoàn tất khi verifier xác nhận đạt
-      let stepOk = false;
-      let failReason: string | undefined;
-
-      if (loopResult.status === 'completed') {
-        if (opts.verifier) {
-          try {
-            const v = await opts.verifier(step, { workspaceRoot: opts.workspaceRoot, threadId: s.taskState.threadId });
-            stepOk = v.ok;
-            failReason = v.reason;
-          } catch (err) {
-            stepOk = false;
-            failReason = err instanceof Error ? err.message : String(err);
-          }
-        } else {
-          // Default verifier gọi runPytest trong sandbox; fail-closed nếu lỗi hoặc chưa cài
-          try {
-            const testRun = await runPytest(opts.workspaceRoot, { signal: opts.signal });
-            stepOk = testRun.exitCode === 0 && testRun.failed.length === 0 && !testRun.timedOut;
-            if (!stepOk) {
-              failReason = `Pytest verification failed (exitCode=${testRun.exitCode}, failed=${testRun.failed.length})`;
-            }
-          } catch (err) {
-            stepOk = false;
-            failReason = err instanceof Error ? err.message : String(err);
-          }
-        }
-      } else {
-        stepOk = false;
-        failReason = loopResult.error ?? `Agent loop finished with status: ${loopResult.status}`;
-      }
-
-      if (stepOk) {
-        step.status = 'done';
-        step.note = undefined;
-      } else {
-        step.status = 'failed';
-        step.note = failReason ?? 'Verification failed';
-      }
-
-      s.taskState.updatedAt = new Date().toISOString();
-      saveTaskState(s.taskState);
-      appendProgress(s.taskState.threadId, `step ${step.id} ${step.status}: ${step.title}`);
-
-      return {
-        taskState: s.taskState,
-        filesChanged: loopResult.filesChanged,
-      };
-    };
-
-    const reportNode = async (s: FeatureStateType) => {
-      let status: FeatureReport['status'] = 'completed';
-      let summary = '';
-
-      if (s.approved === false) {
-        status = 'rejected';
-        summary = 'Kế hoạch bị từ chối.';
-      } else if (s.error) {
-        status = 'failed';
-        summary = s.error;
-      } else if (s.taskState?.steps.some((st) => st.status === 'failed')) {
-        status = 'failed';
-        const failedStep = s.taskState.steps.find((st) => st.status === 'failed');
-        summary = `Feature implementation failed at step ${failedStep?.id}: ${failedStep?.note ?? 'unknown error'}`;
-      } else if (s.taskState && s.taskState.steps.length > 0 && s.taskState.steps.every((st) => st.status === 'done')) {
-        status = 'completed';
-        summary = `Feature implementation completed successfully across all ${s.taskState.steps.length} steps.`;
-      } else {
-        status = 'failed';
-        summary = 'Feature implementation incomplete.';
-      }
-
-      const report: FeatureReport = {
-        threadId: s.threadId ?? threadId,
-        status,
-        steps: s.taskState?.steps ?? [],
-        filesChanged: s.filesChanged ?? [],
-        summary,
-      };
-
-      return { finalReport: report };
-    };
-
-    const workflow = new StateGraph(FeatureState)
-      .addNode('plan', traceNode(opts.bus, 'feature', 'plan', planNode))
-      .addNode('approve', traceNode(opts.bus, 'feature', 'approve', approveNode))
-      .addNode('step', traceNode(opts.bus, 'feature', 'step', stepNode))
-      .addNode('report', traceNode(opts.bus, 'feature', 'report', reportNode))
-      .addEdge(START, 'plan')
-      .addEdge('plan', 'approve')
-      .addConditionalEdges('approve', (s) => (s.approved ? 'step' : 'report'), ['step', 'report'])
-      .addConditionalEdges(
-        'step',
-        (s) => {
-          const hasFailed = s.taskState?.steps.some((st) => st.status === 'failed');
-          const hasTodo = s.taskState?.steps.some((st) => st.status === 'todo');
-          if (!hasFailed && hasTodo) return 'step';
-          return 'report';
-        },
-        ['step', 'report']
-      )
-      .addEdge('report', END);
-
     const checkpointer = opts.checkpointer ?? createCheckpointer();
+    const workflow = buildFeatureWorkflow(opts, threadId, request);
     const compiled = workflow.compile({ checkpointer });
 
     const finalState = await runGraph<FeatureStateType>(
@@ -411,7 +437,7 @@ export async function runFeature(request: string, opts: FeatureOptions): Promise
   }
 }
 
-/** `threadId` undefined: the newest unfinished task. (D2 preview & canonical identity guard) */
+/** Continues an unfinished feature task (threadId undefined = newest unfinished task). */
 export async function resumeTask(threadId: string | undefined, opts: FeatureOptions): Promise<FeatureReport> {
   const currentCanonical = canonicalWorkspace(opts.workspaceRoot);
   let targetId = threadId;
@@ -433,12 +459,52 @@ export async function resumeTask(threadId: string | undefined, opts: FeatureOpti
     );
   }
 
-  // Khôi phục các bước đang 'doing' về lại 'todo' trước khi chạy tiếp (theo đặc tả D2)
+  // Khôi phục các bước đang 'doing' về lại 'todo' trước khi chạy tiếp (P7: rollback files từ snapshot)
   for (const st of existingState.steps) {
-    if (st.status === 'doing') st.status = 'todo';
+    if (st.status === 'doing') {
+      const snapDir = path.join(taskDir(targetId), `snap-${st.id}`);
+      if (fs.existsSync(snapDir)) {
+        restoreFiles(opts.workspaceRoot, snapDir, { affectedFiles: st.files });
+      }
+      st.status = 'todo';
+    }
   }
+  existingState.updatedAt = new Date().toISOString();
   saveTaskState(existingState);
 
-  // D1 Seam: gọi trực tiếp runFeature với taskState đã khôi phục
-  return runFeature(existingState.goal, opts);
+  const checkpointer = opts.checkpointer ?? createCheckpointer();
+  const workflow = buildFeatureWorkflow(opts, targetId, existingState.goal);
+  const compiled = workflow.compile({ checkpointer });
+
+  let input: Partial<FeatureStateType> | null = null;
+  let hasCheckpoint = false;
+  if (typeof (checkpointer as any).getTuple === 'function') {
+    const tuple = await (checkpointer as any).getTuple({ configurable: { thread_id: targetId } });
+    if (tuple) hasCheckpoint = true;
+  }
+
+  if (!hasCheckpoint) {
+    input = {
+      threadId: targetId,
+      taskState: existingState,
+      approved: true,
+    };
+  }
+
+  const origApprover = opts.tools.approver;
+  opts.tools.approver = async (req) => {
+    if (req.name === 'submit_plan') return 'approve';
+    return origApprover ? origApprover(req) : 'deny';
+  };
+
+  try {
+    const finalState = await runGraph<FeatureStateType>(
+      compiled,
+      input,
+      { threadId: targetId, ui: opts.ui ?? defaultCommandUI, signal: opts.signal }
+    );
+    return finalState.finalReport;
+  } finally {
+    opts.tools.approver = origApprover;
+  }
 }

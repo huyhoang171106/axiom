@@ -6,7 +6,7 @@
 |---|---|---|---|
 | D0 | 04/11 | Cài LangGraph, tạo mọi file dùng chung và stub | done |
 | D1 | 04/11 | `task-state.ts`, graph `/feature` | done |
-| D2 | 05/11 | Checkpointer SQLite, `/resume` | |
+| D2 | 05/11 | Checkpointer SQLite, `/resume` | done |
 | D3 | 06/11 | Compaction, `/compact` | |
 | D4 | 06/11 | Memory, `/memory` | |
 | D5 | 07/11 | 3 feature + eval UC-04 | |
