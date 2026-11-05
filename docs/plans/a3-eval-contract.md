@@ -89,3 +89,10 @@ Mỗi commit code đi kèm test và comment tiếng Việt giải thích ý đ�
 1. Chấp thuận/sửa các field bổ sung ở mục 3 và metadata artifact ở mục 4; đồng bộ `phase-2.md` mục 5.4 trước khi implement.
 2. Chốt ngữ nghĩa `--all`, `--uc`, `--partial` và các gate tối thiểu của runner B/C/D/E; runner cũ thiếu bằng chứng không được coi là pass release.
 3. Giao A3 quyền sửa bước eval trong `.github/workflows/ci.yml`. Hiện registry chỉ có UC-01: chọn smoke partial có nhãn rõ trong lúc tích hợp, hoặc đợi đủ runner để bật full smoke; không tự tạo fake runner 02..05 để CI xanh.
+
+## 7. Tiến độ trên nhánh
+
+- Bước 1: đã commit đề xuất (`e8e9506`); chưa có xác nhận từ D0.
+- Bước 2: đã viết `evals/measure.ts` đúng chữ ký hiện hành, có comment tiếng Việt và 10 test ở `tests/eval-measure.test.ts`; test mới không skip.
+- Kiểm tra bước 2: `npm run lint`, `npm run build` pass. Full suite với Python/pytest qua `AXIOM_PYTHON`: 553 test, 540 pass, 13 skip môi trường Windows, 0 fail. Không coi skip Linux/bwrap là bằng chứng sandbox.
+- Chưa sửa `evals/types.ts`, CLI, registry hay CI; bước 3–6 chờ D0 chốt contract. Các phép đo chat/embedding/compaction ở test helper là usage giả để kiểm tổng hợp, chưa phải nối workflow/eval thật.
