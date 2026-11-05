@@ -205,6 +205,6 @@ export class ToolRegistry {
     if (recheck.verdict === 'deny') {
       return { args, policy: recheck, refusal: `Blocked by policy after edit (${recheck.reason}).` };
     }
-    return { args: answer.editedArgs, policy: { ...policy, approval: 'edited' } };
+    return { args: answer.editedArgs, policy: { ...recheck, approval: 'edited' } };
   }
 }
