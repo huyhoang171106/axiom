@@ -1,10 +1,16 @@
-// src/agents/route.ts - Run the workflow an IssueTicket routes to (UC-01 -> UC-02/03/04)
+// src/agents/route.ts - Chọn workflow đích từ IssueTicket, chạy ngoài graph triage.
+import { answerQuestion } from './ask.js';
+import { fixIssue } from './fix.js';
+import { runFeature } from './feature.js';
+import { loadCatalog } from '../llm/catalog/index.js';
+import { resolveModel, createProviderFor } from '../llm/model-resolver.js';
+import { embedderFromConfig } from '../core/rag/embedder.js';
 
 import type { CommandUI, ExecutionContext } from '../core/execution-context.js';
 import type { AxiomConfig } from '../core/types.js';
 import type { IssueTicket } from './triage.js';
 
-/** Session `tools`, `bus`, `costTracker`, `runId` come with it, so routed workflows ask and trace like chat. */
+/** Dùng context của phiên để workflow giữ quyền duyệt, trace và chi phí chung với chat. */
 export interface RouteContext extends ExecutionContext {
   workspaceRoot: string;
   config: AxiomConfig;
@@ -18,7 +24,38 @@ export interface RouteResult {
   data?: unknown;
 }
 
-export async function runRoute(ticket: IssueTicket, issue: string, ctx: RouteContext): Promise<RouteResult> {
-  // TODO(A2)
-  return { route: ticket.route, text: 'chưa làm (A2)' };
+// Seam cho test: thay workflow bằng spy/fake nhưng vẫn kiểm resolver và context thật.
+// Khi không truyền deps, ứng dụng gọi các workflow thật do B/C/D sở hữu.
+export interface RouteDeps {
+  answer: typeof answerQuestion;
+  fix: typeof fixIssue;
+  feature: typeof runFeature;
+}
+
+export async function runRoute(ticket: IssueTicket, issue: string, ctx: RouteContext,
+  deps: RouteDeps = { answer: answerQuestion, fix: fixIssue, feature: runFeature }): Promise<RouteResult> {
+  // Hai route thụ động không cần provider hay embedding; chỉ hiển thị field có trong schema.
+  if (ticket.route === 'ask_user' || ticket.route === 'reject') {
+    return { route: ticket.route, text: `[${ticket.type}] ${ticket.priority}\n${ticket.missing_info.map(q => `- ${q}`).join('\n')}` };
+  }
+  // Resolve trước khi gọi provider: API nhận ID thật, không nhận selector @role.
+  const info = resolveModel(ticket.route === 'answer' ? '@default' : '@code', loadCatalog(), ctx.config);
+  const provider = await createProviderFor(info);
+  // Không dựng registry/tracker mới: duyệt tool và tổng chi phí phải tiếp tục thuộc cùng phiên.
+  const opts = { workspaceRoot: ctx.workspaceRoot, provider, model: info.id, bus: ctx.bus,
+    tools: ctx.tools, costTracker: ctx.costTracker, ui: ctx.ui, signal: ctx.signal };
+  if (ticket.route === 'answer') {
+    // Chỉ RAG cần @embed; fix/implement vẫn chạy được khi chưa cấu hình model embedding.
+    // Gửi cả tên model để index nhận biết thay đổi model và tracker tính usage vào phiên.
+    const data = await deps.answer(issue, { ...opts,
+      embedder: embedderFromConfig(ctx.config, { costTracker: ctx.costTracker }),
+      embedModel: ctx.config.modelRoles?.embed });
+    return { route: ticket.route, text: data.text, data };
+  }
+  if (ticket.route === 'fix') {
+    const data = await deps.fix({ ...opts, issue });
+    return { route: ticket.route, text: data.summary, data };
+  }
+  const data = await deps.feature(issue, opts);
+  return { route: ticket.route, text: data.summary, data };
 }
