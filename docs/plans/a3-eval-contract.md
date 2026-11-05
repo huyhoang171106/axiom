@@ -6,7 +6,7 @@ Trạng thái: An đồng ý hướng triển khai; **chưa có xác nhận cont
 
 ## 1. Chênh lệch cần giải quyết trước khi đổi API
 
-| Hiện tại | Yêu cầu issue #8 | Đề xuất |
+| Trước A3 | Yêu cầu issue #8 | Hướng xử lý |
 |---|---|---|
 | Plan cũ bỏ qua runner thiếu và giữ exit code | Release thiếu UC-01..05 phải fail | `--all` đòi đủ 01..05; chỉ `--partial` cho phép thiếu runner và luôn ghi không đủ điều kiện release |
 | `evals/run.ts` fallback mock khi provider chưa sẵn sàng | Không được mock ngoài ý muốn | Chỉ tạo mock khi có `--mock`; credential/provider lỗi phải có kết quả lỗi và exit code khác 0 |
@@ -62,7 +62,7 @@ Các trường ở trên là **đề xuất, chưa có trong `evals/types.ts`**.
 
 Provenance lấy từ model được resolve và đường chạy thật/mock thực tế; tracker chỉ tổng hợp usage theo model ID, không đủ để suy ra provider. Embedding/compaction nếu có phải cùng tracker và được liệt kê trong provenance của case. Không ghi giá trị secret, header auth hay config vào artifact.
 
-## 4. Ngữ nghĩa CLI đề xuất
+## 4. Ngữ nghĩa CLI development (chưa chứng nhận release)
 
 - `--uc NN` lặp được: chạy các UC được chọn, loại trùng; artifact ghi rõ chạy chọn lọc, không phải full release.
 - `--all`: chọn UC-01..05 bắt buộc và các runner đã đăng ký thêm. Thiếu runner bắt buộc là lỗi.
@@ -71,13 +71,13 @@ Provenance lấy từ model được resolve và đường chạy thật/mock th
 - Không có `--uc` hoặc `--all`: lỗi `Pass --uc NN or --all`. Giá trị UC phải có hai chữ số; flag không biết phải lỗi, không bỏ qua ngầm.
 - Full release chỉ hợp lệ khi chạy `--all` không mock, không partial, đủ runner/case/gate/provenance và mọi gate đạt.
 - Mọi chế độ đều fail khi runner lỗi hoặc zero case; partial không miễn lỗi/threshold cho runner đã chạy.
-- `evals/results.json` giữ `runAt`, `mock`, `ucs`, bổ sung thông tin mode, UC yêu cầu/thiếu và đủ điều kiện release. Tên field cuối cùng cần D0 chốt cùng contract.
+- `evals/results.json` giữ `runAt`, `mock`, `ucs`; bộ điều phối A3 hiện thêm `scope`, `partial`, `requestedUcs`, `missingUcs`, `errors`, `passed`, `releaseEligible`, `releaseBlockers`. Chưa đổi contract `UcResult`; metadata release cuối cùng cần đồng bộ D0 khi tích hợp gates/provenance.
 
 ## 5. Thứ tự commit và test
 
 1. **Tài liệu contract**: ghi đề xuất và các điểm cần D0 xác nhận. Không đổi runtime/API/CI.
 2. **Helper đo case**: `evals/measure.ts` + `tests/eval-measure.test.ts`; test success, failure có usage, lỗi rỗng/non-Error, redaction, token prompt/completion, tracker độc lập và clock tất định.
-3. **Runner UC-01**: có thể chuẩn bị tách `evals/uc01/run.ts`, dùng helper và giảm registry còn đăng ký runner khi giữ nguyên contract hiện hành. Sau khi D0 chốt mới bổ sung gates/provenance và nối điều phối CLI mới. Giữ 10 fixture, bảo toàn injection gate của CLI cũ; không viết runner của B/C/D/E.
+3. **Runner UC-01**: có thể chuẩn bị tách `evals/uc01/run.ts`, dùng helper và giảm registry còn đăng ký runner khi giữ nguyên contract hiện hành. Điều phối CLI có thể nối theo contract hiện hành; chỉ bổ sung gates/provenance chung sau khi D0 chốt. Giữ 10 fixture, bảo toàn injection gate của CLI cũ; không viết runner của B/C/D/E.
 4. **Điều phối CLI/artifact**: parse args, registry, workDir từng UC, averages, kết quả có cấu trúc; test qua runner fake và entry point, không gọi mạng thật.
 5. **Release gates**: test missing runner, zero case, threshold fail, missing/duplicate/skipped case, thiếu credential, provenance mock sai và không fallback.
 6. **CI/tài liệu nghiệm thu**: chỉ sửa đúng bước CI được D0 giao; chạy lint, full tests, build và smoke phù hợp các runner hiện có. Không dùng partial/mock làm bằng chứng hoàn tất release.
@@ -95,9 +95,23 @@ Mỗi commit code đi kèm test và comment tiếng Việt giải thích ý đ�
 - Bước 1: đã commit đề xuất (`e8e9506`); chưa có xác nhận từ D0.
 - Bước 2: đã viết `evals/measure.ts` đúng chữ ký hiện hành, có comment tiếng Việt và 10 test ở `tests/eval-measure.test.ts`; test mới không skip.
 - Kiểm tra bước 2: `npm run lint`, `npm run build` pass. Full suite với Python/pytest qua `AXIOM_PYTHON`: 553 test, 540 pass, 13 skip môi trường Windows, 0 fail. Không coi skip Linux/bwrap là bằng chứng sandbox.
-- Phần chuẩn bị bước 3: tách `evals/uc01/run.ts`, registry chỉ đăng ký runner, thay phần đo lặp bằng `measureCase`. Giữ nguyên `UcRunner`/result/summary hiện hành. `evals/run.ts` vẫn là CLI cũ và còn giữ các helper được runner import; chuyển hẳn CLI sang registry thuộc bước điều phối sau khi chốt contract.
+- Phần chuẩn bị bước 3 tại commit `5348710`: tách `evals/uc01/run.ts`, registry chỉ đăng ký runner, thay phần đo lặp bằng `measureCase`, giữ nguyên contract hiện hành. Ở bước 4, helper/fixture đã chuyển sang `evals/uc01/cases.ts` để runner không import entry point CLI và không tạo vòng phụ thuộc.
 - Thêm 5 test trong `tests/eval-uc01.test.ts`: đủ 10 fixture, registry trỏ đúng hàm, provider/tracker độc lập, giữ usage qua schema retry/provider failure và từ chối provider đã tắt thay vì fallback mock. Test dùng mock để kiểm pipeline, không phải số đo accuracy thật.
 - Kiểm phần chuẩn bị bước 3: 27 test eval liên quan pass, 0 skip; lint/build pass. Full suite với Python/pytest: 558 test, 545 pass, 13 skip môi trường, 0 fail.
-- Chưa sửa `evals/types.ts`, CLI hay CI; gates/provenance/release vẫn chờ D0 chốt. Runner tách riêng hiện chưa thể hiện injection gate trong result chung, không được dùng thay nghiệm thu release của issue #8.
+- Bước 4: CLI đã dùng registry, parse `--uc` lặp được/`--all`/`--mock`/`--partial`, xuất artifact, workDir từng UC và averages. Đã bỏ fallback mock và xoá vòng chạy triage trùng trong CLI cũ. Gate UC-01 lấy case bắt buộc từ fixture, đếm unexpected tool calls qua `metrics` có sẵn, tính lại ngưỡng từ case thay vì tin summary; bắt thiếu/trùng case và sai injection.
+- Test bước 4: 54 test eval liên quan pass, 0 skip; lint/build pass. Full suite với Python/pytest: 585 test, 572 pass, 13 skip môi trường, 0 fail. Test entry point chạy subprocess, chặn kế thừa secret env và dùng AXIOM_HOME tạm.
+- `evals/types.ts` và CI chưa sửa. Full real `--all` hiện fail-closed với lý do thiếu contract gates/provenance chung, kể cả case đang pass. `releaseEligible` luôn false trong giai đoạn development này; không coi CLI đã hoàn tất nghiệm thu release #8.
 - Phát hiện khi thử lỗi có chuỗi nhạy cảm giả: `EventBus.installDefaultErrorHandler` (`src/core/event-bus.ts`) in message lỗi ra console mà chưa `redact`. `measureCase` che lỗi ở result nhưng không che được log đã phát trước đó. Cần D0 xử lý logger chung trước release; không tự sửa file chung trong commit tách runner.
 - Các phép đo chat/embedding/compaction ở test helper là usage giả để kiểm tổng hợp, chưa phải nối workflow/eval thật.
+
+## 8. Lệnh đã kiểm ở bước CLI
+
+| Lệnh | Exit code | Ý nghĩa |
+|---|---|---|
+| `npm run eval -- --uc 01 --mock` | 0 | 10 case UC-01 chạy qua registry; smoke kiểm pipeline/schema, không kiểm accuracy thật |
+| `npm run eval -- --all --mock` | 1 | Hiện thiếu runner 02..05, không bỏ qua ngầm |
+| `npm run eval -- --all --mock --partial` | 0 | Development có nhãn rõ, artifact liệt kê 02..05 thiếu và không đủ điều kiện release |
+
+Các lệnh trên chạy với AXIOM_HOME/config tạm và không gọi mạng thật. Artifact là `evals/results.json` (gitignored), không commit. Case `passed: false` do mock phân loại không đúng expected vẫn được ghi trung thực; `report.passed` ở mock UC-01 chỉ thể hiện smoke schema/pipeline đã chạy, không phải type accuracy đạt ngưỡng.
+
+CI hiện còn gọi `npm run eval --if-present` không có selection: CLI mới sẽ báo `Pass --uc NN or --all`. Trước PR/merge cần D0 giao quyền cập nhật bước này và chốt full/partial smoke; **chưa có CI xanh cho bước 4, không được ship như task đã Done**.

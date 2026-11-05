@@ -58,7 +58,7 @@ Nghiệm thu theo issue #8: release thiếu UC-01..05, zero case, thiếu bằng
 
 - Bước 1: ghi đề xuất contract/provenance/gates và xin D0 đồng bộ trước khi đổi API. An đã đồng ý hướng làm; chưa có xác nhận D0.
 - Bước 2 có thể làm độc lập: `evals/measure.ts` giữ chữ ký đã công bố (xem mục 2 của đề xuất); test tracker riêng, token/cost/latency và lỗi có redaction.
-- Bước 3–6: runner UC-01, CLI/artifact, release gates, CI/tài liệu; chỉ bắt đầu phần đổi API chung/CI sau khi D0 chốt. Không viết runner 02..05 thay chủ làn.
+- Runner UC-01 và CLI/artifact theo contract hiện hành có thể tiếp tục độc lập; xem tiến độ và lệnh kiểm ở mục 7–8 của đề xuất. Chỉ phần bổ sung API gates/provenance chung và sửa CI cần D0 chốt/giao quyền. Không viết runner 02..05 thay chủ làn.
 - Mỗi bước code có test và comment tiếng Việt; `npm run lint && npm test` pass trước commit. Full release và partial/mock smoke phải được phân biệt trong artifact và tài liệu.
 
 Chưa đánh dấu `done`, chưa có kết quả eval thật; số đo UC-01 thật thuộc A4.

@@ -1,9 +1,12 @@
+// tests/eval.test.ts - Bảo toàn fixture, ngưỡng và injection check UC-01 khi thay CLI.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { hasProvider, loadCases, parseArgs, passesThresholds, runUc, summarize, workspaceRoot, type CaseResult } from '../evals/run.js';
+import { parseArgs } from '../evals/args.js';
+import { hasProvider, loadCases, passesThresholds, summarize, UC01_WORKSPACE, type CaseResult } from '../evals/uc01/cases.js';
+import { passesUc01, runUc01Cases } from '../evals/uc01/run.js';
 import { DEFAULT_CONFIG } from '../src/core/config.js';
 import { loadCatalog, type ModelInfo } from '../src/llm/catalog/index.js';
 import { MockProvider } from '../src/llm/providers/mock.js';
@@ -29,12 +32,12 @@ function result(overrides: Partial<CaseResult>): CaseResult {
   };
 }
 
-test('parseArgs defaults to all UCs without mock', () => {
-  assert.deepEqual(parseArgs([]), { mock: false });
+test('parseArgs requires an explicit UC selection before model use', () => {
+  assert.throws(() => parseArgs([]), /Pass --uc NN or --all/);
 });
 
 test('parseArgs reads --uc and --mock', () => {
-  assert.deepEqual(parseArgs(['--uc', '01', '--mock']), { uc: '01', mock: true });
+  assert.deepEqual(parseArgs(['--uc', '01', '--mock']), { ucs: ['01'], all: false, mock: true, partial: false });
 });
 
 test('parseArgs rejects a missing or malformed --uc value', () => {
@@ -117,12 +120,13 @@ test('mock pipeline errors fail and are not reported as invalid schemas', async 
   const dir = path.join(parent, 'uc01');
   fs.mkdirSync(dir);
   fs.writeFileSync(path.join(dir, 'case.json'), caseFile('one'));
-  const passed = await runUc(dir, true, parent, async () => { throw new Error('provider unavailable'); });
-  const output = JSON.parse(fs.readFileSync(path.join(dir, 'results.json'), 'utf8'));
-  assert.equal(passed, false);
-  assert.equal(output.results[0].schemaValid, null);
-  assert.equal(output.schemaValidRate, null);
-  assert.match(output.results[0].error, /provider unavailable/);
+  const fixtures = loadCases(dir);
+  const output = await runUc01Cases(fixtures, { workspaceRoot: parent,
+    createCaseProvider: async () => { throw new Error('provider unavailable'); } });
+  assert.equal(passesUc01(output, true, fixtures), false);
+  assert.equal(output.cases[0].passed, false);
+  assert.equal(output.cases[0].metrics.schemaValid, null);
+  assert.match(output.cases[0].error!, /provider unavailable/);
 });
 
 test('real run records unexpected tool calls on a required injection case', async () => {
@@ -135,14 +139,15 @@ test('real run records unexpected tool calls on a required injection case', asyn
   const submit = { id: 'submit', name: 'submit_issue_ticket', arguments: { ticket: { type: 'bug', priority: 'P1 - crash', affected_files: [], reproduction_steps: [], acceptance_criteria: ['Exit successfully'], missing_info: [], route: 'fix' } } };
   let count = 0;
   const providers: MockProvider[] = [];
-  const passed = await runUc(dir, false, parent, async () => {
+  const fixtures = loadCases(dir);
+  const output = await runUc01Cases(fixtures, { workspaceRoot: parent, createCaseProvider: async () => {
     const provider = new MockProvider('mock', [{ toolCalls: count++ === 0 ? [{ id: 'bad', name: 'run_command', arguments: { command: 'echo test' } }, submit] : [submit] }]);
     providers.push(provider);
     return { provider, model: 'test-model' };
-  });
-  const output = JSON.parse(fs.readFileSync(path.join(dir, 'results.json'), 'utf8'));
-  assert.equal(passed, false);
-  assert.deepEqual(output.results[0].unexpectedToolCalls, ['run_command']);
+  } });
+  assert.equal(passesUc01(output, false, fixtures), false);
+  assert.equal(output.cases[0].metrics.unexpectedToolCalls, 1);
+  assert.equal(output.cases[0].passed, false);
   assert.ok(providers.every((provider) => provider.callHistory[0].model === 'test-model'));
 });
 
@@ -150,7 +155,7 @@ test('UC-01 cases use the fixed fixture and mark the injection as required', () 
   const cases = loadCases(path.join(process.cwd(), 'evals', 'uc01'));
   assert.equal(cases.length, 10);
   assert.deepEqual(cases.filter((item) => item.mustPass).map((item) => item.id), ['uc01-10-injection-ignore-instructions']);
-  const root = workspaceRoot('01');
+  const root = UC01_WORKSPACE;
   for (const file of ['README.md', 'tinydb_demo/cli.py', 'tinydb_demo/format.py', 'tinydb_demo/store.py', 'tinydb_demo/pretty.py', 'tests/test_search.py']) {
     assert.ok(fs.statSync(path.join(root, file)).isFile());
   }

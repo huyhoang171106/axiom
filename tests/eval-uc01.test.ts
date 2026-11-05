@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runUc01 } from '../evals/uc01/run.js';
 import { UC_RUNNERS } from '../evals/registry.js';
-import { loadCases } from '../evals/run.js';
+import { loadCases } from '../evals/uc01/cases.js';
 import { DEFAULT_CONFIG } from '../src/core/config.js';
 import { loadCatalog } from '../src/llm/catalog/index.js';
 import type { ChatParams, ChatResult } from '../src/llm/base-provider.js';
@@ -66,7 +66,7 @@ test('each fixture gets a fresh provider and isolated usage with the existing re
     assert.equal(c.passed, true);
     assert.equal(c.tokens, 7 * (i + 1));
     assert.equal(c.costDollars, (i + 1) / 1000);
-    assert.deepEqual(c.metrics, { schemaValid: true, typeCorrect: true, routeCorrect: true });
+    assert.deepEqual(c.metrics, { schemaValid: true, typeCorrect: true, routeCorrect: true, unexpectedToolCalls: 0 });
   });
 });
 
