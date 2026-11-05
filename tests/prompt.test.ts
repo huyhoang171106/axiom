@@ -9,6 +9,7 @@ import { skillsIndex, skillsIndexFrom } from '../src/core/skills.js';
 import { ToolRegistry } from '../src/tools/registry.js';
 import { runTriage } from '../src/agents/triage.js';
 import { MockProvider } from '../src/llm/providers/mock.js';
+import { parseUnifiedDiff } from '../src/tools/apply-patch.js';
 
 function tempDir(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -160,4 +161,30 @@ test('buildSystemPrompt adds no blank section when the workspace has no rules', 
   assert.ok(prompt.startsWith('Base only\n\nAvailable skills: use read_file'));
   assert.ok(!prompt.includes('\n\n\n'));
   assert.ok(!prompt.endsWith('\n'));
+});
+
+test('bug-fix appears in skillsIndex', () => {
+  assert.match(skillsIndex(), /^- bug-fix: Fix a reported bug .*\(.*skills[\\/]bug-fix[\\/]SKILL\.md\)$/m);
+});
+
+test('bug-fix has every contract section filled in, no TODO and no script', () => {
+  const dir = path.join(path.dirname(skillsIndex().match(/\(([^()]*bug-fix[^()]*)\)/)![1]));
+  assert.deepEqual(fs.readdirSync(dir), ['SKILL.md'], 'a skill must not ship scripts');
+  const text = fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf8');
+  assert.doesNotMatch(text, /TODO/);
+  assert.doesNotMatch(text, /```(?:bash|sh|shell|console|python)\b/, 'no runnable script blocks');
+  const sections = [...text.matchAll(/^## (.+)$/gm)].map((m) => m[1].trim());
+  assert.deepEqual(sections, ['Metadata', 'When to use', 'Input / Output', 'Steps', 'Constraints', 'Example', 'Final check']);
+  for (const [i, name] of sections.entries()) {
+    const body = text.split(`## ${name}`)[1].split(sections[i + 1] ? `## ${sections[i + 1]}` : /$(?![\s\S])/)[0];
+    assert.ok(body.trim().length > 40, `${name} is empty`);
+  }
+  for (const rule of [/5 rounds/, /apply_patch/, /run_tests/, /status: failed/, /3 files or 100/, /Never delete, weaken or skip an existing test/]) assert.match(text, rule);
+});
+
+test('the diffs in the bug-fix example are valid unified diffs', () => {
+  const text = fs.readFileSync(skillsIndex().match(/\(([^()]*bug-fix[^()]*)\)/)![1], 'utf8');
+  const diffs = [...text.matchAll(/```diff\r?\n([\s\S]*?)```/g)].map((m) => m[1]);
+  assert.equal(diffs.length, 2);
+  for (const diff of diffs) assert.ok(parseUnifiedDiff(diff).length === 1, diff);
 });
