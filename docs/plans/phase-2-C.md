@@ -5,7 +5,7 @@
 | # | Ngày | Việc | Trạng thái |
 |---|---|---|---|
 | C1 | 04/11 | `bug-06..10`, thêm loại `unfixable` | done |
-| C2 | 05/11 | `apply_patch` + guard sửa test | |
+| C2 | 05/11 | `apply_patch` + guard sửa test | done |
 | C3 | 06/11 | `runPytest`, `run_tests` tắt mạng, `findRegressions`, Python trong CI | |
 | C4 | 05/11 | Skill `bug-fix` | |
 | C5 | 07/11 | Graph `/fix` | |
@@ -34,36 +34,41 @@ Test `tests/seeded-bugs.test.ts`: đủ 10 bug đúng category, `check()` pass (
 
 ## C2. `apply_patch` và guard sửa test
 
-Branch `c/c2-apply-patch`. Không cần D0 (nếu stub chưa có thì tạo file trong branch này).
+Branch `c/c2-apply-patch`.
 
 ```ts
 // src/tools/apply-patch.ts
 export interface Hunk { oldStart: number; oldLines: number; newStart: number; newLines: number; lines: string[] } // lines giữ tiền tố ' ', '-', '+'
-export interface FilePatch { oldPath: string | null; newPath: string | null; hunks: Hunk[] }  // null = /dev/null (tạo hoặc xoá file)
-export function parseUnifiedDiff(patch: string): FilePatch[];   // throw Error có số dòng khi sai định dạng
-export function applyHunks(source: string, hunks: readonly Hunk[]): string; // throw PatchConflict nếu ngữ cảnh không khớp
-export class PatchConflict extends Error { constructor(readonly path: string, readonly hunkIndex: number, readonly expected: string, readonly actual: string) }
-export class ApplyPatchTool extends BaseTool { readonly name = 'apply_patch'; /* params { patch: string } */ }
+export interface FilePatch { oldPath: string | null; newPath: string | null; hunks: Hunk[] }  // null = /dev/null (tạo hoặc xoá file); đã bỏ tiền tố a/, b/
+export function parseUnifiedDiff(patch: string): FilePatch[];   // throw Error 'invalid diff at line N: <lý do>'
+export function applyHunks(source: string, hunks: readonly Hunk[], filePath?: string): string; // throw PatchConflict nếu ngữ cảnh không khớp
+export class PatchConflict extends Error { constructor(readonly path: string, readonly hunkIndex: number, readonly expected: string, readonly actual: string, readonly actualRange: string) }
+export class ApplyPatchTool extends BaseTool { readonly name = 'apply_patch'; constructor(guard?: TestGuardOptions); /* params { patch: string } */ }
 
 // src/tools/test-guard.ts
+export interface TestGuardOptions { allowedTests?: readonly string[] } // chỉ code tin cậy đặt (metadata issue, người duyệt), không bao giờ từ args của tool
 export function isTestPath(p: string): boolean;   // tests/**, test_*.py, *_test.py, conftest.py
-export function findTestTampering(patches: readonly FilePatch[], workspaceRoot: string): string | null;
+export function findTestTampering(patches: readonly FilePatch[], workspaceRoot: string, opts?: TestGuardOptions): string | null;
+export function findChangeTampering(filePath: string, before: string | null, after: string | null, workspaceRoot: string, opts?: TestGuardOptions): string | null; // cho edit, write_file
+
+// src/tools/edit.ts, src/tools/write.ts: constructor(guard?: TestGuardOptions), gọi findChangeTampering ngay trước khi ghi
 ```
 
 Bước:
 1. `execute({ patch })`:
    1. `parseUnifiedDiff`. Lỗi → trả `Error: invalid diff at line N: <lý do>`.
-   2. Mỗi path (`a/`, `b/` bỏ tiền tố): `escapesWorkspace` → lỗi; `isSecretPath` → lỗi. (Giữ cả khi E1 đã có luật trong `decide()`.)
+   2. Mỗi path: tuyệt đối hoặc `escapesWorkspace` → lỗi; `isSecretPath` (cả sau khi giải symlink) → lỗi; một path xuất hiện trong hai file patch → lỗi. (Giữ cả khi E1 đã có luật trong `decide()`.)
    3. `findTestTampering` khác `null` → trả lỗi đó, không ghi file nào.
-   4. Tính nội dung mới cho mọi file trước; bất kỳ `PatchConflict` nào → không ghi file nào, trả `Error: hunk <i> of <path> does not apply. Expected:\n<expected>\nActual (lines a-b):\n<actual>` để model thử lại.
-   5. Ghi bằng `fs.writeFileSync` (tạo thư mục cha nếu cần), xoá file khi `newPath === null`.
-   6. Kết quả: `Applied: <path> (+a -b)` mỗi file một dòng.
-2. `findTestTampering` trả lý do khi một patch trên file `isTestPath` có:
-   - dòng `-` chứa `assert`, `pytest.raises`, `self.assert` mà không có dòng `+` tương ứng giữ nguyên nội dung sau khi bỏ khoảng trắng;
-   - xoá hẳn file test có sẵn;
-   - thêm `@pytest.mark.skip`, `@pytest.mark.xfail`, `pytest.skip(`.
+   4. Tính nội dung mới cho mọi file trước (hunk lệch số dòng vẫn áp được nếu ngữ cảnh khớp đúng ở chỗ gần nhất; giữ CRLF và `\ No newline at end of file`); bất kỳ `PatchConflict` nào → không ghi file nào, trả `Error: hunk <i> of <path> does not apply. Expected:\n<expected>\nActual (lines a-b):\n<actual>`.
+   5. Ghi từng file qua file tạm + `rename`, xoá file khi `newPath === null`; ghi hỏng giữa chừng thì khôi phục các file đã ghi.
+   6. Kết quả: `Applied: <path> (+a -b)` mỗi file một dòng (`, created` / `, deleted` khi tạo hoặc xoá).
+2. Guard (`checkLines`, một bộ luật cho cả 3 tool) trả lý do khi thay đổi trên file `isTestPath`:
+   - dòng bị xoá chứa `assert`, `self.assert*(`, `pytest.raises|warns|approx`, `def test*`, `class Test*` mà không có dòng thêm vào giữ nguyên nội dung sau khi bỏ khoảng trắng;
+   - xoá hẳn file test có sẵn, hoặc đổi tên nó ra khỏi cây test;
+   - thêm `@pytest.mark.skip|skipif|xfail`, `pytest.skip|xfail|importorskip(`, `@unittest.skip*`, `SkipTest`;
+   - trong `conftest.py`, `pytest.ini`, `tox.ini`, `setup.cfg`, `pyproject.toml`: thêm `addopts`, `--deselect`, `--ignore`, `-k`, `collect_ignore`, hook collection, `testpaths`/`python_files`/... .
    Thêm test mới (dòng `+` có `assert`) **được phép**, vì bug loại `needs-repro-test` cần viết test tái hiện.
-3. Đăng ký `ApplyPatchTool` trong registry mặc định (cùng chỗ đăng ký `edit`).
+3. Guard bật mặc định trên mọi registry (chat, `/feature`, `/fix`). Ngoại lệ: workflow tạo tool với `allowedTests` rồi đăng ký lên view `scoped()`; tham số của tool call không mở được ngoại lệ. `run_command` (ví dụ `sed -i`) không qua guard, chỉ qua duyệt `ask`; hook ở registry cho mọi tool ghi là việc của E2 (#32).
 
 Test `tests/apply-patch.test.ts` (workspace tạm):
 - `applies a valid one-hunk diff`
