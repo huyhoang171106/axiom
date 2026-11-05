@@ -11,6 +11,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { BaseTool, type ToolExecutionContext } from './base-tool.js';
+import { findChangeTampering, type TestGuardOptions } from './test-guard.js';
 import { lineEndingOf, splitLines } from './text-lines.js';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -54,6 +55,11 @@ export class EditTool extends BaseTool {
     },
     required: ['path', 'oldText', 'newText'],
   };
+
+  /** `guard.allowedTests` is set by trusted code building the registry, never by tool arguments (see test-guard.ts). */
+  constructor(private readonly guard: TestGuardOptions = {}) {
+    super();
+  }
 
   async execute(
     args: Record<string, unknown>,
@@ -157,6 +163,7 @@ export class EditTool extends BaseTool {
         ? ''
         : updatedLines.join(eol) + (trailingNewline ? eol : '');
 
+      this.refuseTestTampering(targetPath, originalContent, finalContent, context);
       await this.writeAtomically(targetPath, finalContent, mode);
       return `Successfully replaced text in ${rawPath} at lines ${targetRange.start}-${targetRange.end}`;
     }
@@ -199,6 +206,7 @@ export class EditTool extends BaseTool {
     const updatedContent = replaceAll
       ? originalContent.split(searchText).join(newText)
       : replaceLiterally(originalContent, searchText, newText);
+    this.refuseTestTampering(targetPath, originalContent, updatedContent, context);
     await this.writeAtomically(targetPath, updatedContent, mode);
 
     const replaced = replaceAll ? matches : 1;
@@ -207,6 +215,12 @@ export class EditTool extends BaseTool {
       `Successfully replaced ${replaced} occurrence${replaced === 1 ? '' : 's'} of oldText in ${rawPath}` +
       ` (${delta >= 0 ? '+' : ''}${delta} lines)`
     );
+  }
+
+  /** Same test-tamper rules as `apply_patch`, so `edit` is not a way around them (UC-03). */
+  private refuseTestTampering(targetPath: string, before: string, after: string, context?: ToolExecutionContext): void {
+    const reason = findChangeTampering(targetPath, before, after, context?.workspaceRoot ?? process.cwd(), this.guard);
+    if (reason) throw new Error(reason);
   }
 
   /**

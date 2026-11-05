@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { BaseTool, type ToolExecutionContext } from './base-tool.js';
+import { findChangeTampering, type TestGuardOptions } from './test-guard.js';
 
 /** Guards against a model "helpfully" dumping a multi-hundred-MB blob through the tool channel. */
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -25,6 +26,11 @@ export class WriteTool extends BaseTool {
     },
     required: ['path', 'content'],
   };
+
+  /** `guard.allowedTests` is set by trusted code building the registry, never by tool arguments (see test-guard.ts). */
+  constructor(private readonly guard: TestGuardOptions = {}) {
+    super();
+  }
 
   async execute(
     args: Record<string, unknown>,
@@ -55,6 +61,10 @@ export class WriteTool extends BaseTool {
     if (await pathExists(targetPath)) {
       throw new Error(`File already exists: ${rawPath}. Use "edit" to change an existing file.`);
     }
+
+    // A new test file may add asserts (a repro test) but not skips, and no new conftest/pytest config may deselect tests.
+    const tamper = findChangeTampering(targetPath, null, content, context?.workspaceRoot ?? process.cwd(), this.guard);
+    if (tamper) throw new Error(tamper);
 
     // Create parent directories if they don't exist
     await fs.mkdir(parentDir, { recursive: true });
