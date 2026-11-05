@@ -8,7 +8,7 @@
 | C2 | 05/11 | `apply_patch` + guard sửa test | done |
 | C3 | 06/11 | `runPytest`, `run_tests` tắt mạng, `findRegressions`, Python trong CI | done |
 | C4 | 05/11 | Skill `bug-fix` | done |
-| C5 | 07/11 | Graph `/fix` | |
+| C5 | 07/11 | Graph `/fix` | code xong, chờ D2, E2, D4, E3 |
 | C6 | 08/11 | Eval UC-03 | |
 | C7 | 08/11 | Diff viewer, tiến trình vòng fix | |
 
@@ -146,60 +146,49 @@ Không chứa script. Test `tests/prompt.test.ts` thêm: `bug-fix appears in ski
 
 ## C5. Graph `/fix`
 
-Branch `c/c5-fix-graph`. Cần D0, C2, C3.
+Branch `c/c5-fix-graph`. Code xong; merge chờ D2 #25, E2 #32, D4 #27, E3 #33 (blocked-by của #20).
 
 ```ts
-// src/agents/fix.ts
+// src/agents/fix.ts — FixRound, FixReport như cũ
 export interface FixOptions {
-  issue: string;                 // nội dung issue.md hoặc chữ người dùng gõ
-  workspaceRoot: string;
-  provider: BaseLLMProvider;
-  model: string;
-  bus: EventBus;
+  issue: string; workspaceRoot: string; provider: BaseLLMProvider; model: string; bus: EventBus;
+  tools: ToolRegistry;           // registry phiên; mỗi node dùng tools.scoped([...])
+  costTracker?: CostTracker;
   ui?: CommandUI;                // không có → không hỏi "Giữ bản sửa?", giữ luôn
   maxRounds?: number;            // mặc định 5
-  budgetTokens?: number;         // mặc định 200_000
-  timeLimitMs?: number;          // mặc định 15 phút
+  budgetTokens?: number;         // mặc định 200_000, cho mọi lần gọi model của workflow
+  timeLimitMs?: number;          // mặc định 15 phút, cho cả workflow
   signal?: AbortSignal;
+  runTests?: (root: string, opts?: { target?: string; signal?: AbortSignal }) => Promise<TestRun>; // chỉ cho test; mặc định runPytest
 }
-export interface FixRound { round: number; hypothesis: string; patchApplied: boolean; testsPassed: number; testsFailed: number; regressions: string[] }
-export interface FixReport {
-  status: 'fixed' | 'failed' | 'aborted';
-  rounds: FixRound[];
-  filesChanged: string[];
-  diffStat: { files: number; added: number; removed: number };
-  explanation?: string;          // bắt buộc khi diffStat.files > 3 hoặc added + removed > 100
-  summary: string;               // fixed: nguyên nhân + cách sửa; failed: đã thử gì, giả thuyết bị loại, bước tiếp theo
-}
+export const MAX_PATCH_FAILURES = 3;
+export function classifyPatchError(output: string): 'conflict' | 'invalid' | 'tamper' | 'refused';
 export function fixIssue(opts: FixOptions): Promise<FixReport>;
+// src/commands/fix.ts
+export function readIssueArg(arg: string, cwd: string): string;
+export function formatFixReport(report: FixReport): string;
 ```
 
 Graph `fix` (mỗi node bọc `traceNode`):
 
 | Node | Làm | Tool của `AgentLoop` trong node |
 |---|---|---|
-| `baseline` | `runPytest(root)` → lưu `before` (không gọi model) | — |
-| `reproduce` | Model tìm hoặc viết test tái hiện | `read_file`, `search_code`, `list_dir`, `apply_patch`, `run_tests` |
-| `locate` | Model nêu file, hàm và giả thuyết; trả về bằng tool `submit_hypothesis({ hypothesis, files })` | `read_file`, `search_code`, `list_dir`, `submit_hypothesis` |
-| `patch` | Model sửa | `read_file`, `apply_patch` |
-| `verify` | `runPytest` → `after`; `findRegressions(before, after)` (không gọi model) | — |
-| `keep` | `askHuman('Giữ bản sửa?', ['yes', 'no'])`; `no` → đảo ngược bằng `git checkout -- <files>` hoặc bản sao lưu trước `baseline` | — |
-| `report` | Lập `FixReport` | — |
+| `baseline` | `runTests(root)` → `before` (không gọi model) | — |
+| `reproduce` | Model tìm hoặc viết test tái hiện, nộp bằng `submit_repro({ targetTests })`. Harness chạy từng target: phải fail hoặc treo, không có lỗi collection; không đạt thì trả lỗi để model sửa. Không nộp được → `report` (`failed`) | `read_file`, `search_code`, `list_dir`, `apply_patch`, `run_tests`, `submit_repro` |
+| `locate` | Giả thuyết qua `submit_hypothesis({ hypothesis, files })`; prompt có "Rejected hypotheses (Đã loại)" và kết quả test gần nhất (gồm regression) | `read_file`, `search_code`, `list_dir`, `submit_hypothesis` |
+| `patch` | Model sửa; `apply_patch` có guard C2, đếm lỗi theo loại, lỗi thứ 3 trong vòng thì dừng node | `read_file`, `apply_patch` |
+| `verify` | Chạy toàn suite + từng target riêng. `fixed` chỉ khi mọi target pass, suite chạy xong (`complete`, không timeout, không lỗi collection) và `findRegressions(before, after)` rỗng | — |
+| `keep` | `askHuman('Giữ bản sửa?', ['yes', 'no'])`. `no` → **chưa hoàn tác**: chờ recovery của D2 (#25); báo cáo ghi rõ file vẫn còn thay đổi. Không `git checkout`, không xoá file | — |
+| `report` | `FixReport`; vượt 3 file / 100 dòng thì gọi model 1 lần (tính vào budget) hỏi lý do, lưu nguyên văn vào `explanation` | — |
 
-Cạnh: `verify` → `keep` khi test mục tiêu pass và `regressions` rỗng; → `locate` khi chưa đạt và `round < maxRounds` và còn ngân sách; → `report` (`failed`) khi hết vòng, hết token hoặc hết giờ.
+Cạnh: `verify` → `keep` khi `fixed`; → `locate` khi chưa đạt, `round < maxRounds`, còn token và còn giờ; → `report` (`failed`) khi hết vòng, hết token hoặc hết giờ. Huỷ (`signal`) → `aborted`.
 
-- Giả thuyết của vòng trước đưa vào prompt `locate` vòng sau với tiêu đề "Đã loại".
-- `explanation`: khi vượt 3 file / 100 dòng, gọi model 1 lần hỏi lý do, lưu nguyên văn.
-- Lệnh `src/commands/fix.ts`: `/fix <thư mục issue | chữ>`; thư mục thì đọc `issue.md`. Model `resolveModel('@code')`. Trả `{ kind: 'fix-report', data: FixReport, text: summary }`.
+- Budget: provider được bọc, đếm token mọi lần gọi (cả retry và câu hỏi `explanation`); hết budget thì từ chối lần gọi tiếp theo.
+- `submit_*` không có trong danh mục rủi ro (`decide()` trả `ask`); workflow tự duyệt riêng 2 tool này, tool khác vẫn qua approver của phiên.
+- `filesChanged`, `diffStat` lấy từ kết quả `apply_patch` (cả test tái hiện mới).
+- Memory (D4 #27): chưa ghi gì. Khi D4 merge, quy ước đề xuất ở `report` phải qua `ui.confirm` trước `addMemory`.
 
-Test `tests/fix.test.ts` (`MockProvider` kịch bản, repo Python tạm có 1 bug, `AXIOM_HOME` tạm):
-- `fixes a one-file bug in one round and reports fixed`
-- `stops after 5 rounds on an unfixable bug with a failure report`
-- `rejected hypotheses are passed to the next round`
-- `a regression sends the graph back to locate`
-- `a diff over 3 files carries an explanation`
-- `trace has one node event pair per node per round`
-- `answering no to keep restores the original files`
+Test `tests/fix.test.ts` (`MockProvider` kịch bản theo node, bộ chạy test giả đọc file, `AXIOM_HOME` tạm): sửa 1 vòng; `submit_repro` từ chối target đang pass; không tái hiện được; dừng sau 5 vòng có báo cáo; giả thuyết bị loại vào vòng sau; regression quay về `locate` + đủ cặp node event mỗi vòng; suite timeout/lỗi collection không tính là fixed; cap 3 patch lỗi; patch sửa test bị chặn và ghi vào báo cáo; budget token; giới hạn giờ; diff > 3 file có `explanation`; keep yes/no; huỷ → `aborted`; `/fix` đọc `issue.md`. Một test chạy verifier thật (bwrap) trên `bug-01`, bắt buộc chạy trên CI.
 
 ## C6. Eval UC-03
 
