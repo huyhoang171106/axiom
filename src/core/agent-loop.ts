@@ -36,6 +36,29 @@ export interface TaskResult {
   error?: string;
 }
 
+/** Extracts target file paths from unified diff headers (--- a/... and +++ b/...). */
+export function extractPatchPaths(patch: string): string[] {
+  const paths = new Set<string>();
+  const lines = patch.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.startsWith('--- ')) {
+      const next = lines[i + 1];
+      if (next && next.startsWith('+++ ')) {
+        const oldPath = line.slice(4).trim().replace(/^[ab]\//, '');
+        const newPath = next.slice(4).trim().replace(/^[ab]\//, '');
+        if (newPath !== '/dev/null') {
+          paths.add(newPath);
+        } else if (oldPath !== '/dev/null') {
+          paths.add(oldPath);
+        }
+        i++;
+      }
+    }
+  }
+  return Array.from(paths);
+}
+
 export const DEFAULT_SYSTEM_PROMPT = [
   'You are Axiom, an autonomous software engineering agent running in the user\'s workspace with bash and file tools.',
   '1. Ground every claim in actual file contents or command output; read before you edit.',
@@ -167,6 +190,9 @@ export class AgentLoop {
       const target = tc.arguments['path'];
       if ((tc.name === 'write_file' || tc.name === 'edit') && typeof target === 'string' && !result.isError) {
         this.sessionManager.trackActiveFiles([target]);
+      } else if (tc.name === 'apply_patch' && typeof tc.arguments['patch'] === 'string' && !result.isError) {
+        const patchPaths = extractPatchPaths(tc.arguments['patch']);
+        if (patchPaths.length > 0) this.sessionManager.trackActiveFiles(patchPaths);
       }
       // A model re-issuing the identical call is stuck; say so in the result it will read next.
       const warning = this.guard.record(tc.name, tc.arguments);
