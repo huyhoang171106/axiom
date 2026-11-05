@@ -6,6 +6,31 @@ import os from 'node:os';
 import path from 'node:path';
 import { ToolRegistry } from '../src/tools/registry.js';
 
+test('approval cannot authorize a path moved outside the workspace while waiting', async (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-wait-policy-'));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const root = path.join(base, 'workspace');
+  const outside = path.join(base, 'outside');
+  const configDir = path.join(root, '.github');
+  fs.mkdirSync(configDir, { recursive: true });
+  fs.mkdirSync(outside);
+  const registry = new ToolRegistry();
+  let asked = 0;
+  registry.approver = async () => {
+    asked++;
+    // Mô phỏng filesystem đổi trong lúc người dùng đang xem hộp duyệt.
+    fs.rmdirSync(configDir);
+    fs.symlinkSync(outside, configDir, 'junction');
+    return 'approve';
+  };
+  const result = await registry.executeTool('write_file', { path: '.github/new.yml', content: 'blocked' }, { workspaceRoot: root });
+  assert.equal(asked, 1);
+  assert.equal(result.isError, true);
+  assert.equal(result.metadata?.success, false);
+  assert.equal((result.metadata?.policy as { verdict: string }).verdict, 'deny');
+  assert.equal(fs.existsSync(path.join(outside, 'new.yml')), false);
+});
+
 test('edited arguments execute once and report their final policy', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-edited-policy-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

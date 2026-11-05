@@ -52,8 +52,9 @@ Branch `e/e2-anti-evasion`.
 
 ```ts
 // src/tools/denied-actions.ts
-export function normalizeCommand(command: string): string[];  // mỗi đoạn một chuỗi chuẩn hoá
-export function actionKey(name: string, args: Record<string, unknown>): string;
+export function normalizeCommand(command: string, workspaceRoot?: string): string[];
+export function actionKey(name: string, args: Record<string, unknown>, workspaceRoot?: string): string;
+export function actionKeys(name: string, args: Record<string, unknown>, workspaceRoot?: string): string[];
 export class DeniedActions { add(key: string): void; has(key: string): boolean; clear(): void }
 ```
 
@@ -63,12 +64,15 @@ export class DeniedActions { add(key: string): void; has(key: string): boolean; 
 3. Gộp khoảng trắng; bỏ `./` và `//` thừa trong path; path tương đối giải về tuyệt đối theo `workspaceRoot`.
 4. Tên lệnh tương đương: `pip3`, `python -m pip`, `python3 -m pip` → `pip`; `npm i` → `npm install`; `unlink` → `rm`; `rm -f`, `rm -r` → `rm` + cờ sắp xếp.
 
-`actionKey`: `run_command` → `run_command:<từng đoạn chuẩn hoá>`; tool path → `<name>:<path tuyệt đối>`; khác → `<name>:<JSON args sắp key>`.
+`actionKey` giữ kiểu trả về `string` của seam D0; nhiều keys được đóng gói trong chuỗi `actions:<JSON keys>`, `DeniedActions.add/has` hiểu chuỗi này. `actionKeys` là helper E2 cho gate, trả từng identity riêng. `workspaceRoot` mặc định cwd để caller cũ không cần sửa. Chuỗi lệnh chuẩn hoá là JSON argv, giữ khoảng trắng trong argument và dấu phân cách literal trong quotes. Không dùng join-space làm identity.
+
+`run_command` có key theo workspace và từng đoạn, thêm key theo package khi cài nhiều package và theo tài nguyên khi mutation. Các tool ghi `write_file`, `edit`, `apply_patch` và shell mutation dùng `mutation:<canonical path>` chung; rename kiểm nguồn và đích, copy chỉ ghi đích. Denial mutation bảo vệ cả cây con và thao tác xoá thư mục cha; đọc dùng key riêng. Tool khác dùng JSON args sắp keys đệ quy. Path resolve ancestor thật của file chưa tồn tại. Khi session có denial, command có expansion, syntax không hỗ trợ, đổi cwd, interpreter hoặc nguồn package gián tiếp bị chặn trước approver vì không chứng minh được identity.
 
 Nối vào `gate()`:
-1. Trước `decide()`: một key trong `actionKey(...)` có trong `registry.denied` → `deny`, lý do `"same action was denied earlier in this session: <key>"`, `risk: 'high'`.
+1. Trước `decide()`: một key trong `actionKeys(...)` có trong `registry.denied` → `deny`, lý do `"same action was denied earlier in this session: <key>"`, `risk: 'high'`.
 2. Approver trả `deny` → `registry.denied.add(key)`.
-3. `registry.denied` sống theo phiên (một `ToolRegistry`); `/clear` gọi `clear()`.
+3. `registry.denied` sống tại registry gốc của session; scoped/nested-scoped đọc cùng object. `/clear` chỉ xoá transcript, không gọi `denied.clear()` (nghiệm thu #32 thay recipe cũ). Đổi permission view vẫn giữ registry phiên, session độc lập có state riêng. Không persist denial qua restart trong E2. E5 phải giữ registry phiên khi nối mode; E2 không triển khai lệnh mode.
+4. Args edited và args sau approval kiểm lại denial, policy và filesystem hiện tại. Trước execution kiểm thêm một lần; tool ghi nhận canonical path để guard C2 không bị che qua alias. Patch dùng parser/guard C2 thật, kiểm cả nguồn/đích canonical. Denial của lệnh ghép không ghi các đoạn chỉ đọc. Tool lỗi luôn trả `isError: true`, `success: false`.
 
 Test `tests/denied-actions.test.ts`:
 - `after denying rm a.py, sh -c "rm ./a.py" is denied`

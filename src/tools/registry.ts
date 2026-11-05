@@ -1,5 +1,6 @@
 // src/tools/registry.ts - ToolRegistry for managing and executing deterministic tools
 import crypto from 'node:crypto';
+import path from 'node:path';
 import { redact } from '../core/secrets.js';
 import type { ToolDefinition, ToolResult } from '../core/types.js';
 import { BaseTool, type ToolExecutionContext, type ToolSummarizer } from './base-tool.js';
@@ -12,6 +13,9 @@ import { SearchCodeTool } from './search-code.js';
 import { ApplyPatchTool } from './apply-patch.js';
 import { RunTestsTool } from './run-tests.js';
 import { decide, type Approver, type PolicyDecision } from './permissions.js';
+import { actionKeys, canonicalActionPath, commandActions, DeniedActions } from './denied-actions.js';
+import { parseUnifiedDiff } from './apply-patch.js';
+import { findTestTampering, isTestPath } from './test-guard.js';
 
 export class ToolRegistry {
   private readonly tools: Map<string, BaseTool> = new Map();
@@ -33,6 +37,10 @@ export class ToolRegistry {
 
   /** Set on `scoped()` views: approval state is read from the session registry at call time, never copied. */
   private session?: ToolRegistry;
+  private readonly sessionDenied = new DeniedActions();
+
+  /** Mọi view cùng phiên đọc trực tiếp state gốc; đổi view không làm mất denial. */
+  get denied(): DeniedActions { return (this.session ?? this).sessionDenied; }
 
   /** `allowed` limits the registry to those tool names; omit it for the full standard set. */
   constructor(allowed?: readonly string[]) {
@@ -130,6 +138,20 @@ export class ToolRegistry {
       policy = gate.policy;
       if (gate.refusal) throw new Error(gate.refusal);
       args = gate.args;
+      // Gate có await; kiểm lại ngay trước execution, kể cả khi nhánh đầu là allow.
+      const finalPolicy = this.checkPolicy(name, args, context.workspaceRoot);
+      if (finalPolicy.verdict === 'deny') {
+        policy = finalPolicy;
+        throw new Error(`Blocked by policy before execution (${finalPolicy.reason}).`);
+      }
+      if (finalPolicy.verdict === 'ask' && policy.verdict === 'allow') {
+        policy = finalPolicy;
+        throw new Error('Policy changed before execution; submit the action again for approval.');
+      }
+      if (['edit', 'write_file'].includes(name) && typeof args.path === 'string') {
+        // Pin path trước I/O async; C2 kiểm test guard trên tên thật thay vì alias.
+        args = { ...args, path: canonicalActionPath(args.path.trim(), context.workspaceRoot) };
+      }
       // Tool output goes to the model and the trace; a key a tool happened to print must not travel with it.
       const output = redact(await tool.execute(args, context as ToolExecutionContext));
       const durationMs = Date.now() - startTime;
@@ -178,7 +200,7 @@ export class ToolRegistry {
     args: Record<string, unknown>,
     workspaceRoot: string
   ): Promise<{ args: Record<string, unknown>; policy: PolicyDecision & { approval?: string }; refusal?: string }> {
-    const policy = decide(name, args, workspaceRoot);
+    const policy = this.checkPolicy(name, args, workspaceRoot);
     if (policy.verdict === 'deny') {
       return { args, policy, refusal: `Blocked by policy (${policy.reason}). This action is never allowed; do not retry it in another form.` };
     }
@@ -192,19 +214,95 @@ export class ToolRegistry {
         refusal: `Refusing "${name}" (${policy.reason}): no approver is installed and unattended execution was not enabled.`,
       };
     }
-    const answer = await approver({ name, args, reason: policy.reason, risk: policy.risk });
+    const originalKeys = actionKeys(name, args, workspaceRoot);
+    const answer = await approver({ name, args: structuredClone(args), reason: policy.reason, risk: policy.risk });
     if (answer === 'deny') {
+      for (const key of originalKeys) {
+        // Từ chối lệnh ghép không cấm luôn đoạn đọc vô hại đứng cạnh hành động rủi ro.
+        if (name === 'run_command' && key.startsWith('run_command:[')) {
+          const [, words] = JSON.parse(key.slice('run_command:'.length)) as [string, string[]];
+          if (['ls', 'cat', 'head', 'tail', 'stat', 'wc', 'pwd', 'echo', 'whoami', 'id', 'which'].includes(words[0])) continue;
+        }
+        this.denied.add(key);
+      }
       return {
         args,
         policy: { ...policy, approval: 'denied' },
         refusal: `Denied by user (${policy.reason}). Do not retry the same action; choose a safer alternative or ask the user.`,
       };
     }
-    if (answer === 'approve') return { args, policy: { ...policy, approval: 'approved' } };
-    const recheck = decide(name, answer.editedArgs, workspaceRoot);
+    if (answer === 'approve') {
+      // Path có thể đổi qua symlink trong lúc chờ duyệt; approval không vượt hard deny mới.
+      const recheck = this.checkPolicy(name, args, workspaceRoot);
+      if (recheck.verdict === 'deny') {
+        return { args, policy: recheck, refusal: `Blocked by policy after approval (${recheck.reason}).` };
+      }
+      return { args, policy: { ...recheck, approval: 'approved' } };
+    }
+    const recheck = this.checkPolicy(name, answer.editedArgs, workspaceRoot);
     if (recheck.verdict === 'deny') {
       return { args, policy: recheck, refusal: `Blocked by policy after edit (${recheck.reason}).` };
     }
     return { args: answer.editedArgs, policy: { ...recheck, approval: 'edited' } };
+  }
+
+  /** Một checkpoint cho args gốc, args edited và filesystem hiện tại, không đường tắt approver. */
+  private checkPolicy(name: string, args: Record<string, unknown>, workspaceRoot: string): PolicyDecision {
+    let keys: string[];
+    try { keys = actionKeys(name, args, workspaceRoot); }
+    catch (error) {
+      return { verdict: 'deny', risk: 'high', reason: `cannot identify actions: ${error instanceof Error ? error.message : String(error)}` };
+    }
+    const denied = keys.find((key) => this.denied.has(key));
+    if (denied) return { verdict: 'deny', risk: 'high', reason: `same action was denied earlier in this session: ${denied}` };
+    let commandPolicy: PolicyDecision | undefined;
+    if (name === 'run_command') {
+      const actions = commandActions(String(args.command ?? ''), workspaceRoot);
+      if (this.denied.size && actions.opaque) {
+        return { verdict: 'deny', risk: 'high', reason: 'cannot establish command identity while this session has denied actions' };
+      }
+      for (const key of actions.keys) {
+        if (!key.startsWith('run_command:[')) continue;
+        const [, words] = JSON.parse(key.slice('run_command:'.length)) as [string, string[]];
+        if (!/^[a-zA-Z0-9_-]+$/.test(words[0])) continue;
+        const command = [words[0], ...words.slice(1).map((word) => `'${word.replace(/'/g, `'\\''`)}'`)].join(' ');
+        const inner = decide(name, { command }, workspaceRoot);
+        if (inner.verdict === 'deny') return inner;
+        if (inner.verdict === 'ask' && (!commandPolicy || inner.risk === 'high')) commandPolicy = inner;
+      }
+      for (const target of actions.mutationPaths) {
+        const policy = decide('write_file', { path: target }, workspaceRoot);
+        if (policy.verdict === 'deny') return policy;
+        if (isTestPath(path.relative(workspaceRoot, target))) {
+          return { verdict: 'deny', risk: 'high', reason: `shell mutation of test path (${target}); use a guarded file tool` };
+        }
+      }
+    }
+    const policy = decide(name, args, workspaceRoot);
+    if (policy.verdict === 'deny') return policy;
+    if (name === 'apply_patch') {
+      // C2 nhận cả path thật để alias symlink không che được tên tests/ hoặc conftest.py.
+      const original = parseUnifiedDiff(String(args.patch ?? ''));
+      const patches = original.map((patch) => ({
+        ...patch,
+        oldPath: patch.oldPath === null ? null : canonicalActionPath(patch.oldPath, workspaceRoot),
+        newPath: patch.newPath === null ? null : canonicalActionPath(patch.newPath, workspaceRoot),
+      }));
+      const hasAlias = original.some((patch) => [patch.oldPath, patch.newPath].some((p) => {
+        if (p === null) return false;
+        const lexical = path.resolve(workspaceRoot, p);
+        return path.relative(workspaceRoot, canonicalActionPath(p, workspaceRoot)) !== path.relative(workspaceRoot, lexical);
+      }));
+      const tamper = hasAlias ? findTestTampering(patches, workspaceRoot) : null;
+      if (tamper) return { verdict: 'deny', risk: 'high', reason: tamper };
+    }
+    if (['edit', 'write_file'].includes(name) && typeof args.path === 'string') {
+      // Policy phải thấy tên thật của cấu hình nhạy cảm qua alias.
+      const canonical = canonicalActionPath(args.path.trim(), workspaceRoot);
+      const canonicalPolicy = decide(name, { ...args, path: canonical }, workspaceRoot);
+      if (canonicalPolicy.verdict === 'deny') return canonicalPolicy;
+      if (canonicalPolicy.risk === 'high') return canonicalPolicy;
+    }
+    return policy.risk === 'high' ? policy : commandPolicy ?? policy;
   }
 }

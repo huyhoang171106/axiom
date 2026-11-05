@@ -259,7 +259,8 @@ function needsApproval(name: string, args: Record<string, unknown>, workspaceRoo
  * template and stays readable), `*.pem`, anything under `.ssh`, and `.git/config` (may hold credentials).
  */
 export function isSecretPath(p: string): boolean {
-  const n = p.trim().replace(/\\/g, '/').replace(/^['"]|['"]$/g, '');
+  const raw = p.trim().replace(/\\/g, '/').replace(/^['"]|['"]$/g, '');
+  const n = process.platform === 'win32' ? raw.toLowerCase() : raw;
   return (
     /(^|\/)\.env(\.(?!example$)[^/]*)?$/.test(n) ||
     /\.pem$/i.test(n) ||
@@ -287,7 +288,7 @@ export function decide(name: string, args: Record<string, unknown>, workspaceRoo
       return patches.length > 5 || patches.some((patch) => patch.newPath === null)
         ? { verdict: 'ask', risk: 'medium', reason: 'large patch or file deletion' } : result;
     } catch {
-      return { verdict: 'ask', risk: 'medium', reason: 'patch parser unavailable or patch invalid; C2/E2 integration required' };
+      return { verdict: 'ask', risk: 'medium', reason: 'patch parser rejected invalid input; a verified unified diff is required' };
     }
   }
   if (name === 'run_command') {
@@ -328,7 +329,7 @@ export function decide(name: string, args: Record<string, unknown>, workspaceRoo
     if (raw && escapesWorkspace(raw, workspaceRoot) && !(name === 'read_file' && isBundledSkillFile(raw))) {
       return { verdict: 'deny', risk: 'high', reason: `outside the workspace (${path.resolve(workspaceRoot, raw)})` };
     }
-    if ((name === 'write_file' || name === 'edit') && /(^|[\\/])(?:\.github(?:[\\/]|$)|pyproject\.toml$|setup\.(?:py|cfg)$|requirements[^\\/]*\.txt$|package\.json$|[^\\/]*lock[^\\/]*$|SECURITY\.md$)/i.test(raw)) {
+    if ((name === 'write_file' || name === 'edit') && [raw, realTarget(path.resolve(workspaceRoot, raw))].some((target) => /(^|[\\/])(?:\.github(?:[\\/]|$)|pyproject\.toml$|setup\.(?:py|cfg)$|requirements[^\\/]*\.txt$|package\.json$|[^\\/]*lock[^\\/]*$|SECURITY\.md$)/i.test(target))) {
       return { verdict: 'ask', risk: 'high', reason: 'changes security or dependency configuration' };
     }
   }
