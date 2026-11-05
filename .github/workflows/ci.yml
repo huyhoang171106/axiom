@@ -34,6 +34,12 @@ jobs:
       # search_code wraps ripgrep; without it its tests are skipped instead of run.
       - run: command -v rg || (sudo apt-get update && sudo apt-get install -y ripgrep)
       - run: python -m pip install pytest
+      # run_tests refuses to run without bwrap; Ubuntu 24.04 blocks unprivileged user namespaces via AppArmor
+      # by default, so without the sysctl the sandbox tests would have nothing to run on.
+      - run: |
+          sudo apt-get install -y bubblewrap || (sudo apt-get update && sudo apt-get install -y bubblewrap)
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          bwrap --ro-bind / / -- /bin/true
       - run: npm test
       # Runs once D0 adds the `eval` script; mock provider, so no API key is needed.
       - run: npm run eval --if-present
