@@ -206,41 +206,70 @@ export async function execViaSandboxService(url: string, req: SandboxExecRequest
 /**
  * Builds the bwrap argv for a command.
  *
- * The root is mounted read-only and only the workspace (plus package caches) is writable, so a stray
- * `rm -rf` inside a command cannot reach the user's home or system files. The network namespace is
- * shared, because installs and test runners need it.
+ * Default (what `run_command` uses): the root is mounted read-only and only the workspace (plus package
+ * caches) is writable, so a stray `rm -rf` cannot reach the user's home or system files. The network
+ * namespace is shared, because installs need it.
+ *
+ * `isolateNetwork` adds `--unshare-net`: the command gets a network namespace with no interfaces at all.
+ *
+ * `readableRoots` replaces the read-only bind of `/` with `/usr` (+ the `/bin`, `/lib*`, `/sbin` links or
+ * dirs), fresh `/tmp` and `/home`, and a read-only bind of each given root. Host files outside those roots,
+ * `~/.ssh` and `~/.axiom` included, do not exist inside, and only `cwd` + `extraWritable` are writable
+ * (package caches are not bound). `run_tests` uses both, because test code is untrusted.
  */
 export function bwrapInvocation(
   command: string,
   cwd: string,
-  opts: { bwrap?: string; home?: string; extraWritable?: string[] } = {}
+  opts: { bwrap?: string; home?: string; extraWritable?: string[]; isolateNetwork?: boolean; readableRoots?: string[] } = {}
 ): { file: string; args: string[] } {
   const bwrap = opts.bwrap ?? getBwrapPath() ?? 'bwrap';
   const home = opts.home ?? os.homedir();
-  const args: string[] = [
-    '--ro-bind', '/', '/',
-    '--dev', '/dev',
-    '--tmpfs', '/dev/shm',
-    '--proc', '/proc',
-    '--tmpfs', '/tmp',
-  ];
-
-  // Mounted after the read-only root, so these override it.
+  const args: string[] = [];
   const writable = [cwd];
-  for (const rel of WRITABLE_CACHE_DIRS) writable.push(path.join(home, rel));
+
+  if (opts.readableRoots) {
+    args.push('--ro-bind', '/usr', '/usr');
+    for (const top of ['/bin', '/sbin', '/lib', '/lib32', '/lib64']) {
+      const link = readLink(top);
+      if (link !== null) args.push('--symlink', link, top);
+      else if (isDirectory(top)) args.push('--ro-bind', top, top);
+    }
+    args.push('--dev', '/dev', '--proc', '/proc', '--tmpfs', '/tmp', '--tmpfs', '/home');
+    for (const root of uniqueExisting(opts.readableRoots.filter((r) => path.isAbsolute(r) && r !== '/'), '')) {
+      args.push('--ro-bind', root, root);
+    }
+  } else {
+    args.push('--ro-bind', '/', '/', '--dev', '/dev', '--tmpfs', '/dev/shm', '--proc', '/proc', '--tmpfs', '/tmp');
+    for (const rel of WRITABLE_CACHE_DIRS) writable.push(path.join(home, rel));
+  }
+
+  // Mounted after the read-only binds, so these override them.
   if (opts.extraWritable) writable.push(...opts.extraWritable);
   for (const dir of uniqueExisting(writable, cwd)) {
     args.push('--bind', dir, dir);
   }
 
-  args.push(
-    '--chdir', cwd,
-    '--unshare-pid',
-    '--die-with-parent',
-    '--',
-    '/bin/bash', '-c', command
-  );
+  args.push('--chdir', cwd, '--unshare-pid');
+  if (opts.isolateNetwork) args.push('--unshare-net');
+  args.push('--die-with-parent', '--', '/bin/bash', '-c', command);
   return { file: bwrap, args };
+}
+
+/** Target of a symlink such as `/bin -> usr/bin` (merged-/usr systems), or null when it is not a link. */
+function readLink(p: string): string | null {
+  try {
+    return fs.lstatSync(p).isSymbolicLink() ? fs.readlinkSync(p) : null;
+  } catch {
+    return null;
+  }
+}
+
+function isDirectory(p: string): boolean {
+  try {
+    return fs.statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 /** Extra writable roots, e.g. AXIOM_SANDBOX_RW=/srv/data:/opt/tools. */
