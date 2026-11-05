@@ -1,4 +1,5 @@
-import test from 'node:test';
+import { createExecutionContext } from '../src/core/execution-context.js';
+import test, { beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -11,6 +12,16 @@ import type { ModelInfo } from '../src/llm/catalog/index.js';
 import { defaultCommandRouter } from '../src/commands/index.js';
 
 process.env.AXIOM_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-command-home-'));
+process.env.AXIOM_CONFIG_PATH = path.join(process.env.AXIOM_HOME, 'config.json');
+fs.writeFileSync(process.env.AXIOM_CONFIG_PATH, JSON.stringify({ defaultModel: 'ollama/gpt-oss:20b' }));
+
+// Giả lập ở ranh giới HTTP; activeProvider không điều khiển model resolver.
+beforeEach(t => {
+  t.mock.method(globalThis, 'fetch', async () => new Response(
+    'data: {"choices":[{"delta":{"content":"No ticket"}}]}\n\ndata: [DONE]\n\n',
+    { headers: { 'content-type': 'text/event-stream' } },
+  ));
+});
 
 const ticket = (over: Partial<IssueTicket> = {}): IssueTicket => ({
   type: 'bug',
@@ -23,7 +34,7 @@ const ticket = (over: Partial<IssueTicket> = {}): IssueTicket => ({
   ...over,
 });
 
-/** activeProvider 'mock' makes createProviderFor return a MockProvider, so nothing touches the network. */
+/** Cấu hình model cố định và fetch giả giữ test độc lập với máy người chạy. */
 function makeCtx(opts: { activeProvider?: string; onAsk?: () => string } = {}): {
   ctx: CommandContext;
   questions: string[];
@@ -38,7 +49,8 @@ function makeCtx(opts: { activeProvider?: string; onAsk?: () => string } = {}): 
     confirm: async () => false,
   };
   const ctx: CommandContext = {
-    config: { ...DEFAULT_CONFIG, activeProvider: opts.activeProvider ?? DEFAULT_CONFIG.activeProvider },
+    ...createExecutionContext(),
+    config: { ...DEFAULT_CONFIG, defaultModel: 'ollama/gpt-oss:20b', activeProvider: opts.activeProvider ?? DEFAULT_CONFIG.activeProvider },
     workspaceRoot: process.cwd(),
     ui,
     signal: new AbortController().signal,

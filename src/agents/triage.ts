@@ -1,4 +1,7 @@
-// src/agents/triage.ts - UC-01: turn a free-form issue into a structured IssueTicket (topic spec)
+// src/agents/triage.ts - Phân loại issue thành IssueTicket và hỏi duyệt route (UC-01).
+import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
+import { createCheckpointer, traceNode } from '../core/graph.js';
+import { askHuman } from '../core/human-gate.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
@@ -136,6 +139,8 @@ export interface TriageOptions {
   /** Injected so tests can drive triage with a MockProvider; production callers pass the resolved wire provider. */
   provider: BaseLLMProvider;
   model?: string;
+  /** Registry phiên để node triage giữ nguyên approver và chỉ thu hẹp quyền tool. */
+  tools?: ToolRegistry;
   maxSteps?: number;
   signal?: AbortSignal;
   onToolCall?: (name: string) => void;
@@ -154,13 +159,17 @@ export async function runTriage(opts: TriageOptions): Promise<TriageResult> {
   let accepted: IssueTicket | undefined;
   const submitTool = new SubmitIssueTicketTool(
     (ticket) => {
+      // Nhận ticket là thành công, không abort: TUI dùng event lỗi để báo lượt thất bại.
+      // AgentLoop sẽ dừng qua isComplete sau khi lưu xong kết quả của lượt tool.
       accepted = ticket;
-      controller.abort();
     },
     () => controller.abort()
   );
 
-  const registry = new ToolRegistry(['read_file', 'search_code', submitTool.name]);
+  // Scoped view dùng chung cơ chế duyệt của phiên, tránh tạo một đường chạy bỏ qua policy.
+  // Chỉ caller độc lập không truyền registry mới cần registry riêng.
+  const names = ['read_file', 'search_code', submitTool.name];
+  const registry = opts.tools ? opts.tools.scoped(names) : new ToolRegistry(names);
   registry.registerTool(submitTool);
 
   const eventBus = opts.bus ?? new EventBus();
@@ -181,6 +190,7 @@ export async function runTriage(opts: TriageOptions): Promise<TriageResult> {
     systemPrompt: buildSystemPrompt(TRIAGE_SYSTEM_PROMPT, opts.workspaceRoot),
     model: opts.model,
     maxSteps: opts.maxSteps ?? 12,
+    isComplete: () => accepted !== undefined,
     signal: controller.signal,
   });
 
@@ -195,4 +205,32 @@ export async function runTriage(opts: TriageOptions): Promise<TriageResult> {
   throw new Error(
     `Triage failed: the model never called submit_issue_ticket${result.error ? ` (${result.error})` : ` (${result.status})`}`
   );
+}
+
+// Checkpoint chỉ giữ kết quả phân loại và quyết định duyệt, không giữ kết quả workflow đích.
+// Khi confirm resume, LangGraph chạy lại node confirm chứ không gọi lại model của node triage.
+const TriageState = Annotation.Root({
+  issue: Annotation<string>,
+  ticket: Annotation<IssueTicket | null>,
+  warnings: Annotation<string[]>,
+  confirmed: Annotation<boolean>,
+});
+export type TriageGraphState = typeof TriageState.State;
+
+// Graph kết thúc ngay sau confirm. Command mới dispatch workflow ở ngoài graph:
+// interrupt từ workflow con không thể làm LangGraph chạy lại thao tác sửa của route.
+export function buildTriageGraph(opts: TriageOptions) {
+  const bus = opts.bus ?? new EventBus();
+  return new StateGraph(TriageState)
+    .addNode('triage', traceNode<TriageGraphState>(bus, 'triage', 'triage', async (s) => ({
+      ...await runTriage({ ...opts, issue: s.issue }),
+    })))
+    // Hỏi thêm hoặc từ chối chỉ trả thông tin, không cần xin phép chạy workflow.
+    // Route còn lại dừng ở askHuman và để runGraph hỏi qua UI của CLI hoặc TUI.
+    .addNode('confirm', traceNode<TriageGraphState>(bus, 'triage', 'confirm', async (s) => ({
+      confirmed: s.ticket?.route === 'ask_user' || s.ticket?.route === 'reject'
+        || askHuman(`Chạy route đề xuất (${s.ticket?.route})?`, ['yes', 'no']) === 'yes',
+    })))
+    .addEdge(START, 'triage').addEdge('triage', 'confirm').addEdge('confirm', END)
+    .compile({ checkpointer: createCheckpointer() });
 }
