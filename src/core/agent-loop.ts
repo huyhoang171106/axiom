@@ -10,6 +10,9 @@ import { BaseLLMProvider } from '../llm/base-provider.js';
 import { defaultProviderRegistry, type ProviderRegistry } from '../llm/provider-factory.js';
 import { ToolRegistry } from '../tools/registry.js';
 import type { BaseTool } from '../tools/base-tool.js';
+import { compactHistory, shouldCompact } from './compaction.js';
+import type { TaskState } from './task-state.js';
+import { loadCatalog } from '../llm/catalog/index.js';
 
 export interface AgentLoopOptions {
   config: AxiomConfig;
@@ -28,6 +31,10 @@ export interface AgentLoopOptions {
   signal?: AbortSignal;
   /** Workflow xác nhận đã nhận đầu ra cuối cùng sau lượt tool; không dùng abort để báo thành công. */
   isComplete?: () => boolean;
+  /** Context window size for auto-compaction (UC-04); defaults to model's contextWindow or 1,000,000. */
+  contextWindow?: number;
+  /** TaskState when running under a workflow task (preserves goal and acceptance across compaction). */
+  task?: TaskState;
 }
 
 export interface TaskResult {
@@ -85,6 +92,8 @@ export class AgentLoop {
   private readonly budgetLimitDollars: number;
   private readonly systemPrompt: string;
   private readonly model?: string;
+  private readonly contextWindow?: number;
+  private readonly task?: TaskState;
   private signal?: AbortSignal;
 
   constructor(options: AgentLoopOptions) {
@@ -102,6 +111,8 @@ export class AgentLoop {
     this.signal = options.signal;
     this.systemPrompt = options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
     this.model = options.model;
+    this.contextWindow = options.contextWindow;
+    this.task = options.task;
   }
 
   public registerTool(tool: BaseTool): void {
@@ -134,6 +145,7 @@ export class AgentLoop {
     const provider =
       this.provider ?? this.providerRegistry.getOrCreate(this.config.activeProvider, this.config.providers[this.config.activeProvider]);
     const model = this.model ?? this.config.defaultModel ?? 'claude-sonnet-4-5';
+    let lastPromptTokens: number | undefined;
 
     for (let step = 1; step <= this.maxSteps; step++) {
       if (this.signal?.aborted) return this.finish('aborted', 'Task aborted via AbortSignal');
@@ -141,6 +153,39 @@ export class AgentLoop {
       const cost = runCosts.getSessionSummary().totalCost;
       if (cost >= this.budgetLimitDollars) {
         return this.finish('failed', `Budget limit reached: $${cost.toFixed(4)} >= $${this.budgetLimitDollars.toFixed(4)}`);
+      }
+
+      // Ước lượng token trước mỗi lượt chat: dùng promptTokens của lượt trước nếu có,
+      // không thì tính xấp xỉ ceil(độ dài ký tự / 4).
+      const currentMessages = this.sessionManager.requireSession().messages;
+      let promptTokens: number;
+      if (lastPromptTokens !== undefined) {
+        promptTokens = lastPromptTokens;
+      } else {
+        let chars = 0;
+        for (const m of currentMessages) {
+          chars += (m.content?.length ?? 0);
+          if (m.toolCalls) chars += JSON.stringify(m.toolCalls).length;
+        }
+        promptTokens = Math.ceil(chars / 4);
+      }
+
+      const effectiveContextWindow = this.contextWindow ?? this.resolveContextWindow(model);
+      if (shouldCompact(promptTokens, effectiveContextWindow)) {
+        const { summary, messages: compactedMessages } = await compactHistory(currentMessages, {
+          provider,
+          model,
+          task: this.task,
+          signal: this.signal,
+          costTracker: this.costTracker,
+          eventBus: this.eventBus,
+        });
+        if (summary) {
+          const currentSession = this.sessionManager.requireSession();
+          currentSession.messages = compactedMessages;
+          this.sessionManager.saveSession();
+          lastPromptTokens = undefined;
+        }
       }
 
       let response;
@@ -165,6 +210,7 @@ export class AgentLoop {
       this.sessionManager.updateCost(response.usage.costEstimate, response.usage);
       this.eventBus.emit('cost_update', response.usage);
       this.sessionManager.addMessage({ role: 'assistant', content: response.content, toolCalls: response.toolCalls });
+      lastPromptTokens = response.usage.promptTokens;
 
       const toolCalls = response.toolCalls ?? [];
       if (toolCalls.length === 0) {
@@ -229,5 +275,18 @@ export class AgentLoop {
       totalTokens: { ...session.totalTokens },
       error,
     };
+  }
+
+  private resolveContextWindow(modelId: string): number {
+    try {
+      const catalog = loadCatalog();
+      for (const p of Object.values(catalog.providers)) {
+        const match = p.models.find((m: { id: string; contextWindow?: number }) => m.id === modelId || `${p.id}/${m.id}` === modelId);
+        if (match?.contextWindow) return match.contextWindow;
+      }
+    } catch {
+      // ignore
+    }
+    return 1_000_000;
   }
 }
