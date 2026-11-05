@@ -9,11 +9,12 @@ import { redact } from '../src/core/secrets.js';
 import type { AxiomConfig } from '../src/core/types.js';
 import { parseArgs, type EvalArgs } from './args.js';
 import { UC_RUNNERS } from './registry.js';
+import { evidenceSchema, gateSchema, provenanceSchema, releaseEvidenceErrors } from './evidence.js';
 import { passesUc01 } from './uc01/run.js';
 import type { UcResult, UcRunner } from './types.js';
 
 const REQUIRED_UCS = ['01', '02', '03', '04', '05'];
-const RELEASE_CONTRACT_BLOCKER = 'Release validation requires the shared acceptance/provenance contract';
+// Chỉ full real mới xét release; metadata được giữ nguyên trong artifact để D0 đối chiếu.
 
 // Kiểm đúng shape hiện hành trước khi tính trung bình; NaN/âm không được biến thành số 0 thành công.
 const resultSchema = z.object({
@@ -23,8 +24,10 @@ const resultSchema = z.object({
     metrics: z.record(z.string(), z.union([z.number(), z.boolean(), z.null()])),
     tokens: z.number().int().nonnegative(), costDollars: z.number().nonnegative(), latencyMs: z.number().nonnegative(),
     error: z.string().optional(),
+    provenance: provenanceSchema.optional(), skipped: z.string().optional(),
   })),
   summary: z.record(z.string(), z.number().nullable()),
+  gates: z.array(gateSchema).optional(), expectedCaseIds: evidenceSchema.shape.expectedCaseIds.optional(),
 });
 
 // Artifact thuộc bộ điều phối A3; không đổi UcResult/UcRunner dùng chung khi chưa chốt API.
@@ -53,7 +56,7 @@ export async function runEvaluation(args: EvalArgs, opts: {
   const report: EvalReport = {
     runAt: new Date().toISOString(), mock: args.mock, scope: args.all ? 'all' : 'selected', partial: args.partial,
     requestedUcs: [...requestedUcs], missingUcs, ucs: [], errors: [], passed: false, releaseEligible: false,
-    releaseBlockers: [RELEASE_CONTRACT_BLOCKER],
+    releaseBlockers: [],
   };
   if (args.mock) report.releaseBlockers.push('Mock smoke is not a real eval');
   if (!args.all) report.releaseBlockers.push('Selected run is not a full release');
@@ -81,6 +84,14 @@ export async function runEvaluation(args: EvalArgs, opts: {
       // Error trong artifact cũng phải redact, không chỉ thông báo runner throw ở catch.
       for (const c of result.cases) if (c.error !== undefined) c.error = redact(c.error);
       report.ucs.push(result);
+      const evidenceErrors = releaseEvidenceErrors(result, args.mock).map(error => `UC ${uc}: ${error}`);
+      report.releaseBlockers.push(...evidenceErrors);
+      // Development vẫn hỗ trợ runner cũ; bằng chứng đã khai báo mà sai thì không được bỏ qua.
+      if (result.gates !== undefined || result.expectedCaseIds !== undefined) report.errors.push(...evidenceErrors);
+      if (result.gates?.some(g => !g.passed) || result.cases.some(c => c.skipped !== undefined ||
+        (c.provenance !== undefined && c.provenance.mock !== args.mock))) {
+        report.errors.push(`UC ${uc}: failed gate, skipped case or mock provenance mismatch`);
+      }
       const passed = uc === '01' ? passesUc01(result, args.mock) : result.cases.every(c => c.passed);
       if (!passed || result.cases.some(c => c.error !== undefined)) report.errors.push(`UC ${uc}: case errors or acceptance checks failed`);
     } catch (error) {
@@ -89,10 +100,12 @@ export async function runEvaluation(args: EvalArgs, opts: {
     }
   }
   if (!report.ucs.length) report.errors.push('No UC results were produced');
-  // Chưa có contract gates/provenance của các làn: chỉ cho chạy development/smoke.
-  // Không cấp chứng nhận full release dựa vào passed từng case hoặc summary chưa đủ bằng chứng.
-  if (args.all && !args.mock && !args.partial) report.errors.push(RELEASE_CONTRACT_BLOCKER);
+  // Thiếu runner và lỗi execution luôn chặn release, kể cả partial đang cho phép tiếp tục smoke.
+  for (const uc of missingUcs) report.releaseBlockers.push(`UC ${uc}: missing runner`);
+  if (args.all && !args.mock && !args.partial) report.errors.push(...report.releaseBlockers);
   report.passed = report.errors.length === 0;
+  report.releaseBlockers = [...new Set([...report.releaseBlockers, ...report.errors])];
+  report.releaseEligible = args.all && !args.mock && !args.partial && report.passed && report.releaseBlockers.length === 0;
   fs.mkdirSync(path.dirname(opts.outputFile), { recursive: true });
   fs.writeFileSync(opts.outputFile, `${redact(JSON.stringify(report, null, 2))}\n`);
   return report;

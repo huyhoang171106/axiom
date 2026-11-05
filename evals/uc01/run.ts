@@ -7,6 +7,7 @@ import { measureCase } from '../measure.js';
 import { hasProvider, loadCases, mockProvider, passesThresholds, summarize,
   UC01_CASES_DIR, UC01_WORKSPACE, type CaseResult, type EvalCase } from './cases.js';
 import type { UcCaseResult, UcResult, UcRunner } from '../types.js';
+import type { CaseProvenance, EvidencedUcResult } from '../evidence.js';
 
 // Seam nội bộ UC-01 giúp test case/provider lỗi mà không sửa fixture thật hay gọi mạng.
 export async function runUc01Cases(fixtures: readonly EvalCase[], opts: {
@@ -52,11 +53,21 @@ export const runUc01: UcRunner = async ({ mock, config }) => {
   if (info && !hasProvider(config, info, catalog)) {
     throw new Error(`UC 01: provider ${info.provider} is not set up; run /login or pass --mock`);
   }
-  return runUc01Cases(loadCases(UC01_CASES_DIR), {
+  const fixtures = loadCases(UC01_CASES_DIR);
+  const result = await runUc01Cases(fixtures, {
     workspaceRoot: UC01_WORKSPACE,
     // Provider mới mỗi case để mock không hết canned response sau fixture đầu.
     createCaseProvider: async () => ({ provider: info ? await createProviderFor(info) : mockProvider(), model: info?.id }),
   });
+  // Provenance lấy từ model đã resolve, không suy đoán provider từ tracker hoặc ghi config chứa credential.
+  const provenance: CaseProvenance = { mock, models: [{ provider: info?.provider ?? 'mock',
+    model: info?.id ?? 'mock', role: 'smol' }] };
+  const evidenced: EvidencedUcResult = { ...result,
+    cases: result.cases.map(c => ({ ...c, provenance })),
+    expectedCaseIds: fixtures.map(c => c.id),
+    gates: [{ id: mock ? 'uc01-pipeline-smoke' : 'uc01-acceptance', passed: passesUc01(result, mock, fixtures) }],
+  };
+  return evidenced;
 };
 
 // Giữ gate UC-01 khi bỏ CLI triage cũ: tính lại từ case, không tin summary do runner khai báo.

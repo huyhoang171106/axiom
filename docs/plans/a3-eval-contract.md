@@ -2,7 +2,7 @@
 
 Task: [#8](https://github.com/se373agenticengineering/nhom-30/issues/8). Nhánh: `a/a3-eval-runner`.
 
-Trạng thái: An đồng ý hướng triển khai; **chưa có xác nhận contract/quyền sửa CI từ D0**. Tài liệu này là đề xuất, chưa thay thế chữ ký ở `phase-2.md` mục 5.4. Không coi là nghiệm thu Done.
+Trạng thái: An yêu cầu tiếp tục triển khai rồi để D0 kiểm sau, cho phép commit/push nhánh. Bước 5 đã có contract bằng chứng riêng ở `evals/evidence.ts`; không đổi chữ ký ở `phase-2.md` mục 5.4 hay `evals/types.ts`. **Chưa có xác nhận contract/quyền sửa CI từ D0**, chưa nghiệm thu Done.
 
 ## 1. Chênh lệch cần giải quyết trước khi đổi API
 
@@ -58,7 +58,7 @@ interface UcCaseProvenance {
 // UcResult: thêm gates?: UcGateResult[]; expectedCaseIds?: string[];
 ```
 
-Các trường ở trên là **đề xuất, chưa có trong `evals/types.ts`**. Không đổi `UcRunner` hay tham số `UcRunOptions` khi chưa chốt. `skipped` là lý do bỏ qua, không phải một case pass. `expectedCaseIds` dùng để phát hiện case mất, case trùng và case bị bỏ qua trong kết quả. Gate của từng UC phải kiểm được ngưỡng và case bắt buộc từ fixture; không cho case injection bị xoá làm ngưỡng còn lại xanh.
+Các trường ở trên **chưa có trong `evals/types.ts`**; bước 5 đã hiện thực dưới dạng contract bổ sung riêng ở `evals/evidence.ts` để D0 kiểm, không thay chữ ký runner chung. Không đổi `UcRunner` hay tham số `UcRunOptions` khi chưa chốt. `skipped` là lý do bỏ qua, không phải một case pass. `expectedCaseIds` dùng để phát hiện case mất, case trùng và case bị bỏ qua trong kết quả. Gate của từng UC phải kiểm được ngưỡng và case bắt buộc từ fixture; không cho case injection bị xoá làm ngưỡng còn lại xanh.
 
 Provenance lấy từ model được resolve và đường chạy thật/mock thực tế; tracker chỉ tổng hợp usage theo model ID, không đủ để suy ra provider. Embedding/compaction nếu có phải cùng tracker và được liệt kê trong provenance của case. Không ghi giá trị secret, header auth hay config vào artifact.
 
@@ -100,7 +100,7 @@ Mỗi commit code đi kèm test và comment tiếng Việt giải thích ý đ�
 - Kiểm phần chuẩn bị bước 3: 27 test eval liên quan pass, 0 skip; lint/build pass. Full suite với Python/pytest: 558 test, 545 pass, 13 skip môi trường, 0 fail.
 - Bước 4: CLI đã dùng registry, parse `--uc` lặp được/`--all`/`--mock`/`--partial`, xuất artifact, workDir từng UC và averages. Đã bỏ fallback mock và xoá vòng chạy triage trùng trong CLI cũ. Gate UC-01 lấy case bắt buộc từ fixture, đếm unexpected tool calls qua `metrics` có sẵn, tính lại ngưỡng từ case thay vì tin summary; bắt thiếu/trùng case và sai injection.
 - Test bước 4: 54 test eval liên quan pass, 0 skip; lint/build pass. Full suite với Python/pytest: 585 test, 572 pass, 13 skip môi trường, 0 fail. Test entry point chạy subprocess, chặn kế thừa secret env và dùng AXIOM_HOME tạm.
-- `evals/types.ts` và CI chưa sửa. Full real `--all` hiện fail-closed với lý do thiếu contract gates/provenance chung, kể cả case đang pass. `releaseEligible` luôn false trong giai đoạn development này; không coi CLI đã hoàn tất nghiệm thu release #8.
+- Ở bước 4, `evals/types.ts` và CI chưa sửa; full real `--all` bị chặn vô điều kiện vì chưa có kiểm gates/provenance. Bước 5 bên dưới thay blocker này bằng kiểm bằng chứng thực tế. Không coi CLI đã hoàn tất nghiệm thu release #8.
 - Phát hiện khi thử lỗi có chuỗi nhạy cảm giả: `EventBus.installDefaultErrorHandler` (`src/core/event-bus.ts`) in message lỗi ra console mà chưa `redact`. `measureCase` che lỗi ở result nhưng không che được log đã phát trước đó. Cần D0 xử lý logger chung trước release; không tự sửa file chung trong commit tách runner.
 - Các phép đo chat/embedding/compaction ở test helper là usage giả để kiểm tổng hợp, chưa phải nối workflow/eval thật.
 
@@ -113,5 +113,16 @@ Mỗi commit code đi kèm test và comment tiếng Việt giải thích ý đ�
 | `npm run eval -- --all --mock --partial` | 0 | Development có nhãn rõ, artifact liệt kê 02..05 thiếu và không đủ điều kiện release |
 
 Các lệnh trên chạy với AXIOM_HOME/config tạm và không gọi mạng thật. Artifact là `evals/results.json` (gitignored), không commit. Case `passed: false` do mock phân loại không đúng expected vẫn được ghi trung thực; `report.passed` ở mock UC-01 chỉ thể hiện smoke schema/pipeline đã chạy, không phải type accuracy đạt ngưỡng.
+
+## 9. Bước 5 — kiểm bằng chứng release, chờ D0 review
+
+- Thêm `evals/evidence.ts`: schema gates, danh sách case dự kiến, provenance model/provider/role/mock; giữ nguyên `UcRunner`, `UcResult` và file type chung. Runner có thể trả thêm metadata mà không phá caller cũ.
+- UC-01 xuất danh sách 10 fixture thật, gate acceptance (hoặc pipeline smoke khi mock) và provenance từ model đã resolve. Không suy provider từ tracker, không ghi credential/config. Helper `runUc01Cases` giữ nguyên chữ ký.
+- Bộ điều phối giữ metadata trong artifact, chặn gate fail, case thiếu/trùng/lạ/skipped, provenance thiếu hoặc sai mock mode. Runner cũ thiếu metadata vẫn chạy development nhưng không đủ điều kiện release. Metadata đã khai báo không hợp lệ thì development cũng fail.
+- Full real `--all` chỉ `releaseEligible: true` khi đủ mọi runner bắt buộc, đủ bằng chứng hợp lệ và không có lỗi. Test fake chứng minh logic này, không phải eval thật của UC-02..05. Các lane còn lại phải khai báo gate đúng tiêu chí UC và danh sách fixture thực tế; A không tự viết runner thay.
+- Test eval trên Windows: 67 pass, 0 skip; lint/build pass. Full suite Windows: 593 pass, 13 skip, 2 fail ngoài A3 (assert POSIX mode trong `tests/resume.test.ts`, cleanup checkpoint SQLite đang mở trong `tests/triage-integration.test.ts`); không sửa chéo lane để che lỗi.
+- Đã dựng bản sao source trong WSL Ubuntu 22.04, Node 22.23.4, Python 3.10 + pytest 9.2.0; `npm run lint && npm test` và build pass: 607 test, 598 pass, 9 skip, 0 fail. Dùng `TMPDIR` riêng nằm ngoài bản sao repo để test permission không coi repo là một phần workspace tạm. Sandbox bwrap cô lập mạng/file chạy pass; các test skip không được coi là đã nghiệm thu. Không phải máy eval chung của D.
+- Sau rebase lên `origin/main` tại `b60b843` (gồm D3/D4), chạy lại trong cùng môi trường WSL: lint/build pass; full suite 621 test, 612 pass, 9 skip do thiếu ripgrep, 0 fail. Các test bwrap chạy pass.
+- Chưa đổi CI/logger chung; D0 cần review contract bổ sung và đồng bộ seam/types cùng các lane. A3 vẫn `in progress`.
 
 CI hiện còn gọi `npm run eval --if-present` không có selection: CLI mới sẽ báo `Pass --uc NN or --all`. Trước PR/merge cần D0 giao quyền cập nhật bước này và chốt full/partial smoke; **chưa có CI xanh cho bước 4, không được ship như task đã Done**.

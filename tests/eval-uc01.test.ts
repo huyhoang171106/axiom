@@ -12,6 +12,7 @@ import { DEFAULT_CONFIG } from '../src/core/config.js';
 import { loadCatalog } from '../src/llm/catalog/index.js';
 import type { ChatParams, ChatResult } from '../src/llm/base-provider.js';
 import { MockProvider } from '../src/llm/providers/mock.js';
+import { evidenceSchema, provenanceSchema, releaseEvidenceErrors } from '../evals/evidence.js';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-eval-uc01-'));
 const previousHome = process.env.AXIOM_HOME;
@@ -42,6 +43,14 @@ test('registry points to the extracted UC-01 runner and preserves all ten fixtur
   assert.equal(result.uc, '01');
   assert.equal(result.cases.length, 10);
   assert.deepEqual(result.cases.map(c => c.id), fixtures.map(c => c.id));
+  const evidence = evidenceSchema.parse(result);
+  assert.deepEqual(evidence.expectedCaseIds, fixtures.map(c => c.id));
+  assert.deepEqual(evidence.gates, [{ id: 'uc01-pipeline-smoke', passed: true }]);
+  assert.deepEqual(releaseEvidenceErrors(result, true), []);
+  for (const c of result.cases) {
+    const parsed = provenanceSchema.parse('provenance' in c ? c.provenance : undefined);
+    assert.deepEqual(parsed, { mock: true, models: [{ provider: 'mock', model: 'mock', role: 'smol' }] });
+  }
   assert.equal(result.summary.schemaValidRate, 1);
   const rate = (key: string) => result.cases.filter(c => c.metrics[key] === true).length / 10;
   assert.equal(result.summary.typeAccuracy, rate('typeCorrect'));
