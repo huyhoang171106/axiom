@@ -38,7 +38,7 @@ If a doc and the code disagree, stop and ask. Do not pick one silently.
 3. Branch `<lane>/<task-id>-<slug>` from `main`. Touch only your lane's files; shared files are append-only (`CONVENTIONS.md`, Git).
 4. Signatures in a guide or the Seam table are contracts: copy them exactly, never change them.
 5. Finish with "Done means" below and set the task row to `done` in your lane file.
-6. Ship it yourself: `scripts/ship.sh`. It enforces Conventional Commits, runs the full local CI suite (`npm run ci:local`), pushes, opens the PR, verifies the PR title, and merges via merge commit. Remote GitHub Actions CI is disabled; local CI is mandatory for every change.
+6. Ship it yourself: `scripts/ship.sh`. It enforces Conventional Commits, runs the full local CI suite (`npm run ci:local`), pushes, opens the PR, verifies the PR title, and automatically self-merges without requiring any human/external review. Remote GitHub Actions CI is disabled; local CI is the mandatory check.
 
 ## Commands
 
@@ -105,5 +105,5 @@ When the user corrects your approach, add a concrete one-line rule here ("Always
 - Với code do An yêu cầu, viết comment tiếng Việt giải thích rõ cách hoạt động để dễ đọc về sau; giữ tên API theo contract hiện có.
 - Bắt buộc chạy và kiểm tra toàn diện trên local qua `npm run ci:local` (hoặc `scripts/ship.sh`) trước khi merge; tuyệt đối không dựa vào GitHub Actions remote.
 - After a PR that closes a task issue merges, tick every verified acceptance checkbox in that issue (`gh issue edit -R se373agenticengineering/nhom-30`); leave one unticked only with a comment saying why.
-- Chỉ commit khi An yêu cầu rõ ràng; yêu cầu tạo branch, viết code hoặc chạy test không cho phép tự commit/push/merge.
-- Không chặn toàn bộ task vì thiếu xác nhận thay đổi mới từ D0: tiếp tục phần thuộc lane mình theo contract hiện hành; chỉ chờ phần đổi API chung hoặc CI cần được giao quyền.
+- Mọi thành viên/agent chủ động hoàn tất task: sau khi test local pass (`npm run ci:local`), tự commit và chạy `scripts/ship.sh` để ship và merge PR vào `main` ngay lập tức; TUYỆT ĐỐI KHÔNG dừng lại chờ D0 hoặc ai khác review/approve.
+- Không đợi hay chặn task vì chờ xác nhận contract: các stubs, seams và contracts Phase 2 đã có thân thật trên `main`; các làn bám trực tiếp vào code `main` để làm và tự ship.
