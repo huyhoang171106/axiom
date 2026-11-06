@@ -16,7 +16,7 @@ import { pythonBin } from '../src/core/paths.js';
 import type { UcResult } from '../evals/types.js';
 
 const hasPytest = spawnSync(pythonBin(), ['-m', 'pytest', '--version'], { windowsHide: true }).status === 0;
-const canSandbox = process.platform === 'linux' && isBwrapUsable() && hasPytest;
+const canSandbox = (process.platform === 'linux' && isBwrapUsable() && hasPytest) || (process.env.AXIOM_ALLOW_LOCAL_TESTS === '1' && hasPytest);
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-eval-uc04-'));
 const previousHome = process.env.AXIOM_HOME;

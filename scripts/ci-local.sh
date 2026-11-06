@@ -23,13 +23,22 @@ run_stage() {
   fi
 }
 
-# 0. Detect Python for pytest/bwrap sandbox tests
+# 0. Detect Python and OS environment for pytest/sandbox tests
 if [ -z "${AXIOM_PYTHON:-}" ]; then
   if [ -x "$HOME/.axiom/venv/bin/python" ]; then
     export AXIOM_PYTHON="$HOME/.axiom/venv/bin/python"
   elif [ -x "$HOME/.axiom/venv/bin/python3" ]; then
     export AXIOM_PYTHON="$HOME/.axiom/venv/bin/python3"
+  elif [ -f "$HOME/.axiom/venv/Scripts/python.exe" ]; then
+    export AXIOM_PYTHON="$HOME/.axiom/venv/Scripts/python.exe"
+  elif [ -f "$HOME/.axiom/venv/Scripts/python" ]; then
+    export AXIOM_PYTHON="$HOME/.axiom/venv/Scripts/python"
   fi
+fi
+
+# On Windows (Git Bash / MSYS), enable local execution for tests when bwrap is absent
+if [[ "$(uname -s 2>/dev/null || true)" =~ ^(MINGW|MSYS|CYGWIN) ]]; then
+  export AXIOM_ALLOW_LOCAL_TESTS="${AXIOM_ALLOW_LOCAL_TESTS:-1}"
 fi
 
 # 1. Secret & sensitive files guard (names + content scanning)

@@ -22,5 +22,9 @@ export function pythonBin(): string {
   if (process.env.AXIOM_PYTHON) return process.env.AXIOM_PYTHON;
   const defaultVenv = path.join(os.homedir(), '.axiom', 'venv', 'bin', 'python');
   if (fs.existsSync(defaultVenv)) return defaultVenv;
+  if (process.platform === 'win32') {
+    const winVenv = path.join(os.homedir(), '.axiom', 'venv', 'Scripts', 'python.exe');
+    if (fs.existsSync(winVenv)) return winVenv;
+  }
   return process.platform === 'win32' ? 'python' : 'python3';
 }

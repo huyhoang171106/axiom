@@ -69,10 +69,11 @@ export interface GradeResult {
 export async function gradeFeature(workspaceRoot: string, featId: string): Promise<GradeResult> {
   const feat = loadFeatureCase(featId);
   const plan = planSandbox();
+  const allowLocal = process.env.AXIOM_ALLOW_LOCAL_TESTS === '1';
 
   // Trên Windows/macOS hoặc môi trường không có bwrap sandbox (plan.kind !== 'bwrap'):
-  // runPytest từ chối chạy khi thiếu bwrap (theo đúng thiết kế verifier UC-03).
-  if (plan.kind !== 'bwrap') {
+  // runPytest từ chối chạy khi thiếu bwrap (trừ khi bật AXIOM_ALLOW_LOCAL_TESTS=1 cho dev).
+  if (plan.kind !== 'bwrap' && !allowLocal) {
     throw new Error(
       `cannot grade feature without the bwrap sandbox (Linux with unprivileged user namespaces); current backend is "${plan.kind}" (${plan.detail})`
     );

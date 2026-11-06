@@ -36,6 +36,7 @@ type RunTests = NonNullable<FixOptions['runTests']>;
 
 /** Why UC-03 cannot be measured here, or undefined when the bwrap sandbox is usable. */
 export function sandboxUnavailable(): string | undefined {
+  if (process.env.AXIOM_ALLOW_LOCAL_TESTS === '1') return undefined;
   const plan = planSandbox();
   return plan.kind === 'bwrap' ? undefined : `${plan.kind} backend (${plan.detail})`;
 }
