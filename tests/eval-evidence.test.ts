@@ -62,6 +62,30 @@ test('full release requires every UC and persists the evidence used for its deci
   assert.match(failed.errors.join('\n'), /gate/);
 });
 
+for (const uc of ['03', '04']) {
+  test(`UC-${uc} uses evidenced acceptance gates instead of requiring every case to pass`, async t => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-release-threshold-'));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    // Một case không đạt mục tiêu không đồng nghĩa workflow lỗi; chủ UC chấm ngưỡng qua gate.
+    const runners = Object.fromEntries(['01', '02', '03', '04', '05'].map(id => [id, async () => {
+      const r = result(id);
+      if (id === uc) r.cases[0].passed = false;
+      return r;
+    }]));
+    const opts = { config: DEFAULT_CONFIG, runners, workDir: path.join(root, 'work'), outputFile: path.join(root, 'result.json') };
+    const report = await runEvaluation(parseArgs(['--all']), opts);
+    assert.equal(report.passed, true, report.errors.join('\n'));
+    assert.equal(report.releaseEligible, true);
+    assert.equal(report.ucs.find(r => r.uc === uc)!.cases[0].passed, false);
+
+    // Gate không được che lỗi thực thi hoặc usage đã mất vì provider thất bại.
+    runners[uc] = async () => { const r = result(uc); r.cases[0].error = 'provider failed'; return r; };
+    const failed = await runEvaluation(parseArgs(['--all']), opts);
+    assert.equal(failed.passed, false);
+    assert.equal(failed.releaseEligible, false);
+  });
+}
+
 test('declared incomplete evidence also fails selected partial development runs', async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-release-partial-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

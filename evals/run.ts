@@ -92,7 +92,10 @@ export async function runEvaluation(args: EvalArgs, opts: {
         (c.provenance !== undefined && c.provenance.mock !== args.mock))) {
         report.errors.push(`UC ${uc}: failed gate, skipped case or mock provenance mismatch`);
       }
-      const passed = uc === '01' ? passesUc01(result, args.mock) : result.cases.every(c => c.passed);
+      // Gate của chủ UC chấm ngưỡng tổng thể (ví dụ UC-03 >= 4/10), không ép mọi case thành công.
+      // Chỉ tin gate khi đủ bằng chứng; runner cũ chưa khai báo vẫn phải pass từng case ở development.
+      const passed = uc === '01' ? passesUc01(result, args.mock)
+        : evidenceErrors.length === 0 || result.cases.every(c => c.passed);
       if (!passed || result.cases.some(c => c.error !== undefined)) report.errors.push(`UC ${uc}: case errors or acceptance checks failed`);
     } catch (error) {
       // Runner khác vẫn được chạy để artifact giữ bằng chứng phần đã hoàn thành, không bịa case có usage 0.
