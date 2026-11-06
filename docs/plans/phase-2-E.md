@@ -107,6 +107,18 @@ Branch `e/e4-audit`.
 
 ```ts
 // src/core/audit.ts
+export type AuditDecision =
+  | 'allow'
+  | 'ask'
+  | 'deny'
+  | 'approve'
+  | 'reject'
+  | 'edited'
+  | 'unattended'
+  | 'auto-deny';
+
+export type AuditActor = 'policy' | 'user' | 'headless' | 'eval';
+
 export interface AuditEntry {
   at: string;                    // ISO
   runId?: string;
@@ -114,17 +126,18 @@ export interface AuditEntry {
   args: Record<string, unknown>; // qua redact, chuỗi > 500 ký tự cắt
   reason: string;
   risk: Risk;
-  decision: 'allow' | 'deny' | 'approve' | 'reject' | 'edited' | 'auto-deny';
-  approver: 'policy' | 'user' | 'headless' | 'eval';
+  decision: AuditDecision;
+  approver: AuditActor;
 }
-export function auditPath(): string;          // path.join(axiomHome(), 'audit.jsonl')
+export function auditPath(): string;                      // path.join(axiomHome(), 'audit.jsonl')
 export function recordDecision(entry: AuditEntry): void;  // appendFileSync, quyền 0600
 export function readAudit(limit?: number): AuditEntry[];  // mặc định 50 dòng cuối
 ```
 
-1. `gate()` gọi `recordDecision` cho mọi `deny` và mọi `ask` (sau khi có quyết định). `allow` không ghi (quá nhiều).
-2. `gate()` emit event `approval` (D0) với cùng dữ liệu, để trace có quyết định.
-3. Lệnh `/audit [n]`: bảng `at`, `tool`, tóm tắt args 1 dòng, `risk`, `decision`, `approver`. `kind: 'audit'`.
+1. `gate()` (hoặc `executeTool`) gọi `recordDecision` ghi audit cho mọi quyết định (`allow`, `ask`, `deny`, `approve`, `reject`, `edited`, `unattended`, `auto-deny`). Theo nghiệm thu Issue #34, không bỏ sót `allow`.
+2. Emit event `approval` trên `bus` (EventBus) với đầy đủ dữ liệu `{ at, runId, tool, args, reason, risk, decision, approver }` để trace lưu lại.
+3. `ToolRegistry` có sẵn getter/setter `.bus` và `.runId`, được uỷ quyền từ session gốc nên mọi view tạo qua `tools.scoped(...)` tự động kế thừa `bus` và `runId` của phiên.
+4. Lệnh `/audit [n]`: bảng `at`, `tool`, tóm tắt args 1 dòng, `risk`, `decision`, `approver`. `kind: 'audit'`.
 
 Test `tests/audit.test.ts` (`AXIOM_HOME` tạm):
 - `approve and deny both write an audit line`

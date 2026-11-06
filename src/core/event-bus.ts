@@ -1,6 +1,7 @@
 // src/core/event-bus.ts - Typed Event Bus for Axiom Lifecycle
 
 import { EventEmitter } from 'node:events';
+import type { AuditDecision, AuditActor } from './audit.js';
 import { redact } from './secrets.js';
 import type {
   ExecutionState,
@@ -26,7 +27,16 @@ export interface AxiomEvents {
   cost_update: (usage: TokenUsage) => void;
   error: (data: { message: string; error?: Error }) => void;
   node: (data: { graph: string; node: string; phase: 'enter' | 'exit'; threadId?: string }) => void;
-  approval: (data: { tool: string; reason: string; risk?: Risk; decision: 'approve' | 'deny' | 'edited' | 'auto-deny'; approver: string }) => void;
+  approval: (data: {
+    at?: string;
+    runId?: string;
+    tool: string;
+    args?: Record<string, unknown>;
+    reason: string;
+    risk?: Risk;
+    decision: AuditDecision;
+    approver: AuditActor | string;
+  }) => void;
 }
 
 export class EventBus {

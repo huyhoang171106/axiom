@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { redact } from '../core/secrets.js';
 import type { ToolDefinition, ToolResult } from '../core/types.js';
+import type { EventBus } from '../core/event-bus.js';
 import { BaseTool, type ToolExecutionContext, type ToolSummarizer } from './base-tool.js';
 import { BashTool } from './bash.js';
 import { ReadTool } from './read.js';
@@ -38,9 +39,19 @@ export class ToolRegistry {
   /** Set on `scoped()` views: approval state is read from the session registry at call time, never copied. */
   private session?: ToolRegistry;
   private readonly sessionDenied = new DeniedActions();
+  private eventBus?: EventBus;
+  private sessionRunId?: string;
 
   /** Mọi view cùng phiên đọc trực tiếp state gốc; đổi view không làm mất denial. */
   get denied(): DeniedActions { return (this.session ?? this).sessionDenied; }
+
+  /** Session event bus: views created via scoped() inherit this automatically. */
+  get bus(): EventBus | undefined { return (this.session ?? this).eventBus; }
+  set bus(b: EventBus | undefined) { (this.session ?? this).eventBus = b; }
+
+  /** Session runId: views created via scoped() inherit this automatically. */
+  get runId(): string | undefined { return (this.session ?? this).sessionRunId; }
+  set runId(id: string | undefined) { (this.session ?? this).sessionRunId = id; }
 
   /** `allowed` limits the registry to those tool names; omit it for the full standard set. */
   constructor(allowed?: readonly string[]) {
