@@ -7,6 +7,7 @@ import path from 'node:path';
 import { redact, registerSecret, scrubEnv } from '../src/core/secrets.js';
 import { decide } from '../src/tools/permissions.js';
 import { ToolRegistry } from '../src/tools/registry.js';
+import { EventBus } from '../src/core/event-bus.js';
 
 // Built at runtime so no key-shaped literal sits in the repo for secret scanners to flag.
 const fakeKey = (prefix: string) => `${prefix}-${crypto.randomBytes(12).toString('hex')}`;
@@ -87,4 +88,23 @@ test('printenv and echo $OPENROUTER_API_KEY do not reveal the key', { skip: !fs.
   }
   const kept = await run('echo "$PATH|$HOME"');
   assert.match(kept.output, /^[^|]+\|[^|]+$/, 'PATH and HOME still reach the child');
+});
+
+test('EventBus default error handler redacts secrets in emitted errors', (t) => {
+  const key = fakeKey('sk-ant');
+  registerSecret(key);
+  const bus = new EventBus();
+  const errors: string[] = [];
+  const originalError = console.error;
+  console.error = (...args: unknown[]) => {
+    errors.push(args.map(String).join(' '));
+  };
+  t.after(() => {
+    console.error = originalError;
+  });
+
+  bus.emit('error', { message: `provider failed with token: ${key}` });
+  assert.equal(errors.length, 1);
+  assert.ok(!errors[0].includes(key), 'Printed error must not contain raw secret');
+  assert.ok(errors[0].includes('‹redacted›'), 'Raw secret must be redacted');
 });
