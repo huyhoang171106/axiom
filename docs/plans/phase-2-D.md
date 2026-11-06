@@ -9,7 +9,7 @@
 | D2 | 05/11 | Checkpointer SQLite, `/resume` | done |
 | D3 | 06/11 | Compaction, `/compact` | done |
 | D4 | 06/11 | Memory, `/memory` | done |
-| D5 | 07/11 | 3 feature + eval UC-04 | |
+| D5 | 07/11 | 3 feature + eval UC-04 | done |
 | D7 | 08/11 | Ghép, video, tag `v0.2-phase2` | |
 
 ## D0. Khung (merge trước 12:00 T4 04/11)
