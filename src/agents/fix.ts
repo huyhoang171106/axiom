@@ -6,6 +6,8 @@
 // the explanation call count too. "fixed" needs the reproduction targets to pass on their own and a full
 // suite that finished with no regression against the baseline (findRegressions: lost or skipped tests,
 // timeout, collection errors, abnormal exit codes all count).
+import crypto from 'node:crypto';
+import fs from 'node:fs';
 import path from 'node:path';
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
 import { AgentLoop } from '../core/agent-loop.js';
@@ -14,9 +16,11 @@ import type { CommandUI } from '../core/execution-context.js';
 import type { EventBus } from '../core/event-bus.js';
 import { createCheckpointer, newThreadId, traceNode } from '../core/graph.js';
 import { askHuman, runGraph } from '../core/human-gate.js';
+import { addMemory } from '../core/memory.js';
 import { axiomHome } from '../core/paths.js';
 import { buildSystemPrompt } from '../core/prompt.js';
 import { SessionManager } from '../core/session.js';
+import { restoreFiles, snapshotFiles, type SnapshotManifest } from '../core/snapshot.js';
 import { findRegressions, runPytest, type TestRun } from '../core/verifier.js';
 import { BaseLLMProvider, type ChatParams, type ChatResult } from '../llm/base-provider.js';
 import { CostTracker } from '../llm/cost-tracker.js';
@@ -106,6 +110,10 @@ class TrackedApplyPatch extends BaseTool {
   readonly parameters: Record<string, unknown>;
   private readonly inner = new ApplyPatchTool();
   readonly changes = new Map<string, { added: number; removed: number }>();
+  /** Content hash each changed file had right after this run wrote it (null = deleted), for rollback. */
+  readonly written = new Map<string, string | null>();
+  /** Files this run created; rollback removes only these. */
+  readonly created = new Set<string>();
   failures: PatchFailure[] = [];
   applied = 0;
   tampered = false;
@@ -138,17 +146,37 @@ class TrackedApplyPatch extends BaseTool {
       return out;
     }
     this.applied++;
-    for (const match of out.matchAll(/^Applied: (.+?) \(\+(\d+) -(\d+)/gm)) {
-      const [, label, added, removed] = match;
+    const root = context?.workspaceRoot ?? process.cwd();
+    for (const match of out.matchAll(/^Applied: (.+?) \(\+(\d+) -(\d+)(, created)?/gm)) {
+      const [, label, added, removed, created] = match;
       // A rename lists `old -> new`: both paths changed, its lines count once, on the new path.
-      const paths = label.split(' -> ');
-      for (const file of paths) if (!this.changes.has(file)) this.changes.set(file, { added: 0, removed: 0 });
-      const entry = this.changes.get(paths[paths.length - 1])!;
+      const paths = label.split(' -> ').map((p) => workspaceRelative(root, p));
+      for (const file of paths) {
+        if (!this.changes.has(file)) this.changes.set(file, { added: 0, removed: 0 });
+        this.written.set(file, hashOf(path.join(root, file)));
+      }
+      const target = paths[paths.length - 1];
+      if (created || paths.length > 1) this.created.add(target);
+      const entry = this.changes.get(target)!;
       entry.added += Number(added);
       entry.removed += Number(removed);
     }
     return out;
   }
+}
+
+/** sha256 of a file's bytes, or null when it does not exist. */
+function hashOf(abs: string): string | null {
+  try {
+    return crypto.createHash('sha256').update(fs.readFileSync(abs)).digest('hex');
+  } catch {
+    return null;
+  }
+}
+
+/** Workspace-relative path with '/' separators, the form D2's snapshot manifest uses. */
+function workspaceRelative(root: string, p: string): string {
+  return path.relative(root, path.resolve(root, p)).split(path.sep).join('/');
 }
 
 /** `submit_repro`: the targets must really fail (or hang) now; the harness runs each one before accepting. */
@@ -203,10 +231,15 @@ class SubmitHypothesisTool extends BaseTool {
     properties: {
       hypothesis: { type: 'string', description: 'One or two sentences: file, function, and why it causes the symptom' },
       files: { type: 'array', items: { type: 'string' }, description: 'Files the fix will change' },
+      conventions: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Optional: project conventions worth remembering for later sessions; the user approves each one',
+      },
     },
     required: ['hypothesis'],
   };
-  submitted?: { hypothesis: string; files: string[] };
+  submitted?: { hypothesis: string; files: string[]; conventions: string[] };
   constructor(private readonly onAccepted: () => void) {
     super();
   }
@@ -214,7 +247,10 @@ class SubmitHypothesisTool extends BaseTool {
     const hypothesis = typeof args.hypothesis === 'string' ? args.hypothesis.trim() : '';
     if (!hypothesis) return 'Error: hypothesis must be a non-empty sentence.';
     const files = Array.isArray(args.files) ? args.files.filter((f): f is string => typeof f === 'string') : [];
-    this.submitted = { hypothesis, files };
+    const conventions = Array.isArray(args.conventions)
+      ? args.conventions.filter((c): c is string => typeof c === 'string' && c.trim() !== '').map((c) => c.trim())
+      : [];
+    this.submitted = { hypothesis, files, conventions };
     this.onAccepted();
     return 'Hypothesis recorded.';
   }
@@ -246,7 +282,7 @@ const FixState = Annotation.Root({
   before: Annotation<TestRun | undefined>,
   targets: Annotation<string[]>({ reducer: (_c, u) => u, default: () => [] }),
   round: Annotation<number>({ reducer: (_c, u) => u, default: () => 0 }),
-  hypothesis: Annotation<{ hypothesis: string; files: string[] } | undefined>,
+  hypothesis: Annotation<{ hypothesis: string; files: string[]; conventions?: string[] } | undefined>,
   rejected: Annotation<string[]>({ reducer: (c, u) => [...c, ...u], default: () => [] }),
   rounds: Annotation<FixRound[]>({ reducer: (c, u) => [...c, ...u], default: () => [] }),
   lastOutput: Annotation<string>({ reducer: (_c, u) => u, default: () => '' }),
@@ -254,6 +290,7 @@ const FixState = Annotation.Root({
   fixed: Annotation<boolean>({ reducer: (_c, u) => u, default: () => false }),
   stop: Annotation<string | undefined>,
   kept: Annotation<boolean | undefined>,
+  rollback: Annotation<{ restored: string[]; removed: string[]; conflicts: string[] } | undefined>,
   finalReport: Annotation<FixReport | undefined>,
 });
 type FixStateType = typeof FixState.State;
@@ -275,6 +312,10 @@ export async function fixIssue(opts: FixOptions): Promise<FixReport> {
   const signal = opts.signal ? AbortSignal.any([opts.signal, deadline]) : deadline;
   const patchTool = new TrackedApplyPatch();
   const threadId = newThreadId('fix');
+  // Preimages of the workspace before this run (D2 #25), so "keep = no" can undo only what this run wrote.
+  const runDir = path.join(axiomHome(), 'fix', threadId);
+  const snapDir = path.join(runDir, 'snapshot');
+  let manifest: SnapshotManifest | undefined;
   // Mirrors the state, so a cancel that interrupts the graph still yields a report of what happened.
   let progress: FixStateType | undefined;
 
@@ -316,6 +357,11 @@ export async function fixIssue(opts: FixOptions): Promise<FixReport> {
   };
 
   const baseline = async () => {
+    try {
+      manifest = snapshotFiles(root, snapDir);
+    } catch (err) {
+      return { stop: `could not snapshot the workspace before changing it: ${err instanceof Error ? err.message : String(err)}` };
+    }
     try {
       const before = await runTests(root, { signal });
       return { before, lastOutput: short(before) };
@@ -399,9 +445,26 @@ export async function fixIssue(opts: FixOptions): Promise<FixReport> {
     if (!opts.ui) return { kept: true };
     // Nothing may happen before askHuman: LangGraph re-runs this node on resume (DESIGN.md 2026-11-03).
     const answer = askHuman('Giữ bản sửa?', ['yes', 'no']);
-    // TODO(D2): on "no", restore this run's files through D2's recovery (#25). Until it exists nothing is
-    // reverted, and the report says so instead of claiming a rollback.
-    return { kept: answer === 'yes' };
+    if (answer === 'yes') return { kept: true };
+    return { kept: false, rollback: rollback() };
+  };
+
+  /**
+   * Undoes this run's writes through D2's restoreFiles, file by file and only where it is safe: a file whose
+   * content no longer matches what this run wrote was edited by someone else since, so it is left alone and
+   * reported. Only files this run created are removed; never a git checkout, never a whole-workspace restore.
+   */
+  const rollback = () => {
+    const inSnapshot = new Set((manifest?.files ?? []).map((f) => f.path));
+    const safe: string[] = [];
+    const conflicts: string[] = [];
+    for (const [rel, written] of patchTool.written) {
+      if (hashOf(path.join(root, rel)) !== written) conflicts.push(`${rel} (changed after the fix was written; left as is)`);
+      else if (inSnapshot.has(rel) || patchTool.created.has(rel)) safe.push(rel);
+      else conflicts.push(`${rel} (no snapshot of the original; left as is)`);
+    }
+    const result = safe.length ? restoreFiles(root, snapDir, { affectedFiles: safe }) : { restored: [], removed: [], conflicts: [] };
+    return { restored: result.restored, removed: result.removed, conflicts: [...conflicts, ...result.conflicts] };
   };
 
   const report = async (s: FixStateType) => {
@@ -423,7 +486,12 @@ export async function fixIssue(opts: FixOptions): Promise<FixReport> {
     if (s.fixed) {
       const last = s.rounds[s.rounds.length - 1];
       summary = `Fixed in round ${last.round}. Cause: ${last.hypothesis} Changed: ${files.join(', ') || '(none)'}.`;
-      if (s.kept === false) summary += ' You chose not to keep the fix, but automatic rollback is not available yet (waits for D2 #25): the files above are still changed.';
+      if (s.kept === false && s.rollback) {
+        const r = s.rollback;
+        summary += ` You chose not to keep the fix: restored ${r.restored.length ? r.restored.join(', ') : 'nothing'}, removed ${r.removed.length ? r.removed.join(', ') : 'nothing'}.`;
+        if (r.conflicts.length) summary += ` Not undone: ${r.conflicts.join('; ')}.`;
+      }
+      if (s.kept !== false) await proposeMemory(s);
     } else {
       const reason = s.stop ?? (s.round >= maxRounds ? `stopped after ${maxRounds} rounds` : 'stopped');
       const tried = s.rounds.map((r) => `- round ${r.round}: ${r.hypothesis} (${r.patchApplied ? `patch applied, ${r.testsFailed} failing, ${r.regressions.length} regressions` : 'no patch applied'})`);
@@ -437,8 +505,16 @@ export async function fixIssue(opts: FixOptions): Promise<FixReport> {
         `Next step: ${s.targets.length ? 'review the rejected hypotheses and the failing output, then narrow the cause by hand or give more detail in the issue' : 'add exact reproduction steps or a failing test to the issue'}.`,
       ].filter(Boolean).join('\n');
     }
-    if (files.length) summary += `\nFiles changed: ${files.join(', ')}${s.fixed ? '' : ' (left in place for review)'}.`;
+    if (files.length && s.kept !== false) summary += `\nFiles changed: ${files.join(', ')}${s.fixed ? '' : ' (left in place for review)'}.`;
     return { finalReport: { status, rounds: s.rounds, filesChanged: files, diffStat, ...(explanation !== undefined && { explanation }), summary } };
+  };
+
+  /** Conventions the model proposed with the winning hypothesis; each is saved only after the user agrees. */
+  const proposeMemory = async (s: FixStateType) => {
+    if (!opts.ui) return;
+    for (const convention of s.hypothesis?.conventions ?? []) {
+      if (await opts.ui.confirm(`Lưu quy ước mới vào memory dự án: "${convention}"?`)) addMemory(root, convention);
+    }
   };
 
   const afterVerify = (s: FixStateType) => {
@@ -480,7 +556,9 @@ export async function fixIssue(opts: FixOptions): Promise<FixReport> {
   session.approver = async (req) => {
     if (SUBMIT_TOOLS.has(req.name)) return 'approve';
     if (originalApprover) return originalApprover(req);
-    return session.allowWithoutApprover ? 'approve' : 'deny';
+    if (session.allowWithoutApprover) return 'approve';
+    // Throw rather than answer 'deny': a deny would be recorded as the user's own refusal (E2) for the session.
+    throw new Error(`Refusing "${req.name}" (${req.reason}): no approver is installed and unattended execution was not enabled.`);
   };
   const ui: CommandUI = opts.ui ?? { print() {}, async ask() { return 'yes'; }, async confirm() { return true; } };
   try {
@@ -498,5 +576,6 @@ export async function fixIssue(opts: FixOptions): Promise<FixReport> {
     };
   } finally {
     session.approver = originalApprover;
+    fs.rmSync(runDir, { recursive: true, force: true });
   }
 }

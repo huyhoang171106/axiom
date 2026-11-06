@@ -260,8 +260,9 @@ test('a diff over 3 files carries an explanation', async (t) => {
   assert.match(formatFixReport(report), /Why this many changes:/);
 });
 
-test('answering no to keep says the files were not restored, yes keeps them', async (t) => {
-  for (const keep of [false, true]) {
+// The "no" answer now rolls back through D2; it is covered by the rollback tests below.
+test('answering yes to keep keeps the fix and claims no rollback', async (t) => {
+  for (const keep of [true]) {
     const root = workspace(t);
     const provider = scripted({
       reproduce: reproduceScript(),
@@ -273,8 +274,9 @@ test('answering no to keep says the files were not restored, yes keeps them', as
     const report = await fixIssue(options(root, provider, { ui }));
     assert.deepEqual(asked, ['Giữ bản sửa?']);
     assert.equal(report.status, 'fixed');
-    // Rollback is D2's (#25); until then the report must not claim one.
+    // A kept fix must not claim any rollback.
     assert.equal(/rollback is not available yet/.test(report.summary), !keep);
+    assert.doesNotMatch(report.summary, /not to keep/);
     assert.match(fs.readFileSync(path.join(root, 'calc.py'), 'utf8'), /return a - b/);
   }
 });
@@ -323,4 +325,96 @@ test('fixes seeded bug-01 with the real sandboxed verifier', { skip: !canSandbox
   assert.equal(report.rounds.length, 1);
   assert.ok(report.rounds[0].testsPassed > 200, `passed ${report.rounds[0].testsPassed}`);
   assert.deepEqual(report.rounds[0].regressions, []);
+});
+
+/** A scripted run that fixes calc.py in one round and creates tests/test_repro.py; `conventions` go with the hypothesis. */
+function fixingProvider(conventions: string[] = []): MockProvider {
+  return scripted({
+    reproduce: reproduceScript(),
+    locate: [call('submit_hypothesis', { hypothesis: 'sub adds', files: ['calc.py'], conventions })],
+    patch: [call('apply_patch', { patch: FIX_PATCH })],
+  });
+}
+const answering = (keep: boolean, onAsk?: (q: string) => void) => ({
+  asked: [] as string[],
+  print() {},
+  async ask() { return ''; },
+  async confirm(q: string) { this.asked.push(q); onAsk?.(q); return /Giữ bản sửa/.test(q) ? keep : false; },
+});
+
+test('answering no to keep restores the original files and removes the files the run created (no git)', async (t) => {
+  const root = workspace(t);
+  const report = await fixIssue(options(root, fixingProvider(), { ui: answering(false) }));
+  assert.equal(report.status, 'fixed');
+  assert.equal(fs.readFileSync(path.join(root, 'calc.py'), 'utf8'), CALC);
+  assert.equal(fs.existsSync(path.join(root, 'tests/test_repro.py')), false);
+  assert.match(report.summary, /restored calc\.py, removed tests\/test_repro\.py\./);
+  assert.doesNotMatch(report.summary, /Not undone/);
+});
+
+test('rollback in a dirty git repo keeps the user\'s own uncommitted and untracked changes', async (t) => {
+  const root = workspace(t);
+  const git = (...args: string[]) => spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { cwd: root, encoding: 'utf8' });
+  assert.equal(git('init', '-q').status, 0, 'git is required for this test');
+  git('add', '.');
+  git('commit', '-qm', 'init');
+  // The user's work in progress, before /fix runs.
+  fs.writeFileSync(path.join(root, 'tests/test_calc.py'), 'from calc import add\n\ndef test_add():\n    assert add(2, 3) == 5\n# user note\n');
+  fs.writeFileSync(path.join(root, 'notes.md'), 'draft\n');
+  const report = await fixIssue(options(root, fixingProvider(), { ui: answering(false) }));
+  assert.equal(report.status, 'fixed');
+  assert.equal(fs.readFileSync(path.join(root, 'calc.py'), 'utf8'), CALC);
+  assert.match(fs.readFileSync(path.join(root, 'tests/test_calc.py'), 'utf8'), /# user note/);
+  assert.equal(fs.readFileSync(path.join(root, 'notes.md'), 'utf8'), 'draft\n');
+  assert.equal(fs.existsSync(path.join(root, 'tests/test_repro.py')), false);
+});
+
+test('a file the user edited after the fix is left alone and reported as a conflict', async (t) => {
+  const root = workspace(t);
+  // While the "Keep the fix?" question is open, the user edits calc.py by hand.
+  const ui = answering(false, (q) => {
+    if (/Giữ bản sửa/.test(q)) fs.appendFileSync(path.join(root, 'calc.py'), '# my own edit\n');
+  });
+  const report = await fixIssue(options(root, fixingProvider(), { ui }));
+  const calc = fs.readFileSync(path.join(root, 'calc.py'), 'utf8');
+  assert.match(calc, /return a - b/);
+  assert.match(calc, /# my own edit/);
+  assert.equal(fs.existsSync(path.join(root, 'tests/test_repro.py')), false);
+  assert.match(report.summary, /Not undone: calc\.py \(changed after the fix was written; left as is\)/);
+});
+
+test('proposed conventions reach memory only after the user approves each one', async (t) => {
+  const root = workspace(t);
+  const { loadMemory } = await import('../src/core/memory.js');
+  const ui = {
+    asked: [] as string[],
+    print() {},
+    async ask() { return ''; },
+    async confirm(q: string) { this.asked.push(q); return /Giữ bản sửa|use pytest fixtures/.test(q); },
+  };
+  await fixIssue(options(root, fixingProvider(['use pytest fixtures', 'never touch calc.py']), { ui }));
+  assert.deepEqual(ui.asked.slice(1), ['Lưu quy ước mới vào memory dự án: "use pytest fixtures"?', 'Lưu quy ước mới vào memory dự án: "never touch calc.py"?']);
+  assert.match(loadMemory(root), /use pytest fixtures/);
+  assert.doesNotMatch(loadMemory(root), /never touch/);
+  // Without a UI nobody can approve, so nothing is saved.
+  const other = workspace(t);
+  await fixIssue(options(other, fixingProvider(['unattended rule'])));
+  assert.equal(loadMemory(other), '');
+});
+
+test('without an approver a risky call is refused without recording a session denial', async (t) => {
+  const root = workspace(t);
+  fs.writeFileSync(path.join(root, 'old.py'), 'x = 1\n');
+  const tools = new ToolRegistry();
+  const provider = scripted({
+    reproduce: reproduceScript(),
+    locate: [call('submit_hypothesis', { hypothesis: 'old.py is in the way', files: ['old.py'] })],
+    // Deleting a file asks (E1 catalog row 9); there is no approver and no --yes.
+    patch: [call('apply_patch', { patch: '--- a/old.py\n+++ /dev/null\n@@ -1 +0,0 @@\n-x = 1\n' }), { content: 'blocked' }],
+  });
+  const report = await fixIssue(options(root, provider, { tools, maxRounds: 1 }));
+  assert.equal(report.status, 'failed');
+  assert.ok(fs.existsSync(path.join(root, 'old.py')));
+  assert.match(promptsFor(provider, 'patch').at(-1)!, /no approver is installed/);
+  assert.equal(tools.denied.size, 0);
 });
