@@ -54,6 +54,7 @@ test('approval resolves only on a decision and cancellation refuses pending work
 });
 
 test('help uses the shared router and Ctrl+C requires two presses within two seconds', async (t) => {
+  useTempHome(t);
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const store = new TuiStore();
   t.after(() => store.dispose());

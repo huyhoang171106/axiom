@@ -210,7 +210,10 @@ for (const reply of ['y', 'n']) {
     const controller = new TuiController(store, { workspaceRoot: root, mock: true });
     let questions = 0;
     const unsubscribe = store.subscribe(() => {
-      if (store.getSnapshot().question) { questions++; store.answer(reply); }
+      if (store.getSnapshot().pendingApproval?.name === 'confirm') {
+        questions++;
+        store.resolveApproval(reply === 'y' ? 'approve' : 'deny');
+      }
     });
     try {
       await controller.submit('/triage issue'); store.flush();

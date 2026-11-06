@@ -9,6 +9,7 @@ import { CostTracker, defaultCostTracker } from '../llm/cost-tracker.js';
 import { BaseLLMProvider } from '../llm/base-provider.js';
 import { defaultProviderRegistry, type ProviderRegistry } from '../llm/provider-factory.js';
 import { ToolRegistry } from '../tools/registry.js';
+import type { PolicyDecision } from '../tools/permissions.js';
 import type { BaseTool } from '../tools/base-tool.js';
 import { compactHistory, shouldCompact } from './compaction.js';
 import type { TaskState } from './task-state.js';
@@ -243,6 +244,18 @@ export class AgentLoop {
         for (let j = i; j < toolCalls.length && parallelSafe(toolCalls[j]); j++) started[j] = run(toolCalls[j]);
       }
       const result = await (started[i] ?? run(tc));
+      // Trace dùng quyết định thực tế của registry, kể cả headless và edited args.
+      const policy = result.metadata?.policy as (PolicyDecision & { approval?: string }) | undefined;
+      if (policy && (policy.verdict === 'deny' || policy.verdict === 'ask' || policy.approval)) {
+        this.eventBus.emit('approval', {
+          tool: tc.name, reason: policy.reason, risk: policy.risk,
+          decision: policy.verdict === 'deny' ? 'auto-deny'
+            : policy.approval === 'denied' ? 'deny'
+            : policy.approval === 'edited' ? 'edited'
+            : policy.approval === 'approved' || policy.approval === 'unattended' ? 'approve' : 'auto-deny',
+          approver: policy.approval === 'unattended' ? 'headless' : policy.approval ? 'user' : 'policy',
+        });
+      }
       this.eventBus.emit('tool_call_end', result);
 
       const target = tc.arguments['path'];

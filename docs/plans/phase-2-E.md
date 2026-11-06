@@ -6,7 +6,7 @@
 |---|---|---|---|
 | E1 | 04/11 | Danh mục rủi ro trong `decide()` | done |
 | E2 | 05/11 | Chống lách sau khi bị từ chối | done |
-| E3 | 06/11 | `runGraph` hỏi lại, nối TUI, test duyệt tool call | |
+| E3 | 06/11 | `runGraph` hỏi lại, nối TUI, test duyệt tool call | done |
 | E4 | 07/11 | Audit log, `/audit` | |
 | E5 | 07/11 | `/mode`, `/plan`, màn hình duyệt có mức rủi ro | |
 | E6 | 08/11 | Eval UC-05 | |

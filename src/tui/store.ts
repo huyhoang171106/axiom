@@ -1,6 +1,7 @@
 // src/tui/store.ts - EventBus state for the TUI, published at most 30 times per second
 
 import type { AxiomEvents, EventBus } from '../core/event-bus.js';
+import type { CommandResult } from '../commands/types.js';
 import type { ExecutionState, TokenUsage, ToolCall, ToolResult } from '../core/types.js';
 import type { ModelInfo } from '../llm/catalog/index.js';
 import type { ApprovalRequest, ApprovalDecision } from '../tools/permissions.js';
@@ -17,6 +18,8 @@ export interface TuiToolRow {
 }
 
 export interface TuiTurn {
+  readonly kind?: string;
+  readonly data?: unknown;
   readonly prompt?: string;
   readonly id: number;
   readonly status: ExecutionState;
@@ -104,8 +107,8 @@ export class TuiStore {
     this.toolStarts.clear();
   }
 
-  public print(text: string, prompt?: string): void {
-    const turn: TuiTurn = { id: this.nextTurnId++, prompt, text, thinking: '', tools: [], usage: null, error: null, status: 'completed' };
+  public print(text: string, prompt?: string, result?: CommandResult): void {
+    const turn: TuiTurn = { ...(result && { kind: result.kind, data: result.data }), id: this.nextTurnId++, prompt, text, thinking: '', tools: [], usage: null, error: null, status: 'completed' };
     this.pending = { ...this.pending, entries: [...this.pending.entries, turn] };
     this.schedule();
   }
