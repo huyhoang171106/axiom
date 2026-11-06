@@ -27,7 +27,13 @@ function writeProvider(baseUrl: string): void {
     models: ['triage-model', 'answer-model', 'code-model', 'embed-model'].map(id => ({ id, contextWindow: 128000 })),
   } } }));
 }
-after(() => fs.rmSync(root, { recursive: true, force: true }));
+after(() => {
+  try {
+    fs.rmSync(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+  } catch {
+    // Trên Windows, file handle còn mở có thể gây EPERM khi xoá thư mục tạm
+  }
+});
 
 const config = { ...DEFAULT_CONFIG, defaultModel: 'test-a2/answer-model',
   enabledProviders: ['test-a2'], modelRoles: { smol: 'test-a2/triage-model',

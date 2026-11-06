@@ -19,7 +19,11 @@ process.env.AXIOM_HOME = root;
 after(() => {
   if (previousHome === undefined) delete process.env.AXIOM_HOME;
   else process.env.AXIOM_HOME = previousHome;
-  fs.rmSync(root, { recursive: true, force: true });
+  try {
+    fs.rmSync(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+  } catch {
+    // Trên Windows, file handle còn mở có thể gây EPERM khi xoá thư mục tạm
+  }
 });
 
 test('loadFeatureCase loads request, metadata and acceptance test for feat-01..03', () => {
