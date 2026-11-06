@@ -85,6 +85,22 @@ test('without bwrap, run_tests refuses instead of running tests unisolated', asy
   assert.match(result.output, /Tests are not run unisolated/);
 });
 
+test('runs tests with local python when AXIOM_ALLOW_LOCAL_TESTS is set', async (t) => {
+  const root = repo(t, { 'tests/test_local.py': 'def test_pass():\n    assert 1 + 1 == 2\n' });
+  const saved = process.env.AXIOM_ALLOW_LOCAL_TESTS;
+  const savedSandbox = process.env.AXIOM_SANDBOX;
+  process.env.AXIOM_ALLOW_LOCAL_TESTS = '1';
+  process.env.AXIOM_SANDBOX = 'off';
+  t.after(() => {
+    if (saved === undefined) delete process.env.AXIOM_ALLOW_LOCAL_TESTS;
+    else process.env.AXIOM_ALLOW_LOCAL_TESTS = saved;
+    if (savedSandbox === undefined) delete process.env.AXIOM_SANDBOX;
+    else process.env.AXIOM_SANDBOX = savedSandbox;
+  });
+  const result = await runPytest(root);
+  assert.deepEqual(result.passed, ['tests/test_local.py::test_pass']);
+});
+
 test('reports a complete summary even when the console log is cut', sandboxed, async (t) => {
   requireSandbox();
   const root = repo(t, {

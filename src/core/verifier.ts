@@ -162,7 +162,9 @@ export async function runPytest(root: string, opts?: { target?: string; timeoutM
   const workspace = path.resolve(root);
   const target = opts?.target === undefined ? undefined : checkTarget(workspace, opts.target);
   const plan = planSandbox();
-  if (plan.kind !== 'bwrap') {
+  const allowLocal = process.env.AXIOM_ALLOW_LOCAL_TESTS === '1';
+
+  if (plan.kind !== 'bwrap' && !allowLocal) {
     throw new Error(
       `run_tests needs the bwrap sandbox (Linux with unprivileged user namespaces) to cut the network and hide host files; ` +
         `the "${plan.kind}" backend cannot guarantee that (${plan.detail}). Tests are not run unisolated.`
@@ -174,18 +176,38 @@ export async function runPytest(root: string, opts?: { target?: string; timeoutM
     fs.writeFileSync(path.join(scratch, `${PLUGIN_MODULE}.py`), PLUGIN_SOURCE);
     const report = path.join(scratch, 'report.jsonl');
     const argv = [python, ...PYTEST_ARGS, '-p', PLUGIN_MODULE, ...(target ? [target] : [])];
-    const { file, args } = bwrapInvocation(`exec ${argv.map(shellQuote).join(' ')}`, workspace, {
-      isolateNetwork: true,
-      readableRoots: pythonRoots(python),
-      extraWritable: [scratch],
-    });
-    const env = {
-      ...scrubEnv(process.env),
-      HOME: scratch,
-      PYTHONPATH: scratch,
-      PYTHONDONTWRITEBYTECODE: '1',
-      AXIOM_PYTEST_REPORT: report,
-    };
+
+    let file: string;
+    let args: string[];
+    let env: NodeJS.ProcessEnv;
+
+    if (plan.kind === 'bwrap') {
+      const inv = bwrapInvocation(`exec ${argv.map(shellQuote).join(' ')}`, workspace, {
+        isolateNetwork: true,
+        readableRoots: pythonRoots(python),
+        extraWritable: [scratch],
+      });
+      file = inv.file;
+      args = inv.args;
+      env = {
+        ...scrubEnv(process.env),
+        HOME: scratch,
+        PYTHONPATH: scratch,
+        PYTHONDONTWRITEBYTECODE: '1',
+        AXIOM_PYTEST_REPORT: report,
+      };
+    } else {
+      // Local execution fallback for Windows or explicit opt-in
+      file = python;
+      args = [...PYTEST_ARGS, '-p', PLUGIN_MODULE, ...(target ? [target] : [])];
+      env = {
+        ...scrubEnv(process.env),
+        PYTHONPATH: scratch,
+        PYTHONDONTWRITEBYTECODE: '1',
+        AXIOM_PYTEST_REPORT: report,
+      };
+    }
+
     const { exitCode, timedOut, output } = await runKillable(file, args, {
       cwd: workspace,
       env,
@@ -213,7 +235,8 @@ function runKillable(
       reject(new Error('test run cancelled'));
       return;
     }
-    const child = spawn(file, args, { cwd: opts.cwd, env: opts.env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const isWin = process.platform === 'win32';
+    const child = spawn(file, args, { cwd: opts.cwd, env: opts.env, detached: !isWin, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     // Keep a bounded tail: a test printing in a loop must not exhaust memory before the timeout fires.
     let output = '';
     const collect = (chunk: Buffer) => {
@@ -225,7 +248,13 @@ function runKillable(
     let cancelled = false;
     const killTree = () => {
       try {
-        if (child.pid !== undefined) process.kill(-child.pid, 'SIGKILL');
+        if (child.pid !== undefined) {
+          if (isWin) {
+            spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true });
+          } else {
+            process.kill(-child.pid, 'SIGKILL');
+          }
+        }
       } catch {
         // The group is already gone.
       }

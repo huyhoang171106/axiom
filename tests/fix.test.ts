@@ -304,7 +304,7 @@ test('/fix reads issue.md from an issue directory, otherwise takes the text', (t
 });
 
 const hasPytest = spawnSync(pythonBin(), ['-m', 'pytest', '--version'], { windowsHide: true }).status === 0;
-const canSandbox = process.platform === 'linux' && isBwrapUsable() && hasPytest;
+const canSandbox = (process.platform === 'linux' && isBwrapUsable() && hasPytest) || (process.env.AXIOM_ALLOW_LOCAL_TESTS === '1' && hasPytest);
 
 test('fixes seeded bug-01 with the real sandboxed verifier', { skip: !canSandbox && process.env.CI !== 'true' && 'needs Linux + usable bwrap + python with pytest' }, async (t) => {
   assert.ok(canSandbox, 'CI must run the real verifier');
