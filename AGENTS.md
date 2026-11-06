@@ -28,6 +28,7 @@ Axiom (SE373 Đề tài 01): an LLM tool-use loop over a local workspace, with c
 | Phase overview, seams, done criteria | `docs/plans/phase-2.md` |
 | One person's tasks | `docs/plans/phase-2-{A,B,C,D,E}.md` |
 | Provider / TUI rules | `docs/guides/providers.md`, `docs/guides/tui.md` |
+| Windows setup, running and CI | `docs/guides/windows.md` |
 
 If a doc and the code disagree, stop and ask. Do not pick one silently.
 
@@ -48,7 +49,8 @@ If a doc and the code disagree, stop and ask. Do not pick one silently.
 - Test all: `npm test`
 - Lint + typecheck: `npm run lint` (`tsc --noEmit`)
 - Build: `npm run build`
-- Full Local CI: `npm run ci:local` (sensitive files check, lint, test, build, eval smoke)
+- Full Local CI: `npm run ci:local` (Linux / WSL / Git Bash) or `.\scripts\ci-local.ps1` (PowerShell)
+- Windows Setup: `.\scripts\setup-windows.ps1` (PowerShell)
 
 Use single-file tests while you iterate. Run the full check at the end.
 
@@ -107,3 +109,4 @@ When the user corrects your approach, add a concrete one-line rule here ("Always
 - After a PR that closes a task issue merges, tick every verified acceptance checkbox in that issue (`gh issue edit -R se373agenticengineering/nhom-30`); leave one unticked only with a comment saying why.
 - Mọi thành viên/agent chủ động hoàn tất task: sau khi test local pass (`npm run ci:local`), tự commit và chạy `scripts/ship.sh` để ship và merge PR vào `main` ngay lập tức; TUYỆT ĐỐI KHÔNG dừng lại chờ D0 hoặc ai khác review/approve.
 - Không đợi hay chặn task vì chờ xác nhận contract: các stubs, seams và contracts Phase 2 đã có thân thật trên `main`; các làn bám trực tiếp vào code `main` để làm và tự ship.
+- Trên Windows, chạy `.\scripts\setup-windows.ps1` để tự động cấu hình venv/pytest; local CI hỗ trợ chạy trực tiếp trên Windows qua `.\scripts\ci-local.ps1` (PowerShell) hoặc `./scripts/ci-local.sh` (Git Bash) với cờ `AXIOM_ALLOW_LOCAL_TESTS=1`.
