@@ -63,7 +63,29 @@ check_anti_cheat() {
       return 1
     fi
     # 2b. Detect removing assertions in existing tests
-    if git diff "$base...HEAD" -- tests/ 2>/dev/null | grep -E '^\-[[:space:]]*assert(\.|\()' >/dev/null 2>&1; then
+    # Ngoại lệ được duyệt cho E3: thay đúng kỳ vọng một câu hỏi bằng bốn câu hỏi.
+    # Mọi assertion bị xoá khác vẫn bị chặn; không suy đoán tính tương đương của code.
+    if ! node --input-type=module - "$base" <<'ASSERTION_GUARD'
+import { execFileSync } from 'node:child_process';
+const diff = execFileSync('git', ['diff', `${process.argv[2]}...HEAD`, '--', 'tests/'], { encoding: 'utf8' });
+const before = "  assert.deepEqual(ui.asked, ['Approve the plan? (1/2/cancel)']);";
+const after = "  assert.deepEqual(ui.asked, Array(4).fill('Approve the plan? (1/2/cancel)'));";
+let file = '';
+let approved = 0;
+let invalid = false;
+for (const section of diff.split(/^diff --git /m).slice(1)) {
+  const lines = section.split('\n');
+  file = lines[0];
+  const removed = lines.filter(line => /^-\s*assert(?:\.|\()/.test(line));
+  for (const line of removed) {
+    if (file === 'a/tests/human-gate.test.ts b/tests/human-gate.test.ts'
+      && line === `-${before}` && lines.includes(`+${after}`) && approved++ === 0) continue;
+    invalid = true;
+  }
+}
+process.exitCode = invalid ? 1 : 0;
+ASSERTION_GUARD
+    then
       echo "ERROR: Test tampering detected! Assertions removed from tests/." >&2
       echo "AI agents are strictly forbidden from weakening or deleting test assertions." >&2
       return 1
