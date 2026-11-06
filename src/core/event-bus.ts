@@ -1,6 +1,7 @@
 // src/core/event-bus.ts - Typed Event Bus for Axiom Lifecycle
 
 import { EventEmitter } from 'node:events';
+import { redact } from './secrets.js';
 import type {
   ExecutionState,
   AgentStepEvent,
@@ -33,7 +34,7 @@ export class EventBus {
 
   private installDefaultErrorHandler(): void {
     this.emitter.on('error', (data: { message?: string }) => {
-      if (data?.message) console.error(`[Axiom Error] ${data.message}`);
+      if (data?.message) console.error(redact(`[Axiom Error] ${data.message}`));
     });
   }
 
