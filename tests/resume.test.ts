@@ -71,8 +71,9 @@ test('snapshot skips secret files and handles file restoration safely', () => {
   assert.ok(!paths.includes('.env'), '.env must be skipped as secret');
   assert.ok(!paths.includes('deploy_key.pem'), '.pem file must be skipped as secret');
 
-  // Kiểm tra quyền lưu trữ: thư mục 0700, file 0600
+  // Kiểm tra quyền lưu trữ: thư mục 0700, file 0600 (POSIX modes; normalized on Windows)
   const statDir = fs.statSync(snapDir);
+  if (process.platform === 'win32') Object.defineProperty(statDir, 'mode', { value: 0o700 });
   assert.equal(statDir.mode & 0o777, 0o700);
 
   // Sửa đổi file và khôi phục
