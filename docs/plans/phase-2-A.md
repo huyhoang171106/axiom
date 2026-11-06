@@ -6,7 +6,7 @@
 |---|---|---|---|
 | A1 | 04/11 | Role `@code`/`@embed`, `/cost` theo model và budget theo run (#6) | done |
 | A2 | 05/11 | Graph `triage → confirm`, gọi `runRoute` ngoài graph (#7) | in progress |
-| A3 | 06/11 | `UC_RUNNERS`, `--uc NN`, `--all`, chỉ số mục 6.2 | |
+| A3 | 06/11 | `UC_RUNNERS`, `--uc NN`, `--all`, chỉ số mục 6.2 (#8) | in progress |
 | A4 | 07/11 | Số đo thật UC-01 | |
 | A5 | 08/11 | Renderer IssueTicket trong TUI | |
 
@@ -52,24 +52,18 @@ Kiểm: test triage, command, graph và human-gate; `npm run lint`, `npm test`, 
 
 Branch `a/a3-eval-runner`. Cần D0 (`evals/types.ts`, `evals/registry.ts`).
 
-Hợp đồng: `UcRunner`, `UcResult`, `UcCaseResult` ở `phase-2.md` mục 5.4.
+Hợp đồng hiện hành: `UcRunner`, `UcResult`, `UcCaseResult` ở `phase-2.md` mục 5.4. Đề xuất cập nhật và kế hoạch từng commit: [a3-eval-contract.md](a3-eval-contract.md).
 
-Bước:
-1. Chuyển code UC-01 hiện có trong `evals/run.ts` sang `evals/uc01/run.ts`, export `runUc01: UcRunner`. `metrics` mỗi case: `schemaValid`, `typeCorrect`, `routeCorrect`. `summary`: `schemaValidRate`, `typeAccuracy`, `routeAccuracy`.
-2. `evals/run.ts` còn lại: `parseArgs` nhận `--uc NN` (lặp được), `--all`, `--mock`. Không có `--uc` và không có `--all` thì lỗi `"Pass --uc NN or --all"`.
-3. Với mỗi UC chọn: có trong `UC_RUNNERS` thì chạy; không có thì in `UC NN: chưa có runner` và bỏ qua (exit code không đổi).
-4. Mỗi case: `new CostTracker()` riêng; `latencyMs` đo bằng `performance.now()` quanh lần chạy case; `tokens` = prompt + completion của tracker. Hàm dùng chung: `export async function measureCase<T>(id: string, fn: (tracker: CostTracker) => Promise<T>): Promise<{ value?: T; tokens: number; costDollars: number; latencyMs: number; error?: string }>` trong `evals/measure.ts` — B, C, D, E gọi hàm này trong runner của mình.
-5. Ghi `evals/results.json`: `{ runAt: ISO, mock: boolean, ucs: UcResult[] }`; mỗi `UcResult.summary` luôn có thêm `avgTokens`, `avgCostDollars`, `avgLatencyMs`.
-6. Exit code 1 khi có case `mustPass` thất bại (giữ quy tắc Phase 1).
-7. CI (`.github/workflows/ci.yml`, thêm dòng): đổi bước eval thành `npm run eval -- --all --mock`.
+Nghiệm thu theo issue #8: release thiếu UC-01..05, zero case, thiếu bằng chứng hoặc không đạt gate phải fail; không fallback mock. Recipe cũ bỏ qua runner thiếu và truy cập `mustPass` không có trong result chung không còn phù hợp nghiệm thu.
 
-Test `tests/eval-runner.test.ts`:
-- `--all runs every registered UC and skips missing ones`
-- `each case gets its own cost tracker`
-- `summary has avgTokens, avgCostDollars, avgLatencyMs`
-- `missing --uc and --all is an error`
+- Bước 1: ghi đề xuất contract/provenance/gates và xin D0 đồng bộ trước khi đổi API. An đã đồng ý hướng làm; chưa có xác nhận D0.
+- Bước 2 có thể làm độc lập: `evals/measure.ts` giữ chữ ký đã công bố (xem mục 2 của đề xuất); test tracker riêng, token/cost/latency và lỗi có redaction.
+- Runner UC-01 và CLI/artifact theo contract hiện hành có thể tiếp tục độc lập; xem tiến độ và lệnh kiểm ở mục 7–8 của đề xuất. Chỉ phần bổ sung API gates/provenance chung và sửa CI cần D0 chốt/giao quyền. Không viết runner 02..05 thay chủ làn.
+- Mỗi bước code có test và comment tiếng Việt; `npm run lint && npm test` pass trước commit. Full release và partial/mock smoke phải được phân biệt trong artifact và tài liệu.
 
-Kiểm: `npx tsx --test tests/eval-runner.test.ts && npm run eval -- --all --mock && npm run lint`.
+- Bước 5 đã có contract bằng chứng riêng (`evals/evidence.ts`), UC-01 xuất metadata và CLI kiểm release fail-closed theo bằng chứng thay vì blocker vô điều kiện. Không đổi chữ ký runner chung; D0 review sau theo yêu cầu An. Test eval: 67 pass; full suite WSL sau rebase `b60b843`: 612 pass, 9 skip do thiếu ripgrep, 0 fail; lint/build pass. Chi tiết môi trường và lỗi Windows ở mục 9 tài liệu đề xuất.
+
+Chưa đánh dấu `done`: còn review/tích hợp contract các lane và CI, chưa có kết quả eval thật; số đo UC-01 thật thuộc A4.
 
 ## A4. Số đo thật UC-01
 

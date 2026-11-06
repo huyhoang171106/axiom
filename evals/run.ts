@@ -1,219 +1,141 @@
-// evals/run.ts - Eval runner: run evals/uc<NN>/ cases through runTriage and write results.json
+// evals/run.ts - Điều phối registry UC, xuất artifact và không tự fallback sang mock.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import { issueTicketSchema, runTriage, TriageSchemaError } from '../src/agents/triage.js';
 import { loadConfig } from '../src/core/config.js';
+import { redact } from '../src/core/secrets.js';
 import type { AxiomConfig } from '../src/core/types.js';
-import { loadCatalog, type Catalog, type ModelInfo } from '../src/llm/catalog/index.js';
-import { createProviderFor, resolveModel } from '../src/llm/model-resolver.js';
-import { MockProvider } from '../src/llm/providers/mock.js';
-import type { BaseLLMProvider } from '../src/llm/base-provider.js';
+import { parseArgs, type EvalArgs } from './args.js';
+import { UC_RUNNERS } from './registry.js';
+import { evidenceSchema, gateSchema, provenanceSchema, releaseEvidenceErrors } from './evidence.js';
+import { passesUc01 } from './uc01/run.js';
+import type { UcResult, UcRunner } from './types.js';
 
-const caseSchema = z.object({
-  id: z.string().min(1),
-  input: z.string().min(1),
-  expected: z.object({ type: issueTicketSchema.shape.type, route: issueTicketSchema.shape.route }),
-  mustPass: z.boolean().optional(),
+const REQUIRED_UCS = ['01', '02', '03', '04', '05'];
+// Chỉ full real mới xét release; metadata được giữ nguyên trong artifact để D0 đối chiếu.
+
+// Kiểm đúng shape hiện hành trước khi tính trung bình; NaN/âm không được biến thành số 0 thành công.
+const resultSchema = z.object({
+  uc: z.string(),
+  cases: z.array(z.object({
+    id: z.string().min(1), passed: z.boolean(),
+    metrics: z.record(z.string(), z.union([z.number(), z.boolean(), z.null()])),
+    tokens: z.number().int().nonnegative(), costDollars: z.number().nonnegative(), latencyMs: z.number().nonnegative(),
+    error: z.string().optional(),
+    provenance: provenanceSchema.optional(), skipped: z.string().optional(),
+  })),
+  summary: z.record(z.string(), z.number().nullable()),
+  gates: z.array(gateSchema).optional(), expectedCaseIds: evidenceSchema.shape.expectedCaseIds.optional(),
 });
 
-export type EvalCase = z.infer<typeof caseSchema>;
-
-export interface CaseResult {
-  id: string;
-  expected: { type: string; route: string };
-  actual?: { type: string; route: string };
-  schemaValid: boolean | null;
-  typeCorrect: boolean;
-  routeCorrect: boolean;
-  mustPass?: boolean;
-  unexpectedToolCalls?: string[];
-  error?: string;
+// Artifact thuộc bộ điều phối A3; không đổi UcResult/UcRunner dùng chung khi chưa chốt API.
+export interface EvalReport {
+  runAt: string;
+  mock: boolean;
+  scope: 'all' | 'selected';
+  partial: boolean;
+  requestedUcs: string[];
+  missingUcs: string[];
+  ucs: UcResult[];
+  errors: string[];
+  passed: boolean;
+  releaseEligible: boolean;
+  releaseBlockers: string[];
 }
 
-export interface EvalSummary {
-  cases: number;
-  schemaValidRate: number | null;
-  typeAccuracy: number;
-  routeAccuracy: number;
-}
-
-export function parseArgs(argv: string[]): { uc?: string; mock: boolean } {
-  const mock = argv.includes('--mock');
-  const flag = argv.indexOf('--uc');
-  if (flag === -1) {
-    if (argv.some((a) => a.startsWith('--uc'))) throw new Error('Usage: --uc <NN>, e.g. --uc 01');
-    return { mock };
-  }
-  const uc = argv[flag + 1];
-  if (!uc || uc.startsWith('-')) throw new Error('Usage: --uc <NN>, e.g. --uc 01');
-  if (!/^\d{2}$/.test(uc)) throw new Error(`--uc expects a two-digit number, got "${uc}"`);
-  return { uc, mock };
-}
-
-export function loadCases(dir: string): EvalCase[] {
-  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json') && f !== 'results.json').sort();
-  return files.map((file) => {
-    const full = path.join(dir, file);
-    let raw: unknown;
-    try {
-      raw = JSON.parse(fs.readFileSync(full, 'utf8'));
-    } catch (error) {
-      throw new Error(`${full}: not valid JSON (${error instanceof Error ? error.message : String(error)})`);
-    }
-    const parsed = caseSchema.safeParse(raw);
-    if (!parsed.success) {
-      throw new Error(`${full}: bad case file (${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')})`);
-    }
-    return parsed.data;
-  });
-}
-
-export function summarize(results: CaseResult[]): EvalSummary {
-  if (results.length === 0) return { cases: 0, schemaValidRate: null, typeAccuracy: 0, routeAccuracy: 0 };
-  const rate = (pick: (r: CaseResult) => boolean): number => results.filter(pick).length / results.length;
-  const schemaResults = results.filter((result) => result.schemaValid !== null);
-  return {
-    cases: results.length,
-    schemaValidRate: schemaResults.length ? schemaResults.filter((result) => result.schemaValid).length / schemaResults.length : null,
-    typeAccuracy: rate((r) => r.typeCorrect),
-    routeAccuracy: rate((r) => r.routeCorrect),
+export async function runEvaluation(args: EvalArgs, opts: {
+  config: AxiomConfig;
+  runners: Readonly<Record<string, UcRunner>>;
+  workDir: string;
+  outputFile: string;
+}): Promise<EvalReport> {
+  const requestedUcs = args.all ? [...new Set([...REQUIRED_UCS, ...Object.keys(opts.runners)])].sort() : args.ucs;
+  const missingUcs = requestedUcs.filter(uc => !opts.runners[uc]);
+  const report: EvalReport = {
+    runAt: new Date().toISOString(), mock: args.mock, scope: args.all ? 'all' : 'selected', partial: args.partial,
+    requestedUcs: [...requestedUcs], missingUcs, ucs: [], errors: [], passed: false, releaseEligible: false,
+    releaseBlockers: [],
   };
-}
-
-export function passesThresholds(uc: string, summary: EvalSummary, useMock: boolean, results: CaseResult[]): boolean {
-  if (summary.cases === 0 || results.some((result) => result.schemaValid !== true)) return false;
-  if (useMock || uc !== '01') return true;
-  // Không để điểm trung bình che mất case injection hoặc trường hợp case đó bị xóa.
-  const required = results.filter((result) => result.mustPass);
-  return summary.cases >= 10 && summary.schemaValidRate === 1 && summary.typeAccuracy >= 0.8 &&
-    required.length > 0 && required.every((result) => result.schemaValid && result.typeCorrect && result.routeCorrect && !result.unexpectedToolCalls?.length);
-}
-
-export function hasProvider(config: AxiomConfig, info: ModelInfo, catalog: Catalog): boolean {
-  if (config.disabledProviders?.includes(info.provider) || (config.enabledProviders && !config.enabledProviders.includes(info.provider))) return false;
-  if (config.providers[info.provider]?.apiKey) return true;
-  const catalogProvider = catalog.providers().find((provider) => provider.id === info.provider);
-  if (catalogProvider) {
-    if (catalogProvider.auth === 'none') {
-      const selected = config.activeProvider === info.provider ||
-        (!!config.defaultModel && (config.defaultModel === info.id || config.defaultModel.startsWith(`${info.provider}/`))) ||
-        Object.values(config.modelRoles ?? {}).some((value) => value?.split(',').some((part) => part.trim().startsWith(`${info.provider}/`)));
-      if (!selected && !config.providers[info.provider]?.baseUrl) return false;
+  if (args.mock) report.releaseBlockers.push('Mock smoke is not a real eval');
+  if (!args.all) report.releaseBlockers.push('Selected run is not a full release');
+  if (args.partial) report.releaseBlockers.push('Partial run is development only');
+  for (const uc of requestedUcs) {
+    const runner = opts.runners[uc];
+    if (!runner) {
+      if (!args.partial) report.errors.push(`UC ${uc}: missing runner`);
+      continue;
     }
-    return catalog.isAvailable(info.provider);
-  }
-  // B1/B2 còn là stub; dùng cấu hình hiện tại khi catalog chưa có provider.
-  const envName = `${info.provider.replace(/-/g, '_').toUpperCase()}_API_KEY`;
-  const baseUrl = config.providers[info.provider]?.baseUrl ?? info.baseUrl;
-  return !!process.env[envName] || info.provider === 'ollama' || /^https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::|\/|$)/i.test(baseUrl);
-}
-
-/** Pipeline smoke ticket: mock mode exercises the full loop; its metrics are not meaningful. */
-export function mockProvider(): MockProvider {
-  return new MockProvider('mock', [
-    {
-      content: '',
-      toolCalls: [
-        {
-          id: 'mock-1',
-          name: 'submit_issue_ticket',
-          arguments: {
-            ticket: {
-              type: 'question',
-              priority: 'P3 - mock pipeline smoke',
-              affected_files: [],
-              reproduction_steps: [],
-              acceptance_criteria: ['pipeline completes'],
-              missing_info: [],
-              route: 'answer',
-            },
-          },
-        },
-      ],
-    },
-  ]);
-}
-
-export function workspaceRoot(uc: string): string {
-  if (uc === '01') return fileURLToPath(new URL('./fixtures/uc01/', import.meta.url));
-  const bundled = path.join(process.cwd(), 'workspace');
-  return fs.existsSync(bundled) ? bundled : fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-eval-'));
-}
-
-export async function runUc(ucDir: string, useMock: boolean, root: string, createCaseProvider: () => Promise<{ provider: BaseLLMProvider; model?: string }>): Promise<boolean> {
-  const uc = path.basename(ucDir).replace(/^uc/, '');
-  const cases = loadCases(ucDir);
-  const results: CaseResult[] = [];
-  for (const evalCase of cases) {
-    const unexpectedToolCalls: string[] = [];
     try {
-      const { provider, model } = await createCaseProvider();
-      const { ticket } = await runTriage({ issue: evalCase.input, workspaceRoot: root, provider, model,
-        onToolCall: (name) => { if (!['read_file', 'search_code', 'submit_issue_ticket'].includes(name)) unexpectedToolCalls.push(name); } });
-      const actual = { type: ticket.type, route: ticket.route };
-      const result: CaseResult = {
-        id: evalCase.id,
-        expected: evalCase.expected,
-        actual,
-        schemaValid: true,
-        typeCorrect: actual.type === evalCase.expected.type,
-        routeCorrect: actual.route === evalCase.expected.route,
-        mustPass: evalCase.mustPass,
-        unexpectedToolCalls,
-      };
-      results.push(result);
-      const passedCase = result.typeCorrect && result.routeCorrect && (!result.mustPass || unexpectedToolCalls.length === 0);
-      console.log(`${passedCase ? 'ok  ' : 'FAIL'} ${evalCase.id} -> ${actual.type}/${actual.route} (expected ${evalCase.expected.type}/${evalCase.expected.route})${unexpectedToolCalls.length ? `; unexpected tools: ${unexpectedToolCalls.join(', ')}` : ''}`);
+      // Mỗi UC có thư mục riêng dưới workDir của run, không làm bẩn fixture hoặc repo gốc.
+      if (!/^\d{2}$/.test(uc)) throw new Error('UC id must be a two-digit number');
+      const workDir = path.join(opts.workDir, `uc${uc}`);
+      fs.mkdirSync(workDir, { recursive: true });
+      const parsed = resultSchema.safeParse(await runner({ mock: args.mock, config: opts.config, workDir }));
+      if (!parsed.success) throw new Error(`invalid runner result (${parsed.error.issues.map(i => i.path.join('.')).join(', ')})`);
+      const result = parsed.data;
+      if (result.uc !== uc) throw new Error(`runner returned UC ${result.uc}`);
+      if (!result.cases.length) throw new Error('runner returned zero cases');
+      if (new Set(result.cases.map(c => c.id)).size !== result.cases.length) throw new Error('runner returned duplicate case ids');
+      const average = (pick: (c: UcResult['cases'][number]) => number) => result.cases.reduce((sum, c) => sum + pick(c), 0) / result.cases.length;
+      result.summary = { ...result.summary, avgTokens: average(c => c.tokens),
+        avgCostDollars: average(c => c.costDollars), avgLatencyMs: average(c => c.latencyMs) };
+      // Error trong artifact cũng phải redact, không chỉ thông báo runner throw ở catch.
+      for (const c of result.cases) if (c.error !== undefined) c.error = redact(c.error);
+      report.ucs.push(result);
+      const evidenceErrors = releaseEvidenceErrors(result, args.mock).map(error => `UC ${uc}: ${error}`);
+      report.releaseBlockers.push(...evidenceErrors);
+      // Development vẫn hỗ trợ runner cũ; bằng chứng đã khai báo mà sai thì không được bỏ qua.
+      if (result.gates !== undefined || result.expectedCaseIds !== undefined) report.errors.push(...evidenceErrors);
+      if (result.gates?.some(g => !g.passed) || result.cases.some(c => c.skipped !== undefined ||
+        (c.provenance !== undefined && c.provenance.mock !== args.mock))) {
+        report.errors.push(`UC ${uc}: failed gate, skipped case or mock provenance mismatch`);
+      }
+      // Gate của chủ UC chấm ngưỡng tổng thể (ví dụ UC-03 >= 4/10), không ép mọi case thành công.
+      // Chỉ tin gate khi đủ bằng chứng; runner cũ chưa khai báo vẫn phải pass từng case ở development.
+      const passed = uc === '01' ? passesUc01(result, args.mock)
+        : evidenceErrors.length === 0 || result.cases.every(c => c.passed);
+      if (!passed || result.cases.some(c => c.error !== undefined)) report.errors.push(`UC ${uc}: case errors or acceptance checks failed`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      results.push({ id: evalCase.id, expected: evalCase.expected, mustPass: evalCase.mustPass, schemaValid: error instanceof TriageSchemaError ? false : null, typeCorrect: false, routeCorrect: false, unexpectedToolCalls, error: message });
-      console.log(`FAIL ${evalCase.id} ${message}`);
+      // Runner khác vẫn được chạy để artifact giữ bằng chứng phần đã hoàn thành, không bịa case có usage 0.
+      report.errors.push(redact(`UC ${uc}: ${error instanceof Error ? error.message : String(error)}`));
     }
   }
-  const summary = summarize(results);
-  const output = { uc, mock: useMock, ...summary, results };
-  fs.writeFileSync(path.join(ucDir, 'results.json'), `${JSON.stringify(output, null, 2)}\n`);
-  console.log(
-    `uc${uc}${useMock ? ' (mock)' : ''}: ${summary.cases} cases, schema ${summary.schemaValidRate?.toFixed(3) ?? 'n/a'}, ` +
-      `type ${summary.typeAccuracy.toFixed(3)}, route ${summary.routeAccuracy.toFixed(3)} -> ${path.join(ucDir, 'results.json')}`
-  );
-  if (useMock) console.log('Mock metrics are not representative; this run is a pipeline smoke check.');
-  else if (uc === '01') console.log('Injection check covers classification, route and unexpected tool calls; it does not prove resistance to all injections.');
-  const passed = passesThresholds(uc, summary, useMock, results);
-  if (!passed) console.error(`uc${uc} failed: check case errors and required UC thresholds.`);
-  return passed;
+  if (!report.ucs.length) report.errors.push('No UC results were produced');
+  // Thiếu runner và lỗi execution luôn chặn release, kể cả partial đang cho phép tiếp tục smoke.
+  for (const uc of missingUcs) report.releaseBlockers.push(`UC ${uc}: missing runner`);
+  if (args.all && !args.mock && !args.partial) report.errors.push(...report.releaseBlockers);
+  report.passed = report.errors.length === 0;
+  report.releaseBlockers = [...new Set([...report.releaseBlockers, ...report.errors])];
+  report.releaseEligible = args.all && !args.mock && !args.partial && report.passed && report.releaseBlockers.length === 0;
+  fs.mkdirSync(path.dirname(opts.outputFile), { recursive: true });
+  fs.writeFileSync(opts.outputFile, `${redact(JSON.stringify(report, null, 2))}\n`);
+  return report;
 }
 
 export async function main(argv = process.argv.slice(2)): Promise<void> {
-  const { uc, mock } = parseArgs(argv);
-  const evalsDir = path.dirname(fileURLToPath(import.meta.url));
-  const ucDirs = uc
-    ? [path.join(evalsDir, `uc${uc}`)]
-    : fs.readdirSync(evalsDir).filter((d) => /^uc\d+$/.test(d)).sort().map((d) => path.join(evalsDir, d));
-  if (ucDirs.length === 0) throw new Error(`No eval case directories under ${evalsDir}`);
-  for (const dir of ucDirs) {
-    if (!fs.existsSync(dir)) throw new Error(`No eval cases for --uc ${uc}: ${dir} does not exist`);
-  }
-  const config = loadConfig();
-  const catalog = loadCatalog();
-  const info = mock ? undefined : resolveModel('@smol', catalog, config);
-  const useMock = mock || !info || !hasProvider(config, info, catalog);
-  if (useMock && !mock) console.log('Selected provider is unavailable; running in mock mode (metrics are not meaningful).');
-  for (const dir of ucDirs) {
-    const ucId = path.basename(dir).replace(/^uc/, '');
-    const createCaseProvider = useMock
-      ? async () => ({ provider: mockProvider() })
-      : async () => ({ provider: await createProviderFor(info!), model: info!.id });
-    if (!(await runUc(dir, useMock, workspaceRoot(ucId), createCaseProvider))) process.exitCode = 1;
+  // Parse trước khi đọc config để thiếu flag không vô tình khởi động model/provider thật.
+  const args = parseArgs(argv);
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-eval-run-'));
+  const outputFile = path.resolve('evals/results.json');
+  try {
+    const report = await runEvaluation(args, { config: loadConfig(), runners: UC_RUNNERS, workDir, outputFile });
+    for (const uc of report.missingUcs) console.log(`UC ${uc}: chưa có runner${args.partial ? ' (development partial)' : ''}`);
+    for (const result of report.ucs) console.log(`UC ${result.uc}: ${result.cases.length} cases`);
+    if (args.mock) console.log('Mock pipeline smoke only; metrics are not evidence of real model accuracy.');
+    if (args.partial || !args.all) console.log('Development run; not a full release evaluation.');
+    for (const error of report.errors) console.error(redact(error));
+    console.log(`Results: ${outputFile}`);
+    if (!report.passed) process.exitCode = 1;
+  } finally {
+    fs.rmSync(workDir, { recursive: true, force: true });
   }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : String(error));
+    console.error(redact(error instanceof Error ? error.message : String(error)));
     process.exitCode = 1;
   });
 }

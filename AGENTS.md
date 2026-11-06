@@ -106,3 +106,4 @@ When the user corrects your approach, add a concrete one-line rule here ("Always
 - Bắt buộc chạy và kiểm tra toàn diện trên local qua `npm run ci:local` (hoặc `scripts/ship.sh`) trước khi merge; tuyệt đối không dựa vào GitHub Actions remote.
 - After a PR that closes a task issue merges, tick every verified acceptance checkbox in that issue (`gh issue edit -R se373agenticengineering/nhom-30`); leave one unticked only with a comment saying why.
 - Chỉ commit khi An yêu cầu rõ ràng; yêu cầu tạo branch, viết code hoặc chạy test không cho phép tự commit/push/merge.
+- Không chặn toàn bộ task vì thiếu xác nhận thay đổi mới từ D0: tiếp tục phần thuộc lane mình theo contract hiện hành; chỉ chờ phần đổi API chung hoặc CI cần được giao quyền.
