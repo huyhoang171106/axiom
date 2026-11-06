@@ -9,7 +9,7 @@
 | C3 | 06/11 | `runPytest`, `run_tests` tắt mạng, `findRegressions`, Python trong CI | done |
 | C4 | 05/11 | Skill `bug-fix` | done |
 | C5 | 07/11 | Graph `/fix` | done (#54 + nối D2/D4); E3 #33 còn mở |
-| C6 | 08/11 | Eval UC-03 | code xong, chờ chạy thật trên máy eval |
+| C6 | 08/11 | Eval UC-03 | done |
 | C7 | 08/11 | Diff viewer, tiến trình vòng fix | |
 
 ## C1. Đủ 10 bug
