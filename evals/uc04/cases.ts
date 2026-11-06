@@ -72,14 +72,10 @@ export async function gradeFeature(workspaceRoot: string, featId: string): Promi
 
   // Trên Windows/macOS hoặc môi trường không có bwrap sandbox (plan.kind !== 'bwrap'):
   // runPytest từ chối chạy khi thiếu bwrap (theo đúng thiết kế verifier UC-03).
-  // Đánh dấu pass cho pipeline smoke check trên môi trường non-Linux.
   if (plan.kind !== 'bwrap') {
-    return {
-      passed: true,
-      acceptancePassed: true,
-      regressions: [],
-      output: `bwrap sandbox is unavailable on ${process.platform} (${plan.detail}). Verified via static compatibility check.`,
-    };
+    throw new Error(
+      `cannot grade feature without the bwrap sandbox (Linux with unprivileged user namespaces); current backend is "${plan.kind}" (${plan.detail})`
+    );
   }
 
   const testFileName = `test_acceptance_${featId.replace(/-/g, '_')}.py`;
