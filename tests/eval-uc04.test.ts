@@ -1,6 +1,7 @@
 // tests/eval-uc04.test.ts - Unit tests for UC-04 runner, evidence contracts, and cases
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,7 +11,12 @@ import { loadFeatureCase, UC04_CASE_IDS } from '../evals/uc04/cases.js';
 import { DEFAULT_CONFIG } from '../src/core/config.js';
 import { loadCatalog } from '../src/llm/catalog/index.js';
 import { evidenceSchema, provenanceSchema, releaseEvidenceErrors } from '../evals/evidence.js';
+import { isBwrapUsable } from '../src/tools/sandbox.js';
+import { pythonBin } from '../src/core/paths.js';
 import type { UcResult } from '../evals/types.js';
+
+const hasPytest = spawnSync(pythonBin(), ['-m', 'pytest', '--version'], { windowsHide: true }).status === 0;
+const canSandbox = process.platform === 'linux' && isBwrapUsable() && hasPytest;
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-eval-uc04-'));
 const previousHome = process.env.AXIOM_HOME;
@@ -37,7 +43,10 @@ test('loadFeatureCase loads request, metadata and acceptance test for feat-01..0
   }
 });
 
-test('registry points to UC-04 runner and executes all 5 cases', async (t) => {
+test(
+  'registry points to UC-04 runner and executes all 5 cases',
+  { skip: !canSandbox && process.env.CI !== 'true' && 'needs Linux + usable bwrap + python with pytest' },
+  async (t) => {
   t.mock.method(globalThis, 'fetch', async () => {
     throw new Error('Unexpected network call during mock evaluation');
   });
