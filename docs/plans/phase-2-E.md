@@ -82,8 +82,6 @@ Test `tests/denied-actions.test.ts`:
 - `a different file is not affected by the denial`
 - `denied action never reaches the approver a second time`
 
-Nghiệm thu E2: `tests/denied-actions.test.ts` và `tests/denied-actions-integration.test.ts` kiểm sáu case trên, JSON/quotes/flags/workspace, multi-action, shared state, scoped permission views, session độc lập, cross-tool, edited args, denial trong lúc chờ approval, junction đổi target, graph hai node và TUI `/clear`. Dùng registry, graph và C2 thật; không skip E2/C2. `tests/permissions-patch.test.ts`, `tests/registry-approval.test.ts` giữ coverage C2/E1 và recheck sau await. Đã chạy `npm run lint` và `npm test` sau hợp nhất main; skip Linux/bwrap, POSIX modes hoặc điều kiện rg/bash của bộ test chung được ghi rõ theo môi trường.
-
 ## E3. Hỏi lại trong `runGraph`, nối TUI
 
 Branch `e/e3-human-gate`. Cần D0.
