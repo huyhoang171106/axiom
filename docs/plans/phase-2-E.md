@@ -6,7 +6,7 @@
 |---|---|---|---|
 | E1 | 04/11 | Danh mục rủi ro trong `decide()` | done |
 | E2 | 05/11 | Chống lách sau khi bị từ chối | done |
-| E3 | 06/11 | `runGraph` hỏi lại, nối TUI, test duyệt tool call | |
+| E3 | 06/11 | `runGraph` hỏi lại, nối TUI, test duyệt tool call | done |
 | E4 | 07/11 | Audit log, `/audit` | |
 | E5 | 07/11 | `/mode`, `/plan`, màn hình duyệt có mức rủi ro | |
 | E6 | 08/11 | Eval UC-05 | |
@@ -81,8 +81,6 @@ Test `tests/denied-actions.test.ts`:
 - `env FOO=1 rm a.py matches rm a.py`
 - `a different file is not affected by the denial`
 - `denied action never reaches the approver a second time`
-
-Nghiệm thu E2: `tests/denied-actions.test.ts` và `tests/denied-actions-integration.test.ts` kiểm sáu case trên, JSON/quotes/flags/workspace, multi-action, shared state, scoped permission views, session độc lập, cross-tool, edited args, denial trong lúc chờ approval, junction đổi target, graph hai node và TUI `/clear`. Dùng registry, graph và C2 thật; không skip E2/C2. `tests/permissions-patch.test.ts`, `tests/registry-approval.test.ts` giữ coverage C2/E1 và recheck sau await. Đã chạy `npm run lint` và `npm test` sau hợp nhất main; skip Linux/bwrap, POSIX modes hoặc điều kiện rg/bash của bộ test chung được ghi rõ theo môi trường.
 
 ## E3. Hỏi lại trong `runGraph`, nối TUI
 

@@ -229,13 +229,23 @@ export class TuiController {
           }
         },
         ask: async (question, options) => {
+          // Lệnh có thể vừa hoàn tất await sau abort; không mở lại tương tác đã huỷ.
+          if (signal.aborted) throw new Error('Cancelled');
           const hint = transientHints && transientHints.length > 0 ? transientHints.join('\n') : undefined;
           const answer = await store.ask(question, options?.secret, hint);
           return options?.secret ? answer.trim().replace(/^(['"])(.*)\1$/, '$2').trim() : answer;
         },
         confirm: async (question) => {
-          const hint = transientHints && transientHints.length > 0 ? transientHints.join('\n') : undefined;
-          return /^(y|yes)$/i.test((await store.ask(`${question} [y/N]`, false, hint)).trim());
+          if (signal.aborted) throw new Error('Cancelled');
+          // Dùng cùng hộp duyệt; xác nhận giữa node không phải một tool call.
+          return new Promise<boolean>((resolve) => store.requestApproval(
+            { name: 'confirm', args: { question }, reason: question },
+            (decision) => {
+              this.exec.bus.emit('approval', { tool: 'confirm', reason: question,
+                decision: decision === 'approve' ? 'approve' : 'deny', approver: 'user' });
+              resolve(decision === 'approve');
+            },
+          ));
         },
       },
       session: {
@@ -437,7 +447,7 @@ export class TuiController {
         if (controller.signal.aborted) return;
         if (result?.kind === 'exit') this.opts.exit?.();
         else if (result?.kind === 'clear') this.store.clear();
-        else if (result) this.store.print(redact(result.text), input);
+        else if (result) this.store.print(redact(result.text), input, result);
       } else {
         const activeModel = this.opts.mock ? MOCK_MODEL : this.ensureConnectedModel();
         this.store.update({ model: activeModel });

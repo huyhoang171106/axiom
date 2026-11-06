@@ -39,14 +39,19 @@ function pendingQuestion(result: unknown): HumanQuestion | undefined {
 
 /**
  * yes/no goes through `ui.confirm`, so headless without a TTY answers no and `--yes` answers yes. Other choices
- * go through `ui.ask`; an answer that is not a choice becomes the last choice.
+ * go through `ui.ask`; retry invalid answers before falling back to the last choice.
  */
-async function answer(ui: CommandUI, q: HumanQuestion): Promise<string> {
+async function answer(ui: CommandUI, q: HumanQuestion, signal?: AbortSignal): Promise<string> {
   if (q.choices.length === 2 && q.choices.includes('yes') && q.choices.includes('no')) {
     return (await ui.confirm(q.question)) ? 'yes' : 'no';
   }
-  const reply = (await ui.ask(`${q.question} (${q.choices.join('/')})`)).trim();
-  return q.choices.includes(reply) ? reply : q.choices[q.choices.length - 1];
+  // Hỏi lại tối đa ba lần sau câu trả lời đầu; chỉ resume graph với lựa chọn hợp lệ.
+  for (let attempt = 0; attempt <= 3; attempt++) {
+    if (signal?.aborted) throw new Error('Cancelled');
+    const reply = (await ui.ask(`${q.question} (${q.choices.join('/')})`)).trim();
+    if (q.choices.includes(reply)) return reply;
+  }
+  return q.choices[q.choices.length - 1];
 }
 
 /** Runs `graph` to the end on `threadId`, asking `ui` at every `askHuman`. `input: null` continues from the last checkpoint. */
@@ -59,7 +64,9 @@ export async function runGraph<S>(
   let result = await graph.invoke(input, config);
   for (let q = pendingQuestion(result); q; q = pendingQuestion(result)) {
     if (opts.signal?.aborted) throw new Error('Cancelled');
-    result = await graph.invoke(new Command({ resume: await answer(opts.ui, q) }), config);
+    const reply = await answer(opts.ui, q, opts.signal);
+    if (opts.signal?.aborted) throw new Error('Cancelled');
+    result = await graph.invoke(new Command({ resume: reply }), config);
   }
   return result as S;
 }

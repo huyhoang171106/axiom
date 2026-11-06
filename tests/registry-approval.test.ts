@@ -31,7 +31,7 @@ test('approval cannot authorize a path moved outside the workspace while waiting
   assert.equal(fs.existsSync(path.join(outside, 'new.yml')), false);
 });
 
-test('edited arguments execute once and report their final policy', async (t) => {
+test('editedArgs are re-checked by decide and run with the edited args', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-edited-policy-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const registry = new ToolRegistry();
@@ -48,6 +48,32 @@ test('edited arguments execute once and report their final policy', async (t) =>
   assert.equal(fs.existsSync(path.join(root, 'package.json')), false);
   assert.equal(fs.readFileSync(path.join(root, 'note.txt'), 'utf8'), 'approved content');
   assert.deepEqual(fs.readdirSync(root), ['note.txt']);
+});
+
+test('approve runs the tool once', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-e3-approve-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const registry = new ToolRegistry();
+  let executions = 0;
+  const tool = registry.getTool('write_file')!;
+  const execute = tool.execute.bind(tool);
+  tool.execute = async (args, context) => { executions++; return execute(args, context); };
+  registry.approver = async () => 'approve';
+  const result = await registry.executeTool('write_file', { path: 'package.json', content: '{}' }, { workspaceRoot: root });
+  assert.equal(result.isError, false);
+  assert.equal(executions, 1);
+  assert.equal(fs.readFileSync(path.join(root, 'package.json'), 'utf8'), '{}');
+});
+
+test('deny returns the refusal to the model and never runs the tool', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-e3-deny-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const registry = new ToolRegistry();
+  registry.approver = async () => 'deny';
+  const result = await registry.executeTool('write_file', { path: 'package.json', content: '{}' }, { workspaceRoot: root });
+  assert.equal(result.isError, true);
+  assert.match(result.output, /Denied by user/);
+  assert.equal(fs.existsSync(path.join(root, 'package.json')), false);
 });
 
 test('edited arguments cannot override a hard denial', async (t) => {

@@ -50,6 +50,7 @@ test('a run writes one JSONL trace with nodes, tool call args, result, time, pol
   assert.equal(events[0], 'run_start');
   assert.equal(lines[0].data.runId, trace.runId);
   assert.ok(events.includes('state_change'));
+  assert.deepEqual(lines.filter((l) => l.event === 'approval').map((l) => l.data.decision), ['deny']);
 
   const start = lines.find((l) => l.event === 'tool_call_start')!;
   assert.deepEqual(start.data.arguments, { path: 'a.txt', content: 'x' });
