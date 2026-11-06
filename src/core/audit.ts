@@ -6,15 +6,27 @@ import path from 'node:path';
 import { axiomHome } from './paths.js';
 import { redact } from './secrets.js';
 
+export type AuditDecision =
+  | 'allow'
+  | 'ask'
+  | 'deny'
+  | 'approve'
+  | 'reject'
+  | 'edited'
+  | 'unattended'
+  | 'auto-deny';
+
+export type AuditActor = 'policy' | 'user' | 'headless' | 'eval';
+
 export interface AuditEntry {
-  at: string;                    // ISO
+  at: string;                    // ISO timestamp
   runId?: string;
   tool: string;
-  args: Record<string, unknown>; // redacted, strings over 500 chars cut
+  args: Record<string, unknown>; // qua redact, chuỗi > 500 ký tự cắt
   reason: string;
   risk: Risk;
-  decision: 'allow' | 'deny' | 'approve' | 'reject' | 'edited' | 'auto-deny';
-  approver: 'policy' | 'user' | 'headless' | 'eval';
+  decision: AuditDecision;
+  approver: AuditActor;
 }
 
 export function auditPath(): string {
@@ -52,3 +64,4 @@ export function readAudit(limit?: number): AuditEntry[] {
   return fs.readFileSync(file, 'utf8').split('\n').filter((line) => line.trim())
     .slice(-count).map((line) => safeEntry(JSON.parse(line) as AuditEntry));
 }
+

@@ -8,7 +8,7 @@
 | C2 | 05/11 | `apply_patch` + guard sửa test | done |
 | C3 | 06/11 | `runPytest`, `run_tests` tắt mạng, `findRegressions`, Python trong CI | done |
 | C4 | 05/11 | Skill `bug-fix` | done |
-| C5 | 07/11 | Graph `/fix` | code xong, chờ D2, E2, D4, E3 |
+| C5 | 07/11 | Graph `/fix` | done (#54 + nối D2/D4); E3 #33 còn mở |
 | C6 | 08/11 | Eval UC-03 | |
 | C7 | 08/11 | Diff viewer, tiến trình vòng fix | |
 
@@ -146,7 +146,7 @@ Không chứa script. Test `tests/prompt.test.ts` thêm: `bug-fix appears in ski
 
 ## C5. Graph `/fix`
 
-Branch `c/c5-fix-graph`. Code xong; merge chờ D2 #25, E2 #32, D4 #27, E3 #33 (blocked-by của #20).
+Branch `c/c5-fix-graph` (#54), phần nối D2/D4 ở `c/c5-rollback-memory`. Blocked-by của #20: D2, E2, D4 đã merge; E3 #33 còn mở.
 
 ```ts
 // src/agents/fix.ts — FixRound, FixReport như cũ
@@ -175,10 +175,10 @@ Graph `fix` (mỗi node bọc `traceNode`):
 |---|---|---|
 | `baseline` | `runTests(root)` → `before` (không gọi model) | — |
 | `reproduce` | Model tìm hoặc viết test tái hiện, nộp bằng `submit_repro({ targetTests })`. Harness chạy từng target: phải fail hoặc treo, không có lỗi collection; không đạt thì trả lỗi để model sửa. Không nộp được → `report` (`failed`) | `read_file`, `search_code`, `list_dir`, `apply_patch`, `run_tests`, `submit_repro` |
-| `locate` | Giả thuyết qua `submit_hypothesis({ hypothesis, files })`; prompt có "Rejected hypotheses (Đã loại)" và kết quả test gần nhất (gồm regression) | `read_file`, `search_code`, `list_dir`, `submit_hypothesis` |
+| `locate` | Giả thuyết qua `submit_hypothesis({ hypothesis, files, conventions? })`; prompt có "Rejected hypotheses (Đã loại)" và kết quả test gần nhất (gồm regression) | `read_file`, `search_code`, `list_dir`, `submit_hypothesis` |
 | `patch` | Model sửa; `apply_patch` có guard C2, đếm lỗi theo loại, lỗi thứ 3 trong vòng thì dừng node | `read_file`, `apply_patch` |
 | `verify` | Chạy toàn suite + từng target riêng. `fixed` chỉ khi mọi target pass, suite chạy xong (`complete`, không timeout, không lỗi collection) và `findRegressions(before, after)` rỗng | — |
-| `keep` | `askHuman('Giữ bản sửa?', ['yes', 'no'])`. `no` → **chưa hoàn tác**: chờ recovery của D2 (#25); báo cáo ghi rõ file vẫn còn thay đổi. Không `git checkout`, không xoá file | — |
+| `keep` | `askHuman('Giữ bản sửa?', ['yes', 'no'])`. `no` → hoàn tác bằng `restoreFiles` của D2 (snapshot chụp ở `baseline`), chỉ cho file run đã ghi mà nội dung còn đúng như run để lại; file người dùng sửa sau đó thì giữ nguyên và ghi vào báo cáo; chỉ xoá file run tạo ra. Không `git checkout`, không restore cả workspace | — |
 | `report` | `FixReport`; vượt 3 file / 100 dòng thì gọi model 1 lần (tính vào budget) hỏi lý do, lưu nguyên văn vào `explanation` | — |
 
 Cạnh: `verify` → `keep` khi `fixed`; → `locate` khi chưa đạt, `round < maxRounds`, còn token và còn giờ; → `report` (`failed`) khi hết vòng, hết token hoặc hết giờ. Huỷ (`signal`) → `aborted`.
@@ -186,9 +186,10 @@ Cạnh: `verify` → `keep` khi `fixed`; → `locate` khi chưa đạt, `round <
 - Budget: provider được bọc, đếm token mọi lần gọi (cả retry và câu hỏi `explanation`); hết budget thì từ chối lần gọi tiếp theo.
 - `submit_*` không có trong danh mục rủi ro (`decide()` trả `ask`); workflow tự duyệt riêng 2 tool này, tool khác vẫn qua approver của phiên.
 - `filesChanged`, `diffStat` lấy từ kết quả `apply_patch` (cả test tái hiện mới).
-- Memory (D4 #27): chưa ghi gì. Khi D4 merge, quy ước đề xuất ở `report` phải qua `ui.confirm` trước `addMemory`.
+- Memory (D4): quy ước model đề xuất cùng giả thuyết thắng (`conventions`) chỉ lưu bằng `addMemory` sau khi người dùng `ui.confirm` từng dòng; không có UI hoặc chọn không giữ thì không lưu.
+- Không có approver: lớp bọc approver throw (giống registry báo "no approver"), không trả `deny`, để không ghi nhầm vào danh sách từ chối của phiên (E2).
 
-Test `tests/fix.test.ts` (`MockProvider` kịch bản theo node, bộ chạy test giả đọc file, `AXIOM_HOME` tạm): sửa 1 vòng; `submit_repro` từ chối target đang pass; không tái hiện được; dừng sau 5 vòng có báo cáo; giả thuyết bị loại vào vòng sau; regression quay về `locate` + đủ cặp node event mỗi vòng; suite timeout/lỗi collection không tính là fixed; cap 3 patch lỗi; patch sửa test bị chặn và ghi vào báo cáo; budget token; giới hạn giờ; diff > 3 file có `explanation`; keep yes/no; huỷ → `aborted`; `/fix` đọc `issue.md`. Một test chạy verifier thật (bwrap) trên `bug-01`, bắt buộc chạy trên CI.
+Test `tests/fix.test.ts` (`MockProvider` kịch bản theo node, bộ chạy test giả đọc file, `AXIOM_HOME` tạm): sửa 1 vòng; `submit_repro` từ chối target đang pass; không tái hiện được; dừng sau 5 vòng có báo cáo; giả thuyết bị loại vào vòng sau; regression quay về `locate` + đủ cặp node event mỗi vòng; suite timeout/lỗi collection không tính là fixed; cap 3 patch lỗi; patch sửa test bị chặn và ghi vào báo cáo; budget token; giới hạn giờ; diff > 3 file có `explanation`; keep yes; keep no hoàn tác (không git, repo git có thay đổi chưa commit của người dùng, conflict khi người dùng sửa sau fix); memory phải duyệt; không approver thì không ghi từ chối; huỷ → `aborted`; `/fix` đọc `issue.md`. Một test chạy verifier thật (bwrap) trên `bug-01`, bắt buộc chạy trên CI.
 
 ## C6. Eval UC-03
 
