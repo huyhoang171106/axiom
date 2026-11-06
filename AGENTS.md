@@ -38,7 +38,7 @@ If a doc and the code disagree, stop and ask. Do not pick one silently.
 3. Branch `<lane>/<task-id>-<slug>` from `main`. Touch only your lane's files; shared files are append-only (`CONVENTIONS.md`, Git).
 4. Signatures in a guide or the Seam table are contracts: copy them exactly, never change them.
 5. Finish with "Done means" below and set the task row to `done` in your lane file.
-6. Ship it yourself: `scripts/ship.sh`. It rebases, pushes, opens the PR, waits for every CI check and merges only when all pass. A failed check means not merged: fix the cause on the same branch and run it again. Mandatory for every change; see `CONVENTIONS.md` Git.
+6. Ship it yourself: `scripts/ship.sh`. It enforces Conventional Commits, runs the full local CI suite (`npm run ci:local`), pushes, opens the PR, verifies the PR title, and merges via merge commit. Remote GitHub Actions CI is disabled; local CI is mandatory for every change.
 
 ## Commands
 
@@ -48,12 +48,13 @@ If a doc and the code disagree, stop and ask. Do not pick one silently.
 - Test all: `npm test`
 - Lint + typecheck: `npm run lint` (`tsc --noEmit`)
 - Build: `npm run build`
+- Full Local CI: `npm run ci:local` (sensitive files check, lint, test, build, eval smoke)
 
 Use single-file tests while you iterate. Run the full check at the end.
 
 ## Done means
 
-1. `npm run lint && npm test` pass. Read the output; do not assume.
+1. `npm run ci:local` passes completely (sensitive files, `npm run lint`, `npm test`, `npm run build`, eval smoke). Read the output; do not assume.
 2. New behavior or a bug fix has a test that fails without the change.
 3. If a check fails, fix the cause, not the test.
 
@@ -64,6 +65,7 @@ Use single-file tests while you iterate. Run the full check at the end.
   - Provider, model, login, API key, secrets: `docs/guides/providers.md`
   - TUI, slash commands, headless commands: `docs/guides/tui.md`
 - Send every tool call through `ToolRegistry.executeTool` and `decide()` in `src/tools/permissions.ts`.
+- Run and pass `npm run ci:local` locally before pushing or shipping any change. Remote GitHub Actions CI is not used.
 - Read the files you change and their callers. Match existing patterns.
 - State the plan in 1–2 sentences before editing. For non-trivial work, list steps with a check for each.
 - Fix root causes. Suppressing an error is not a fix.
@@ -101,5 +103,6 @@ Proceed without asking when the task is trivial and reversible, or when reading 
 When the user corrects your approach, add a concrete one-line rule here ("Always use X for Y"). Tighten an existing line instead of adding a duplicate. Remove lines that no longer apply.
 
 - Với code do An yêu cầu, viết comment tiếng Việt giải thích rõ cách hoạt động để dễ đọc về sau; giữ tên API theo contract hiện có.
+- Bắt buộc chạy và kiểm tra toàn diện trên local qua `npm run ci:local` (hoặc `scripts/ship.sh`) trước khi merge; tuyệt đối không dựa vào GitHub Actions remote.
 - After a PR that closes a task issue merges, tick every verified acceptance checkbox in that issue (`gh issue edit -R se373agenticengineering/nhom-30`); leave one unticked only with a comment saying why.
 - Chỉ commit khi An yêu cầu rõ ràng; yêu cầu tạo branch, viết code hoặc chạy test không cho phép tự commit/push/merge.

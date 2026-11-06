@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# .githooks/pre-push - Run local CI suite before pushing to remote
+set -euo pipefail
+
+echo "==> [pre-push hook] Running Axiom local CI suite..."
+bash scripts/ci-local.sh
