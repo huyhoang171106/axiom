@@ -33,7 +33,7 @@ export function auditPath(): string {
   return path.join(axiomHome(), 'audit.jsonl');
 }
 
-function safeEntry(entry: AuditEntry): AuditEntry {
+export function redactAuditEntry(entry: AuditEntry): AuditEntry {
   // Redact trước khi cắt để không lưu một phần đầu của secret dài.
   const args: Record<string, unknown> = JSON.parse(JSON.stringify(entry.args,
     (_key, value: unknown) => typeof value === 'string' ? redact(value).slice(0, 500) : value));
@@ -44,7 +44,7 @@ function safeEntry(entry: AuditEntry): AuditEntry {
 export function recordDecision(entry: AuditEntry): void {
   const file = auditPath();
   fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
-  const line = JSON.stringify(safeEntry(entry)) + '\n';
+  const line = JSON.stringify(redactAuditEntry(entry)) + '\n';
   const fd = fs.openSync(file, 'a', 0o600);
   try {
     // Sửa cả quyền file tồn tại từ trước; Windows dùng ACL của nền tảng.
@@ -62,6 +62,6 @@ export function readAudit(limit?: number): AuditEntry[] {
   const file = auditPath();
   if (!fs.existsSync(file)) return [];
   return fs.readFileSync(file, 'utf8').split('\n').filter((line) => line.trim())
-    .slice(-count).map((line) => safeEntry(JSON.parse(line) as AuditEntry));
+    .slice(-count).map((line) => redactAuditEntry(JSON.parse(line) as AuditEntry));
 }
 

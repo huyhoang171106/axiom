@@ -2,6 +2,7 @@
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { redact } from '../core/secrets.js';
+import { recordDecision, redactAuditEntry, type AuditActor, type AuditDecision } from '../core/audit.js';
 import type { ToolDefinition, ToolResult } from '../core/types.js';
 import type { EventBus } from '../core/event-bus.js';
 import { BaseTool, type ToolExecutionContext, type ToolSummarizer } from './base-tool.js';
@@ -151,12 +152,14 @@ export class ToolRegistry {
       args = gate.args;
       // Gate có await; kiểm lại ngay trước execution, kể cả khi nhánh đầu là allow.
       const finalPolicy = this.checkPolicy(name, args, context.workspaceRoot);
+      this.auditPolicyChange(name, args, policy, finalPolicy);
       if (finalPolicy.verdict === 'deny') {
         policy = finalPolicy;
         throw new Error(`Blocked by policy before execution (${finalPolicy.reason}).`);
       }
       if (finalPolicy.verdict === 'ask' && policy.verdict === 'allow') {
         policy = finalPolicy;
+        this.audit(name, args, { ...policy, reason: 'Policy changed before execution; approval required.' }, 'auto-deny', 'policy');
         throw new Error('Policy changed before execution; submit the action again for approval.');
       }
       if (['edit', 'write_file'].includes(name) && typeof args.path === 'string') {
@@ -212,13 +215,18 @@ export class ToolRegistry {
     workspaceRoot: string
   ): Promise<{ args: Record<string, unknown>; policy: PolicyDecision & { approval?: string }; refusal?: string }> {
     const policy = this.checkPolicy(name, args, workspaceRoot);
+    this.audit(name, args, policy, policy.verdict, 'policy');
     if (policy.verdict === 'deny') {
       return { args, policy, refusal: `Blocked by policy (${policy.reason}). This action is never allowed; do not retry it in another form.` };
     }
     if (policy.verdict === 'allow') return { args, policy };
     const { approver, allowWithoutApprover } = this.session ?? this;
     if (!approver) {
-      if (allowWithoutApprover) return { args, policy: { ...policy, approval: 'unattended' } };
+      if (allowWithoutApprover) {
+        this.audit(name, args, policy, 'unattended', 'headless');
+        return { args, policy: { ...policy, approval: 'unattended' } };
+      }
+      this.audit(name, args, { ...policy, reason: `No approver installed: ${policy.reason}` }, 'auto-deny', 'headless');
       return {
         args,
         policy,
@@ -226,7 +234,13 @@ export class ToolRegistry {
       };
     }
     const originalKeys = actionKeys(name, args, workspaceRoot);
-    const answer = await approver({ name, args: structuredClone(args), reason: policy.reason, risk: policy.risk });
+    let answer;
+    try {
+      answer = await approver({ name, args: structuredClone(args), reason: policy.reason, risk: policy.risk });
+    } catch (error) {
+      this.audit(name, args, { ...policy, reason: `Approval failed: ${error instanceof Error ? error.message : String(error)}` }, 'auto-deny', 'policy');
+      throw error;
+    }
     if (answer === 'deny') {
       for (const key of originalKeys) {
         // Từ chối lệnh ghép không cấm luôn đoạn đọc vô hại đứng cạnh hành động rủi ro.
@@ -236,6 +250,7 @@ export class ToolRegistry {
         }
         this.denied.add(key);
       }
+      this.audit(name, args, policy, 'reject', 'user');
       return {
         args,
         policy: { ...policy, approval: 'denied' },
@@ -245,16 +260,37 @@ export class ToolRegistry {
     if (answer === 'approve') {
       // Path có thể đổi qua symlink trong lúc chờ duyệt; approval không vượt hard deny mới.
       const recheck = this.checkPolicy(name, args, workspaceRoot);
+      this.audit(name, args, recheck, 'approve', 'user');
+      this.auditPolicyChange(name, args, policy, recheck);
       if (recheck.verdict === 'deny') {
         return { args, policy: recheck, refusal: `Blocked by policy after approval (${recheck.reason}).` };
       }
       return { args, policy: { ...recheck, approval: 'approved' } };
     }
     const recheck = this.checkPolicy(name, answer.editedArgs, workspaceRoot);
+    this.audit(name, answer.editedArgs, recheck, 'edited', 'user');
+    this.auditPolicyChange(name, answer.editedArgs, policy, recheck);
     if (recheck.verdict === 'deny') {
       return { args, policy: recheck, refusal: `Blocked by policy after edit (${recheck.reason}).` };
     }
     return { args: answer.editedArgs, policy: { ...recheck, approval: 'edited' } };
+  }
+
+  /** Ghi trước khi chạy tool; lỗi lưu audit phải chặn hành động, không bỏ qua. */
+  private audit(name: string, args: Record<string, unknown>, policy: PolicyDecision, decision: AuditDecision, approver: AuditActor): void {
+    // Caller độc lập vẫn có định danh ổn định; context phiên cung cấp runId của trace.
+    this.runId ??= crypto.randomUUID();
+    const entry = redactAuditEntry({ at: new Date().toISOString(), runId: this.runId,
+      tool: name, args, reason: policy.reason, risk: policy.risk ?? 'high', decision, approver });
+    recordDecision(entry);
+    this.bus?.emit('approval', entry);
+  }
+
+  /** Chỉ thêm quyết định policy mới khi recheck đổi kết quả, tránh ghi lặp quyết định cũ. */
+  private auditPolicyChange(name: string, args: Record<string, unknown>, before: PolicyDecision, after: PolicyDecision): void {
+    if (before.verdict !== after.verdict || before.risk !== after.risk || before.reason !== after.reason) {
+      this.audit(name, args, after, after.verdict, 'policy');
+    }
   }
 
   /** Một checkpoint cho args gốc, args edited và filesystem hiện tại, không đường tắt approver. */

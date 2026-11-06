@@ -246,7 +246,8 @@ export class AgentLoop {
       const result = await (started[i] ?? run(tc));
       // Trace dùng quyết định thực tế của registry, kể cả headless và edited args.
       const policy = result.metadata?.policy as (PolicyDecision & { approval?: string }) | undefined;
-      if (policy && (policy.verdict === 'deny' || policy.verdict === 'ask' || policy.approval)) {
+      // Registry có bus phiên đã phát đủ audit; chỉ giữ event cũ cho caller chưa nối context.
+      if (this.toolRegistry.bus !== this.eventBus && policy && (policy.verdict === 'deny' || policy.verdict === 'ask' || policy.approval)) {
         this.eventBus.emit('approval', {
           tool: tc.name, reason: policy.reason, risk: policy.risk,
           decision: policy.verdict === 'deny' ? 'auto-deny'
