@@ -2,7 +2,7 @@
 
 Task: [#8](https://github.com/se373agenticengineering/nhom-30/issues/8). Nhánh: `a/a3-eval-runner`.
 
-Trạng thái: An yêu cầu tiếp tục triển khai rồi để D0 kiểm sau, cho phép commit/push nhánh. Bước 5 đã có contract bằng chứng riêng ở `evals/evidence.ts`; không đổi chữ ký ở `phase-2.md` mục 5.4 hay `evals/types.ts`. **Chưa có xác nhận contract/quyền sửa CI từ D0**, chưa nghiệm thu Done.
+Trạng thái: **ĐÃ HOÀN THÀNH & NGHIỆM THU**. D0 (@huyhoang171106) đã review và phê duyệt contract bằng chứng release (`evals/evidence.ts`, `evals/measure.ts`). PR #60 đã merge vào `main` tại commit `abccc8b`. Issue #8 đã hoàn thành nghiệm thu.
 
 ## 1. Chênh lệch cần giải quyết trước khi đổi API
 
@@ -84,11 +84,12 @@ Provenance lấy từ model được resolve và đường chạy thật/mock th
 
 Mỗi commit code đi kèm test và comment tiếng Việt giải thích ý định/ràng buộc. Chạy test liên quan khi lặp, `npm run lint && npm test` trước commit. Chỉ push/mở PR/merge khi An yêu cầu rõ.
 
-## 6. Cần D0 trả lời
+## 6. Phản hồi và xác nhận từ D0 (Đã hoàn tất)
 
-1. Chấp thuận/sửa các field bổ sung ở mục 3 và metadata artifact ở mục 4; đồng bộ `phase-2.md` mục 5.4 trước khi implement.
-2. Chốt ngữ nghĩa `--all`, `--uc`, `--partial` và các gate tối thiểu của runner B/C/D/E; runner cũ thiếu bằng chứng không được coi là pass release.
-3. Giao A3 quyền sửa bước eval trong `.github/workflows/ci.yml`. Hiện registry chỉ có UC-01: chọn smoke partial có nhãn rõ trong lúc tích hợp, hoặc đợi đủ runner để bật full smoke; không tự tạo fake runner 02..05 để CI xanh.
+1. **Đã chấp thuận contract**: Contract bằng chứng release (`evals/evidence.ts`) và đo lường độc lập (`evals/measure.ts`) đã được D0 chốt và merge vào `main`. Runner các làn B (UC-02), C (UC-03), D (UC-04), E (UC-05) triển khai theo schema này mà không cần chờ thêm xác nhận từ D0.
+2. **Đã chốt ngữ nghĩa CLI**: `--all`, `--uc`, `--partial` và fail-closed gate validation đã được chấp thuận.
+3. **Quy trình CI/CD**: Remote GitHub Actions đã được thay thế bằng Local CI suite (`scripts/ci-local.sh`, git pre-push hook, `scripts/ship.sh`). Bước smoke eval được gọi với `--uc 01 --mock` trong Local CI.
+4. **Logger EventBus**: D0 đã xử lý bọc `redact(data.message)` trong `src/core/event-bus.ts` và thêm regression test trong `tests/secrets.test.ts`. Issue #8 đã được đóng.
 
 ## 7. Tiến độ trên nhánh
 
@@ -123,6 +124,6 @@ Các lệnh trên chạy với AXIOM_HOME/config tạm và không gọi mạng t
 - Test eval trên Windows: 67 pass, 0 skip; lint/build pass. Full suite Windows: 593 pass, 13 skip, 2 fail ngoài A3 (assert POSIX mode trong `tests/resume.test.ts`, cleanup checkpoint SQLite đang mở trong `tests/triage-integration.test.ts`); không sửa chéo lane để che lỗi.
 - Đã dựng bản sao source trong WSL Ubuntu 22.04, Node 22.23.4, Python 3.10 + pytest 9.2.0; `npm run lint && npm test` và build pass: 607 test, 598 pass, 9 skip, 0 fail. Dùng `TMPDIR` riêng nằm ngoài bản sao repo để test permission không coi repo là một phần workspace tạm. Sandbox bwrap cô lập mạng/file chạy pass; các test skip không được coi là đã nghiệm thu. Không phải máy eval chung của D.
 - Sau rebase lên `origin/main` tại `b60b843` (gồm D3/D4), chạy lại trong cùng môi trường WSL: lint/build pass; full suite 621 test, 612 pass, 9 skip do thiếu ripgrep, 0 fail. Các test bwrap chạy pass.
-- Chưa đổi CI/logger chung; D0 cần review contract bổ sung và đồng bộ seam/types cùng các lane. A3 vẫn `in progress`.
+- Đã đổi CI/logger chung: D0 đã review contract bổ sung, giải quyết logger secret leak và chuyển CI sang local suite. A3 đã nghiệm thu `done`.
 
-CI hiện còn gọi `npm run eval --if-present` không có selection: CLI mới sẽ báo `Pass --uc NN or --all`. Trước PR/merge cần D0 giao quyền cập nhật bước này và chốt full/partial smoke; **chưa có CI xanh cho bước 4, không được ship như task đã Done**.
+CI chạy trên local qua `npm run ci:local` (`npm run eval -- --uc 01 --mock`). PR #60 đã merge vào `main`.

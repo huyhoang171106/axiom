@@ -6,7 +6,7 @@
 |---|---|---|---|
 | A1 | 04/11 | Role `@code`/`@embed`, `/cost` theo model và budget theo run (#6) | done |
 | A2 | 05/11 | Graph `triage → confirm`, gọi `runRoute` ngoài graph (#7) | in progress |
-| A3 | 06/11 | `UC_RUNNERS`, `--uc NN`, `--all`, chỉ số mục 6.2 (#8) | in progress |
+| A3 | 06/11 | `UC_RUNNERS`, `--uc NN`, `--all`, chỉ số mục 6.2 (#8) | done |
 | A4 | 07/11 | Số đo thật UC-01 | |
 | A5 | 08/11 | Renderer IssueTicket trong TUI | |
 
@@ -63,7 +63,7 @@ Nghiệm thu theo issue #8: release thiếu UC-01..05, zero case, thiếu bằng
 
 - Bước 5 đã có contract bằng chứng riêng (`evals/evidence.ts`), UC-01 xuất metadata và CLI kiểm release fail-closed theo bằng chứng thay vì blocker vô điều kiện. Không đổi chữ ký runner chung; D0 review sau theo yêu cầu An. Test eval: 67 pass; full suite WSL sau rebase `b60b843`: 612 pass, 9 skip do thiếu ripgrep, 0 fail; lint/build pass. Chi tiết môi trường và lỗi Windows ở mục 9 tài liệu đề xuất.
 
-Chưa đánh dấu `done`: còn review/tích hợp contract các lane và CI, chưa có kết quả eval thật; số đo UC-01 thật thuộc A4.
+Đã nghiệm thu `done` qua PR #60 (D0 approved và merged vào main tại `abccc8b`). Contract `evals/evidence.ts`, `evals/measure.ts` đã hoàn tất; runner UC-01 giữ đủ 10 case; gates và provenance đã sẵn sàng cho các lane B, C, D, E. Đã đóng Issue #8.
 
 ## A4. Số đo thật UC-01
 

@@ -75,6 +75,8 @@ Task đầu của A, B, C, E (A1, B1, C1, E1) không cần file của D0, làm �
 
 ## 5. Hợp đồng D0
 
+> **Cập nhật 06/11**: D0 (Khung Phase 2), D2 (SQLite checkpointer, snapshotFiles, restoreFiles) và A3 (Eval runner chung, gates, provenance) đã hoàn tất và merge vào `main`. Toàn bộ hợp đồng, seam và stubs đã có thân thật trên `main`. Các làn B, C, D, E bám trực tiếp vào code và contract trên `main` để hoàn tất nhiệm vụ, không còn bị chặn bởi D0.
+
 D0 tạo mọi file dưới đây với thân stub (`throw new Error('chưa làm')` hoặc trả giá trị rỗng như ghi). Chữ ký là hợp đồng: **KHÔNG ĐƯỢC** đổi nếu chưa ghi Nhật ký quyết định.
 
 ### 5.1. Dùng chung (D0 làm xong luôn, không stub)
