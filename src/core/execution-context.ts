@@ -28,5 +28,8 @@ export interface ExecutionContext {
 export function createExecutionContext(): ExecutionContext {
   const bus = new EventBus();
   const { runId } = startTrace(bus);
-  return { tools: new ToolRegistry(), bus, costTracker: new CostTracker(), runId };
+  const tools = new ToolRegistry();
+  tools.bus = bus;
+  tools.runId = runId;
+  return { tools, bus, costTracker: new CostTracker(), runId };
 }
