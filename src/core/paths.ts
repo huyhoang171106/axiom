@@ -1,4 +1,5 @@
 // src/core/paths.ts - Where harness state (memory, skills, harness store) lives.
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -16,7 +17,10 @@ export function axiomHome(): string {
   return process.env.AXIOM_HOME || path.join(os.homedir(), '.axiom');
 }
 
-/** Python for pytest and the ast chunker: AXIOM_PYTHON, else `python3` (`python` on Windows, where `python3` is often the Store stub). */
+/** Python for pytest and the ast chunker: AXIOM_PYTHON, ~/.axiom/venv/bin/python if present, else `python3` (`python` on Windows, where `python3` is often the Store stub). */
 export function pythonBin(): string {
-  return process.env.AXIOM_PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
+  if (process.env.AXIOM_PYTHON) return process.env.AXIOM_PYTHON;
+  const defaultVenv = path.join(os.homedir(), '.axiom', 'venv', 'bin', 'python');
+  if (fs.existsSync(defaultVenv)) return defaultVenv;
+  return process.platform === 'win32' ? 'python' : 'python3';
 }

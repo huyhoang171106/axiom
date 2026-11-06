@@ -1,0 +1,5 @@
+{
+  "id": "feat-03",
+  "name": "ReadOnlyMiddleware storage middleware",
+  "minFiles": 3
+}
