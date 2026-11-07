@@ -11,6 +11,7 @@ import type {
   TaskPlan,
   VerificationReport,
   TokenUsage,
+  PermissionMode,
 } from './types.js';
 
 export interface SessionManagerOptions {
@@ -54,6 +55,33 @@ export class SessionManager {
     return this.currentSession;
   }
 
+  public getPermissionMode(): PermissionMode {
+    return this.currentSession?.permissionMode ?? 'edit';
+  }
+
+  public setPermissionMode(mode: PermissionMode): void {
+    const session = this.requireSession();
+    session.permissionMode = mode;
+    if (this.autoSave) {
+      this.saveSession();
+    }
+  }
+
+  public getPlanMode(): boolean {
+    return this.currentSession?.planMode ?? false;
+  }
+
+  public setPlanMode(enabled: boolean, previousMode?: PermissionMode): void {
+    const session = this.requireSession();
+    session.planMode = enabled;
+    if (previousMode !== undefined) {
+      session.previousMode = previousMode;
+    }
+    if (this.autoSave) {
+      this.saveSession();
+    }
+  }
+
   public requireSession(): SessionState {
     if (!this.currentSession) {
       throw new Error('No active session. Call createSession() or loadSession() first.');
@@ -84,6 +112,8 @@ export class SessionManager {
       verificationReports: [],
       checkpoints: [],
       activeFiles: [],
+      permissionMode: 'edit',
+      planMode: false,
     };
 
     this.currentSession = newSession;
@@ -466,6 +496,9 @@ export class SessionManager {
         : [],
       checkpoints: Array.isArray(parsed.checkpoints) ? parsed.checkpoints : [],
       activeFiles: Array.isArray(parsed.activeFiles) ? parsed.activeFiles : [],
+      permissionMode: parsed.permissionMode ?? 'edit',
+      previousMode: parsed.previousMode,
+      planMode: parsed.planMode ?? false,
     };
   }
 }

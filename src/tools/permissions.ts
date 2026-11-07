@@ -5,6 +5,11 @@ import { isBundledSkillFile } from './bundled-skills.js';
 import { literalCommands } from './policy-shell.js';
 import { pushDecision } from './policy-git.js';
 import { parseUnifiedDiff } from './apply-patch.js';
+import type { PermissionMode } from '../core/types.js';
+
+export type { PermissionMode };
+export const READ_ONLY_TOOLS = ['read_file', 'list_dir', 'search_code'] as const;
+export const PLAN_MODE_SYSTEM_DIRECTIVE = 'Chỉ lập kế hoạch, không sửa file.';
 
 export type Verdict = 'allow' | 'ask' | 'deny';
 export type Risk = 'low' | 'medium' | 'high';
@@ -339,4 +344,37 @@ export function decide(name: string, args: Record<string, unknown>, workspaceRoo
   return known.includes(name)
     ? { verdict: 'allow', risk: 'low', reason: 'allowed by policy' }
     : { verdict: 'ask', risk: 'medium', reason: 'tool is not in the risk catalog' };
+}
+
+/**
+ * Điều chỉnh phán quyết chính sách theo chế độ cấp quyền (PermissionMode).
+ *
+ * - `read-only`: các hành động cần hỏi (ask) chuyển thành từ chối (deny); deny giữ nguyên.
+ * - `edit`: giữ nguyên phán quyết theo catalog (mặc định).
+ * - `auto`: tự động cho phép (allow) nếu rủi ro low/medium và không thuộc các hành vi nguy hiểm đặc biệt
+ *   (cài package, xoá/di chuyển file, git commit/push, reset hard, patch lớn/xoá file); còn lại giữ ask.
+ */
+export function applyMode(decision: PolicyDecision, mode: PermissionMode): PolicyDecision {
+  if (decision.verdict === 'deny') {
+    return decision;
+  }
+  if (mode === 'read-only') {
+    if (decision.verdict === 'ask') {
+      return { ...decision, verdict: 'deny', reason: `${decision.reason} (denied in read-only mode)` };
+    }
+    return decision;
+  }
+  if (mode === 'auto') {
+    if (decision.verdict === 'ask') {
+      const isDangerousReason = /(?:pip|npm|pnpm|yarn|uv|poetry)\s+install|package|rm\b|git\s+(?:commit|push|reset|clean)|large patch|file deletion|destructive/i.test(
+        decision.reason
+      );
+      if ((decision.risk === 'low' || decision.risk === 'medium') && !isDangerousReason) {
+        return { ...decision, verdict: 'allow', reason: `${decision.reason} (auto-allowed)` };
+      }
+      return decision;
+    }
+    return decision;
+  }
+  return decision;
 }
