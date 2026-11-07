@@ -100,7 +100,7 @@ TUI chỉ **đọc** sự kiện và **gửi** yêu cầu. TUI không gọi tool
 | `/` | Mở gợi ý lệnh. `↑ ↓` để chọn, `Tab` để điền |
 | `Esc` | Dừng lượt agent đang chạy (truyền `AbortSignal` vào `runTask`) |
 | `Ctrl+C` hai lần | Thoát |
-| `Shift+Tab` | Đổi permission mode: `read-only → edit → auto`. Footer hiện mode đang dùng |
+| `Shift+Tab` | Đổi permission mode: `read-only → edit`. Footer hiện mode đang dùng; không mode nào tự duyệt hành động cần approval (quyết định 04/11 trong `DESIGN.md`) |
 | `Ctrl+O` | Mở rộng hoặc thu gọn output của tool |
 | `↑` khi ô nhập rỗng | Lấy lại câu đã gửi trước đó |
 

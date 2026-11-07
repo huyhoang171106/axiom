@@ -152,27 +152,26 @@ Branch `e/e5-modes`.
 
 ```ts
 // src/tools/permissions.ts
-export type PermissionMode = 'read-only' | 'edit' | 'auto';
+export type PermissionMode = 'read-only' | 'edit';
 export const READ_ONLY_TOOLS: readonly string[];   // tool có isReadOnly = true: read_file, list_dir, search_code
 export function applyMode(verdict: PolicyDecision, mode: PermissionMode): PolicyDecision;
 ```
 
 | Mode | Registry | `ask` thành | `deny` thành |
 |---|---|---|---|
-| `read-only` | `new ToolRegistry(READ_ONLY_TOOLS)` | — | deny |
+| `read-only` | View chỉ đọc của registry phiên, không thay registry gốc | ask | deny |
 | `edit` (mặc định) | đầy đủ | ask | deny |
-| `auto` | đầy đủ | allow nếu `risk === 'low'` hoặc `'medium'` **và** không thuộc dòng 1–4, 6–9 của E1; còn lại ask | deny |
 
-1. `/mode <read-only|edit|auto>`: đổi mode của phiên, dựng lại registry, footer hiện mode.
+1. `/mode <read-only|edit>` theo quyết định 04/11 trong `DESIGN.md`: giữ registry gốc và denial của phiên, footer hiện mode. Scoped view không được mở lại tool ghi. API mode/plan dùng chung cần D0 đồng bộ trước khi triển khai; không dùng recipe dựng root registry mới.
 2. `/plan`: bật `read-only` + system prompt thêm "Chỉ lập kế hoạch, không sửa file". `/plan off` về mode trước đó.
 3. Hộp duyệt (`approval-dialog.tsx`): thêm dòng `Mức rủi ro: low|medium|high` (màu xanh/vàng/đỏ); `apply_patch`, `edit` hiện diff (dùng `DiffView` của C7 khi đã merge, chưa thì in diff thô); phím `y`/`n`/`e` như hiện có.
 4. Nối renderer theo `kind` vào `src/tui/app.tsx` khi các làn nhắn: `issue-ticket` (A), `ask-answer` (B), `fix-report` (C), `feature-report` và `cost` (D), `audit` (E).
 
 Test `tests/modes.test.ts`:
 - `read-only registry does not expose write_file, edit, apply_patch, run_command`
-- `auto still denies .env`
-- `auto still asks for pip install and git push`
-- `auto allows a small apply_patch`
+- `edit still denies .env`
+- `edit still asks for pip install and git push`
+- `edit allows a small apply_patch`
 - `/plan off restores the previous mode`
 
 Test `tests/tui-components.test.ts` thêm: `approval dialog shows risk at 80 columns`.

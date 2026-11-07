@@ -52,7 +52,7 @@ export interface TuiState {
   };
   // These fields are populated by the app/approval integration in E4, not by bus events.
   readonly model: Readonly<ModelInfo> | null;
-  readonly mode: 'read-only' | 'edit' | 'auto';
+  readonly mode: 'read-only' | 'edit';
   readonly approvalEdit: EditorState | null;
   readonly approvalEditError: string;
   readonly pendingApproval: Readonly<ApprovalRequest> | null;
