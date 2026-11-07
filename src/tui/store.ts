@@ -53,6 +53,7 @@ export interface TuiState {
   // These fields are populated by the app/approval integration in E4, not by bus events.
   readonly model: Readonly<ModelInfo> | null;
   readonly mode: 'read-only' | 'edit';
+  readonly planMode: boolean;
   readonly approvalEdit: EditorState | null;
   readonly approvalExpanded: boolean;
   readonly approvalEditError: string;
@@ -79,7 +80,7 @@ export class TuiStore {
   private snapshot: TuiState = {
     editor: { text: '', cursor: 0 }, busy: false, expanded: false, notice: '', question: null, menu: null, revision: 0,
     entries: [], live: null, status: 'idle', error: null,
-    usage: { latest: null, total: null }, model: null, mode: 'edit', pendingApproval: null, approvalEdit: null, approvalEditError: '', approvalExpanded: false, git: null,
+    usage: { latest: null, total: null }, model: null, mode: 'edit', planMode: false, pendingApproval: null, approvalEdit: null, approvalEditError: '', approvalExpanded: false, git: null,
   };
   private pending = this.snapshot;
   private readonly listeners = new Set<() => void>();
@@ -96,7 +97,7 @@ export class TuiStore {
   private answerReject?: (error: Error) => void;
   private menuResolve?: (value: string | null) => void;
 
-  public update(patch: Partial<Pick<TuiState, 'editor' | 'busy' | 'expanded' | 'notice' | 'model' | 'git'>>): void {
+  public update(patch: Partial<Pick<TuiState, 'editor' | 'busy' | 'expanded' | 'notice' | 'model' | 'git' | 'mode' | 'planMode'>>): void {
     this.pending = { ...this.pending, ...patch };
     this.schedule();
   }

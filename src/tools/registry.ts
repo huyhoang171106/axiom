@@ -14,7 +14,7 @@ import { ListDirTool } from './list-dir.js';
 import { SearchCodeTool } from './search-code.js';
 import { ApplyPatchTool } from './apply-patch.js';
 import { RunTestsTool } from './run-tests.js';
-import { decide, type Approver, type PolicyDecision } from './permissions.js';
+import { decide, READ_ONLY_TOOLS, type Approver, type PolicyDecision } from './permissions.js';
 import { actionKeys, canonicalActionPath, commandActions, DeniedActions } from './denied-actions.js';
 import { parseUnifiedDiff } from './apply-patch.js';
 import { findTestTampering, isTestPath } from './test-guard.js';
@@ -42,6 +42,18 @@ export class ToolRegistry {
   private readonly sessionDenied = new DeniedActions();
   private eventBus?: EventBus;
   private sessionRunId?: string;
+  private sessionMode: 'read-only' | 'edit' = 'edit';
+
+  /** Đổi quyền tại registry gốc để view cũ và denial cùng giữ nguyên phiên. */
+  get permissionMode(): 'read-only' | 'edit' { return (this.session ?? this).sessionMode; }
+  setPermissionMode(mode: 'read-only' | 'edit'): void {
+    if (mode !== 'read-only' && mode !== 'edit') throw new Error('Only read-only and edit modes are supported.');
+    (this.session ?? this).sessionMode = mode;
+  }
+
+  private modeAllows(name: string): boolean {
+    return this.permissionMode === 'edit' || (READ_ONLY_TOOLS as readonly string[]).includes(name);
+  }
 
   /** Mọi view cùng phiên đọc trực tiếp state gốc; đổi view không làm mất denial. */
   get denied(): DeniedActions { return (this.session ?? this).sessionDenied; }
@@ -86,6 +98,7 @@ export class ToolRegistry {
 
   /** Trả về true nếu registry ở chế độ chỉ đọc (không chứa hoặc không cho phép write_file, edit, apply_patch). */
   public isReadOnly(): boolean {
+    if (this.permissionMode === 'read-only') return true;
     if (this.allowed) {
       return !this.allowed.has('write_file') && !this.allowed.has('edit') && !this.allowed.has('apply_patch');
     }
@@ -105,17 +118,17 @@ export class ToolRegistry {
   }
 
   getTool(name: string): BaseTool | undefined {
-    return this.tools.get(name);
+    return this.modeAllows(name) ? this.tools.get(name) : undefined;
   }
 
   hasTool(name: string): boolean {
-    return this.tools.has(name);
+    return this.modeAllows(name) && this.tools.has(name);
   }
 
   getDefinitions(): ToolDefinition[] {
     const definitions: ToolDefinition[] = [];
     for (const tool of this.tools.values()) {
-      definitions.push(tool.toDefinition());
+      if (this.modeAllows(tool.name)) definitions.push(tool.toDefinition());
     }
     return definitions;
   }
@@ -305,6 +318,8 @@ export class ToolRegistry {
 
   /** Một checkpoint cho args gốc, args edited và filesystem hiện tại, không đường tắt approver. */
   private checkPolicy(name: string, args: Record<string, unknown>, workspaceRoot: string): PolicyDecision {
+    // Kiểm cả lúc recheck sau approval: view đã tạo trước đổi mode không được giữ quyền ghi.
+    if (!this.modeAllows(name)) return { verdict: 'deny', risk: 'high', reason: `tool ${name} is unavailable in read-only mode` };
     let keys: string[];
     try { keys = actionKeys(name, args, workspaceRoot); }
     catch (error) {

@@ -74,6 +74,10 @@ export function App({
     }
     if (key.ctrl && input === 'o') store.update({ expanded: !state.expanded });
     if (state.busy && !state.question) return;
+    if (key.shift && key.tab && !state.question) {
+      void controller.submit(`/mode ${state.mode === 'edit' ? 'read-only' : 'edit'}`);
+      return;
+    }
     if (matches.length > 1 && (key.upArrow || key.downArrow)) {
       const delta = key.downArrow ? 1 : -1;
       setSlashIndex((clampedSlashIdx + delta + matches.length) % matches.length);

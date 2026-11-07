@@ -62,7 +62,7 @@ export function Footer({ state, workspace, width }: { state: TuiState; workspace
   const left2: Segment[] = [
     { text: state.model?.provider ?? MISSING, priority: 3 },
     { text: state.model?.id ?? MISSING, priority: 2 },
-    { text: state.mode, priority: 1 },
+    { text: `${state.mode}${state.planMode ? ' (plan)' : ''}`, priority: 1 },
   ];
 
   // Line 2 Right: tokens + cost stats

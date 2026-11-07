@@ -5,6 +5,7 @@ import { loadConfig, saveConfig } from '../core/config.js';
 import { redact } from '../core/secrets.js';
 import type { AxiomConfig } from '../core/types.js';
 import { defaultCommandRouter } from '../commands/index.js';
+import { permissionSession } from '../commands/permission-session.js';
 import { parseCommand, unknownCommandMessage } from '../commands/router.js';
 import type { ModelRow } from '../commands/models.js';
 import type { Command, CommandContext } from '../commands/types.js';
@@ -428,6 +429,10 @@ export class TuiController {
           }
         }
         if (!command) throw new Error(unknownCommandMessage(defaultCommandRouter, parsed.name));
+        // Resume có thể phục hồi snapshot trước node step; chặn workflow ghi trước dispatch.
+        if (this.exec.tools.permissionMode === 'read-only' && ['fix', 'feature', 'resume'].includes(parsed.name)) {
+          throw new Error(`/${parsed.name} requires edit mode. Use /mode edit first.`);
+        }
         const config = loadConfig();
 
         if (parsed.name === 'model') {
@@ -444,6 +449,10 @@ export class TuiController {
         }
 
         const result = await command.run(parsed.args, this.createCommandContext(config, controller.signal));
+        if (parsed.name === 'mode' || parsed.name === 'plan') {
+          const permissions = permissionSession({ tools: this.exec.tools, workspaceRoot: this.opts.workspaceRoot });
+          this.store.update({ mode: permissions.mode, planMode: permissions.planning });
+        }
         if (controller.signal.aborted) return;
         if (result?.kind === 'exit') this.opts.exit?.();
         else if (result?.kind === 'clear') this.store.clear();
@@ -463,6 +472,7 @@ export class TuiController {
           const agent = await createAgent({ workspaceRoot: this.opts.workspaceRoot, mock: !!this.opts.mock, exec: this.exec });
           if (controller.signal.aborted) return;
           this.agent = agent;
+          permissionSession({ tools: this.exec.tools, workspaceRoot: this.opts.workspaceRoot }).bind(agent);
         }
         if (this.agent.stateMachine.getState() === 'completed') {
           this.agent.stateMachine.reset();
