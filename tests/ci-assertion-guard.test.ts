@@ -10,7 +10,10 @@ const script = fs.readFileSync(new URL('../scripts/ci-local.sh', import.meta.url
 const guard = script.slice(script.indexOf('check_anti_cheat() {'), script.indexOf('run_stage "2/6"'));
 const before = "  assert.deepEqual(ui.asked, ['Approve the plan? (1/2/cancel)']);";
 const after = "  assert.deepEqual(ui.asked, Array(4).fill('Approve the plan? (1/2/cancel)'));";
-const bash = process.platform === 'win32' ? 'C:/Program Files/Git/bin/bash.exe' : 'bash';
+// On Windows `bash` on PATH may be WSL; Git Bash sits three levels above `git --exec-path`, wherever Git is installed.
+const bash = process.platform === 'win32'
+  ? path.resolve(execFileSync('git', ['--exec-path'], { encoding: 'utf8' }).trim(), '../../../bin/bash.exe')
+  : 'bash';
 
 for (const scenario of [
   { name: 'accepts the contracted E3 retry assertion', file: 'human-gate.test.ts', replacement: after, pass: true },
