@@ -196,6 +196,7 @@ export async function runTriage(opts: TriageOptions): Promise<TriageResult> {
     model: opts.model,
     maxSteps: opts.maxSteps ?? 12,
     isComplete: () => accepted !== undefined,
+    completionReminder: 'Your response is not a submitted ticket. Call submit_issue_ticket with the ticket as its argument; do not reply with plain JSON.',
     signal: controller.signal,
   });
 

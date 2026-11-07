@@ -32,6 +32,8 @@ export interface AgentLoopOptions {
   signal?: AbortSignal;
   /** Workflow xác nhận đã nhận đầu ra cuối cùng sau lượt tool; không dùng abort để báo thành công. */
   isComplete?: () => boolean;
+  /** Nhắc một lần khi workflow chưa hoàn tất và model dừng mà không gọi tool. */
+  completionReminder?: string;
   /** Context window size for auto-compaction (UC-04); defaults to model's contextWindow or 1,000,000. */
   contextWindow?: number;
   /** TaskState when running under a workflow task (preserves goal and acceptance across compaction). */
@@ -88,6 +90,7 @@ export class AgentLoop {
   private readonly providerRegistry: ProviderRegistry;
   private readonly provider?: BaseLLMProvider;
   private readonly isComplete?: () => boolean;
+  private readonly completionReminder?: string;
   private readonly guard = new RepetitionGuard();
   private readonly maxSteps: number;
   private readonly budgetLimitDollars: number;
@@ -99,6 +102,7 @@ export class AgentLoop {
 
   constructor(options: AgentLoopOptions) {
     this.isComplete = options.isComplete;
+    this.completionReminder = options.completionReminder;
     this.config = options.config;
     this.eventBus = options.eventBus ?? defaultEventBus;
     this.stateMachine = new ExecutionStateMachine(this.eventBus);
@@ -147,6 +151,7 @@ export class AgentLoop {
       this.provider ?? this.providerRegistry.getOrCreate(this.config.activeProvider, this.config.providers[this.config.activeProvider]);
     const model = this.model ?? this.config.defaultModel ?? 'claude-sonnet-4-5';
     let lastPromptTokens: number | undefined;
+    let hasReminded = false;
 
     for (let step = 1; step <= this.maxSteps; step++) {
       if (this.signal?.aborted) return this.finish('aborted', 'Task aborted via AbortSignal');
@@ -215,6 +220,12 @@ export class AgentLoop {
 
       const toolCalls = response.toolCalls ?? [];
       if (toolCalls.length === 0) {
+        // Nhắc trong cùng run để giữ giới hạn bước và budget, không nhận text làm kết quả tool.
+        if (this.completionReminder && this.isComplete && !this.isComplete() && !hasReminded && step < this.maxSteps) {
+          hasReminded = true;
+          this.sessionManager.addMessage({ role: 'user', content: this.completionReminder });
+          continue;
+        }
         this.sessionManager.saveSession();
         return this.finish('completed');
       }
