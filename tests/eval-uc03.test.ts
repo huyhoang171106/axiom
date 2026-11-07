@@ -80,17 +80,26 @@ test('without the bwrap sandbox UC-03 reports it cannot measure, never a result'
   t.mock.method(globalThis, 'fetch', async () => {
     throw new Error('unexpected network call');
   });
-  const previous = process.env.AXIOM_SANDBOX;
+  const previous = { sandbox: process.env.AXIOM_SANDBOX, local: process.env.AXIOM_ALLOW_LOCAL_TESTS };
   process.env.AXIOM_SANDBOX = 'off';
   try {
+    // ci-local.sh exports AXIOM_ALLOW_LOCAL_TESTS=1 on Windows; without it neither mode may run.
+    delete process.env.AXIOM_ALLOW_LOCAL_TESTS;
     for (const mock of [true, false]) {
       const dir = workDir();
       await assert.rejects(runUc03({ mock, config: DEFAULT_CONFIG, workDir: dir }), /cannot measure without the bwrap sandbox/);
       assert.deepEqual(fs.readdirSync(dir), [], 'no bug was seeded or run');
     }
+    // The local-tests escape is for the dev smoke: a real run still refuses to execute model code unsandboxed.
+    process.env.AXIOM_ALLOW_LOCAL_TESTS = '1';
+    const dir = workDir();
+    await assert.rejects(runUc03({ mock: false, config: DEFAULT_CONFIG, workDir: dir }), /cannot measure without the bwrap sandbox/);
+    assert.deepEqual(fs.readdirSync(dir), []);
   } finally {
-    if (previous === undefined) delete process.env.AXIOM_SANDBOX;
-    else process.env.AXIOM_SANDBOX = previous;
+    for (const [key, value] of [['AXIOM_SANDBOX', previous.sandbox], ['AXIOM_ALLOW_LOCAL_TESTS', previous.local]] as const) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
   }
 });
 
