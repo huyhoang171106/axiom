@@ -31,7 +31,7 @@ export function createTriageCommand(deps?: RouteDeps): Command {
     summary: 'Turn an issue into an IssueTicket',
     usage: '/triage <issue text>',
     async run(args, ctx): Promise<CommandResult> {
-      const issue = args.trim() || (await ctx.ui.ask('Issue: ')).trim();
+      let issue = args.trim() || (await ctx.ui.ask('Issue: ')).trim();
       if (!issue) throw new Error('Issue cannot be empty. Provide issue text to /triage.');
       // Phân loại dùng @smol; model cho workflow đích được resolve riêng trong runRoute.
       const info = resolveModel('@smol', loadCatalog(), ctx.config);
@@ -47,10 +47,28 @@ export function createTriageCommand(deps?: RouteDeps): Command {
         tools: ctx.tools,
       });
       // runGraph xử lý interrupt/resume qua ui.confirm chung, không tự hỏi riêng cho CLI/TUI.
-      const threadId = newThreadId('triage');
-      const { ticket, warnings, confirmed } = await runGraph<TriageGraphState>(graph,
+      let threadId = newThreadId('triage');
+      let { ticket, warnings, confirmed } = await runGraph<TriageGraphState>(graph,
         { issue, ticket: null, warnings: [], confirmed: false }, { threadId, ui: ctx.ui, signal: ctx.signal });
       if (!ticket) throw new Error('Triage returned no ticket');
+      if (ticket.route === 'ask_user' && ticket.missing_info.length > 0) {
+        // Không ép người dùng hoặc headless cung cấp câu trả lời; thiếu thông tin thì giữ ticket cũ.
+        const shouldClarify = await ctx.ui.confirm('Provide the missing information now?');
+        if (ctx.signal.aborted) throw new Error('Cancelled');
+        if (shouldClarify) {
+          const questions = ticket.missing_info.map((question, index) => `${index + 1}. ${question}`).join('\n');
+          const answer = (await ctx.ui.ask(`Please answer the following questions:\n${questions}`)).trim();
+          if (ctx.signal.aborted) throw new Error('Cancelled');
+          if (answer) {
+            // Dùng thread mới để không resume node cũ và không chạy lại workflow đã duyệt.
+            issue = `${issue}\n\nClarification questions:\n${questions}\n\nUser clarification:\n${answer}`;
+            threadId = newThreadId('triage');
+            ({ ticket, warnings, confirmed } = await runGraph<TriageGraphState>(graph,
+              { issue, ticket: null, warnings: [], confirmed: false }, { threadId, ui: ctx.ui, signal: ctx.signal }));
+            if (!ticket) throw new Error('Triage returned no ticket');
+          }
+        }
+      }
       let result: RouteResult = { route: ticket.route, text: 'Đã dừng theo yêu cầu.' };
       if (confirmed) {
         // Chỉ dispatch sau khi graph kết thúc để interrupt của workflow con không lặp route.

@@ -46,6 +46,8 @@ let calls: string[];
 let requests: Array<{ model: string; input?: string[] }>;
 let contexts: unknown[];
 let failWorkflow: boolean;
+let clarifyNext: boolean;
+let featureRequest: string;
 
 const deps: RouteDeps = {
   answer: async (_issue, opts) => {
@@ -62,7 +64,8 @@ const deps: RouteDeps = {
     if (failWorkflow) throw new Error('workflow failed');
     return { status: 'fixed', rounds: [], filesChanged: [], diffStat: { files: 0, added: 0, removed: 0 }, summary: 'Fixed once' };
   },
-  feature: async (_issue, opts) => {
+  feature: async (issue, opts) => {
+    featureRequest = issue;
     calls.push('implement'); contexts.push(opts);
     assert.equal(opts.model, 'code-model');
     // Workflow con tự interrupt/resume; graph triage đã kết thúc nên không chạy lại route.
@@ -78,7 +81,7 @@ const deps: RouteDeps = {
 // Chỉ thay workflow và fetch; command, graph, resolver và controller vẫn dùng code thật.
 // Endpoint loopback giả bắt cả payload model và embedding, không gọi provider bên ngoài.
 beforeEach(t => {
-  selected = 'fix'; calls = []; requests = []; contexts = []; failWorkflow = false;
+  selected = 'fix'; calls = []; requests = []; contexts = []; failWorkflow = false; clarifyNext = false; featureRequest = '';
   writeProvider('http://127.0.0.1:1/v1');
   fs.writeFileSync(process.env.AXIOM_CONFIG_PATH!, JSON.stringify(config));
   t.mock.method(triageCommand, 'run', createTriageCommand(deps).run);
@@ -90,9 +93,10 @@ beforeEach(t => {
       return Response.json({ data: [{ index: 0, embedding: [1, 0] }], usage: { prompt_tokens: 7 } });
     }
     assert.equal(request.model, 'triage-model');
-    const ticket: IssueTicket = { type: selected === 'reject' ? 'invalid' : 'bug', priority: 'P2 - test',
-      route: selected, affected_files: [], reproduction_steps: [], acceptance_criteria: ['Testable outcome'],
-      missing_info: selected === 'ask_user' ? ['Which version?'] : [] };
+    const route = selected === 'ask_user' && clarifyNext && requests.filter(r => r.model === 'triage-model').length > 1 ? 'implement' : selected;
+    const ticket: IssueTicket = { type: route === 'reject' ? 'invalid' : 'bug', priority: 'P2 - test',
+      route, affected_files: [], reproduction_steps: [], acceptance_criteria: ['Testable outcome'],
+      missing_info: route === 'ask_user' ? ['Which version?'] : [] };
     const chunk = { choices: [{ delta: { tool_calls: [{ index: 0, id: 'submit', function: {
       name: 'submit_issue_ticket', arguments: JSON.stringify({ ticket }),
     } }] } }], usage: { prompt_tokens: 3, completion_tokens: 2 } };
@@ -134,16 +138,57 @@ for (const route of ['answer', 'fix', 'implement'] as const) {
 }
 
 for (const route of ['ask_user', 'reject'] as const) {
-  test(`${route} returns schema fields without a second model or a confirmation`, async () => {
+  test(`${route} returns schema fields without a second model when clarification is declined`, async () => {
     selected = route;
     const ctx = context(false);
-    ctx.ui.confirm = async () => { throw new Error('Unexpected confirmation'); };
+    if (route === 'reject') ctx.ui.confirm = async () => { throw new Error('Unexpected confirmation'); };
     const result = await triageCommand.run('issue', ctx);
     assert.ok(result); assert.match(result.text, /P2 - test/);
     assert.match(result.text, route === 'ask_user' ? /Which version\?/ : /invalid/);
     assert.deepEqual(calls, []); assert.equal(requests.length, 1);
   });
 }
+
+for (const approved of [false, true]) {
+  test(`clarification re-triages and ${approved ? 'runs' : 'does not run'} the approved route`, async () => {
+    selected = 'ask_user'; clarifyNext = true;
+    const ctx = context(approved);
+    const confirmations = [true, approved, true];
+    ctx.ui.confirm = async () => confirmations.shift() ?? false;
+    ctx.ui.ask = async question => { assert.match(question, /Which version\?/); return 'Version 2'; };
+    const result = await triageCommand.run('issue', ctx);
+    assert.ok(result);
+    assert.equal(requests.filter(r => r.model === 'triage-model').length, 2);
+    assert.deepEqual(calls, approved ? ['implement'] : []);
+    if (approved) assert.match(featureRequest, /issue[\s\S]*Which version\?[\s\S]*Version 2/);
+  });
+}
+
+test('an empty clarification stops without running the workflow', async () => {
+  selected = 'ask_user';
+  const ctx = context(true);
+  ctx.ui.ask = async () => '  ';
+  const result = await triageCommand.run('issue', ctx);
+  assert.ok(result); assert.deepEqual(calls, []);
+  assert.equal(requests.filter(r => r.model === 'triage-model').length, 1);
+});
+
+test('unresolved clarification returns the new questions without executing a workflow', async () => {
+  selected = 'ask_user';
+  const ctx = context(true);
+  ctx.ui.ask = async () => 'Some details';
+  const result = await triageCommand.run('issue', ctx);
+  assert.ok(result); assert.match(result.text, /Which version\?/);
+  assert.deepEqual(calls, []); assert.equal(requests.filter(r => r.model === 'triage-model').length, 2);
+});
+
+test('aborting while answering clarification never starts another model or workflow', async () => {
+  selected = 'ask_user';
+  const ctx = context(true); const controller = new AbortController(); ctx.signal = controller.signal;
+  ctx.ui.ask = async () => { controller.abort(); return 'Version 2'; };
+  await assert.rejects(triageCommand.run('issue', ctx), /cancel|abort/i);
+  assert.deepEqual(calls, []); assert.equal(requests.filter(r => r.model === 'triage-model').length, 1);
+});
 
 test('answer resolves an embedding role alias before identifying the index', async () => {
   selected = 'answer';
@@ -244,3 +289,29 @@ for (const reply of ['y', 'n']) {
     } finally { unsubscribe(); store.dispose(); }
   });
 }
+
+test('TUI asks for clarification before displaying the new ticket and approving its workflow', { timeout: 5000 }, async () => {
+  selected = 'ask_user'; clarifyNext = true;
+  const store = new TuiStore();
+  const controller = new TuiController(store, { workspaceRoot: root, mock: true });
+  let approvals = 0;
+  let answered = false;
+  const unsubscribe = store.subscribe(() => {
+    const state = store.getSnapshot();
+    if (state.pendingApproval && approvals < 3) {
+      approvals++;
+      store.resolveApproval('approve');
+    } else if (state.question && !answered) {
+      answered = true;
+      assert.match(state.question.text, /Which version\?/);
+      store.answer('Version 2');
+    }
+  });
+  try {
+    await controller.submit('/triage issue'); store.flush();
+    assert.equal(answered, true); assert.equal(approvals, 3);
+    assert.deepEqual(calls, ['implement']); assert.match(featureRequest, /Version 2/);
+    assert.equal(store.getSnapshot().entries.filter(entry => entry.kind === 'issue-ticket-preview').length, 2);
+    assert.equal(store.getSnapshot().error, null);
+  } finally { unsubscribe(); store.dispose(); }
+});

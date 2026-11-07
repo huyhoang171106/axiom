@@ -30,7 +30,7 @@ Branch `laneA` (theo yêu cầu của An). Nghiệm thu theo issue #7.
 
 - Graph `triage → confirm` dùng checkpointer chung và `askHuman`; command gọi `runRoute` sau graph khi đã duyệt. Workflow nằm ngoài node để resume không lặp thao tác sửa.
 - `answer` dùng `@default` và embedder `@embed`; `fix`/`implement` dùng `@code`. Resolve thành `ModelInfo.id` trước provider call, chỉ tạo embedder cho `answer`.
-- `ask_user`/`reject` không gọi workflow/model khác; hiển thị type, priority, missing_info theo schema hiện tại (không có `summary`).
+- `reject` không gọi workflow/model khác. `ask_user` hiển thị type, priority và missing_info; người dùng có thể bổ sung một lần để phân loại lại, rồi duyệt route trước khi gọi workflow. Schema hiện tại không có `summary`.
 - Truyền registry, bus, tracker, UI và signal của phiên. Triage lấy scoped registry, giữ approver của phiên.
 - Trace `triage`, `confirm` và route bên ngoài graph có cùng thread ID. Headless và TUI đi qua `runGraph`/`ui.confirm` chung.
 - `RouteDeps` cho phép test bằng fake workflow khi C5/D1 chưa sẵn sàng. Fake không phải bằng chứng eval thật.
