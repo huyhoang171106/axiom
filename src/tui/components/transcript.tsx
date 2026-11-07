@@ -160,7 +160,10 @@ export function Turn({
           <IssueTicketView ticket={ticket.data} warnings={preview.warnings} width={cols} workspaceRoot={preview.workspaceRoot} />
         )}
       {answer?.success && workspaceRoot && <AskAnswerView answer={{ ...answer.data, text: redact(answer.data.text) }} root={workspaceRoot} width={cols} />}
-      {!(answer?.success && workspaceRoot) && turn.text && <Box flexDirection="column">{renderAssistantLines(redact(structuredText ?? turn.text), theme, cols, maxLines)}</Box>}
+      {!(answer?.success && workspaceRoot) && structuredText !== undefined && <Box flexDirection="column" width={cols}>
+        {redact(structuredText).split(/\r?\n/).map((line, i) => <Text key={`result-${i}`} wrap="wrap">{line}</Text>)}
+      </Box>}
+      {!(answer?.success && workspaceRoot) && structuredText === undefined && turn.text && <Box flexDirection="column">{renderAssistantLines(redact(turn.text), theme, cols, maxLines)}</Box>}
       {errorLines.map((line, idx) => (
         <Text key={`err-${idx}`}>
           {idx === 0

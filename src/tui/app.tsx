@@ -111,7 +111,7 @@ export function App({
       {state.pendingApproval && <ApprovalDialog approval={state.pendingApproval} width={safeColumns} />}
       {state.approvalEdit && <>
         {state.approvalEditError && <Text>{state.approvalEditError}</Text>}
-        <Editor value={state.approvalEdit} width={safeColumns}
+        <Editor value={state.approvalEdit} getValue={store.getApprovalEdit} width={safeColumns}
           onChange={(value) => store.updateApprovalEdit(value)}
           onSubmit={(text) => store.submitApprovalEdit(text)} />
       </>}

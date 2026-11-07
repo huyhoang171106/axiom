@@ -152,18 +152,22 @@ export class TuiStore {
     this.schedule();
   }
 
+  public getApprovalEdit = (): EditorState => this.pending.approvalEdit ?? { text: '', cursor: 0 };
+
   public cancelApprovalEdit(): void {
     this.pending = { ...this.pending, approvalEdit: null, approvalEditError: '' };
     this.schedule();
   }
 
   public submitApprovalEdit(text: string): void {
+    if (!this.pending.pendingApproval || !this.pending.approvalEdit) return;
     try {
       const args: unknown = JSON.parse(text);
       if (!args || typeof args !== 'object' || Array.isArray(args)) throw new Error('Arguments must be a JSON object');
       this.resolveApproval({ editedArgs: args as Record<string, unknown> });
     } catch {
-      this.pending = { ...this.pending, approvalEditError: 'Arguments must be a valid JSON object' };
+      // Editor clears its buffer on submit; retain invalid JSON so the user can correct it.
+      this.pending = { ...this.pending, approvalEdit: { text, cursor: text.length }, approvalEditError: 'Arguments must be a valid JSON object' };
       this.schedule();
     }
   }
