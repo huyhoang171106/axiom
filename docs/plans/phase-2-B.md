@@ -8,7 +8,7 @@
 | B2 | 05/11 | Embedder, BM25, `RepoIndex.search` | done |
 | B3 | 06/11 | Index tăng dần theo hash file | done |
 | B4 | 07/11 | `answerQuestion`, `/ask`, kiểm tra trích dẫn, link bấm được | done; nối kind `ask-answer` (`AskAnswerView`) vào TUI là E5 bước 4 |
-| B5 | 08/11 | Eval UC-02 ≥ 20 câu | chờ A3 và eval thật |
+| B5 | 08/11 | Eval UC-02 ≥ 20 câu | runner, 20 câu, mock xong; chờ chạy thật (#15) |
 
 Kiểu dữ liệu (`Chunk`, `ScoredChunk`, `Citation`, `IndexDiff`, `Embedder`) cố định ở `phase-2.md` mục 5.3.
 
@@ -165,11 +165,11 @@ Branch `b/b5-eval`.
    `kind` ∈ `locate` (≥ 6), `flow` (≥ 4, ≥ 2 file), `howto` (≥ 4), `absent` (≥ 3, `expected: []`), `after-edit` (≥ 3, `edit: { file, find, replace }` áp trước khi hỏi trên bản sao repo).
    Dòng `expected` lấy bằng `grep -n` trên `workspace/tinydb`, không đoán.
 2. `evals/uc02/run.ts` export `runUc02: UcRunner`. Mỗi case chép `workspace/tinydb` vào `workDir`, áp `edit` nếu có, dùng `measureCase` (`evals/measure.ts`, A3).
-3. `metrics`: `recallAt5` (1 nếu một trong 5 chunk của `search` giao `expected`, `absent` thì 1 nếu `found === false`), `citationsValid` (tỉ lệ trích dẫn hợp lệ), `found`.
+3. `metrics` (#15): `recallAt5` = số đơn vị gold (mỗi khoảng `expected`) có trong top 5 / tổng đơn vị gold, không tính câu `absent`; `citationsValid` trên câu trả lời cuối của model; `abstentionRate` của câu `absent` báo riêng; `freshAfterEditRate`. Cách tính chi tiết: `docs/uc-02.md` mục 3.
 4. `--mock`: `MockProvider` trả câu trả lời trích chunk đầu tiên + `fakeEmbedder`; chỉ kiểm pipeline.
 5. Thêm `'02': runUc02` vào `evals/registry.ts`.
 6. Chạy thật, ghi `docs/uc-02.md`: thiết kế (sơ đồ chunk → index → search → answer → validate), bảng từng câu, Recall@5, tỉ lệ trích dẫn hợp lệ, model chat và model embed, chi phí, failure mode.
 
-Đạt: Recall@5 ≥ 0,8; `citationsValid = 1` trên mọi câu.
+Đạt: Recall@5 ≥ 0,8; `citationsValid = 1` trên mọi câu; mọi câu `after-edit` thấy nội dung mới.
 
 Xong làn B khi: `/ask "Hàm insert nằm ở đâu?"` có trích dẫn bấm được; sửa file rồi hỏi lại ra nội dung mới; `/ask "Có hỗ trợ MongoDB không?"` trả `NOT_FOUND_TEXT`.
