@@ -217,6 +217,8 @@ export interface TaskPlan {
   needsEdit?: boolean;
 }
 
+export type PermissionMode = 'read-only' | 'edit' | 'auto';
+
 export interface SessionState {
   id: string;
   createdAt: number;
@@ -230,6 +232,9 @@ export interface SessionState {
   verificationReports: VerificationReport[];
   checkpoints: Checkpoint[];
   activeFiles: string[];
+  permissionMode?: PermissionMode;
+  previousMode?: PermissionMode;
+  planMode?: boolean;
 }
 
 export interface Checkpoint {

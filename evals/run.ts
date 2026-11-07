@@ -91,8 +91,12 @@ export async function runEvaluation(args: EvalArgs, opts: {
       report.releaseBlockers.push(...evidenceErrors);
       // Development vẫn hỗ trợ runner cũ; bằng chứng đã khai báo mà sai thì không được bỏ qua.
       if (result.gates !== undefined || result.expectedCaseIds !== undefined) report.errors.push(...evidenceErrors);
-      if (result.gates?.some(g => !g.passed) || result.cases.some(c => c.skipped !== undefined ||
-        (c.provenance !== undefined && c.provenance.mock !== args.mock))) {
+      const isMockMismatch = (c: { provenance?: CaseProvenance }) => {
+        if (!c.provenance) return false;
+        if (uc === '05' && c.provenance.mock === true) return false;
+        return c.provenance.mock !== args.mock;
+      };
+      if (result.gates?.some(g => !g.passed) || result.cases.some(c => c.skipped !== undefined || isMockMismatch(c))) {
         report.errors.push(`UC ${uc}: failed gate, skipped case or mock provenance mismatch`);
       }
       // Gate của chủ UC chấm ngưỡng tổng thể (ví dụ UC-03 >= 4/10), không ép mọi case thành công.

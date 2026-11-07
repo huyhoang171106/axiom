@@ -86,7 +86,7 @@ export class AgentLoop {
   public readonly stateMachine: ExecutionStateMachine;
   public readonly sessionManager: SessionManager;
   public readonly costTracker: CostTracker;
-  public readonly toolRegistry: ToolRegistry;
+  public toolRegistry: ToolRegistry;
   private readonly providerRegistry: ProviderRegistry;
   private readonly provider?: BaseLLMProvider;
   private readonly isComplete?: () => boolean;
@@ -94,7 +94,7 @@ export class AgentLoop {
   private readonly guard = new RepetitionGuard();
   private readonly maxSteps: number;
   private readonly budgetLimitDollars: number;
-  private readonly systemPrompt: string;
+  private systemPrompt: string;
   private readonly model?: string;
   private readonly contextWindow?: number;
   private readonly task?: TaskState;
@@ -124,6 +124,52 @@ export class AgentLoop {
     this.toolRegistry.registerTool(tool);
   }
 
+  /** Thay thế ToolRegistry cho AgentLoop đang hoạt động (ví dụ khi chuyển chế độ /mode). */
+  public setToolRegistry(registry: ToolRegistry): void {
+    this.toolRegistry = registry;
+  }
+
+  /** Lấy system prompt hiện tại của agent. */
+  public getSystemPrompt(): string {
+    return this.systemPrompt;
+  }
+
+  /**
+   * Cập nhật system prompt trên AgentLoop và đồng bộ vào session đang chạy.
+   * Đảm bảo prompt của agent được cập nhật ngay cả khi session đã có system message từ trước.
+   */
+  public setSystemPrompt(prompt: string): void {
+    this.systemPrompt = prompt;
+    const session = this.sessionManager.getSession();
+    if (session) {
+      const idx = session.messages.findIndex((m) => m.role === 'system');
+      if (idx !== -1) {
+        session.messages[idx] = { ...session.messages[idx], content: prompt };
+      } else {
+        session.messages.unshift({ role: 'system', content: prompt, timestamp: Date.now() });
+      }
+      this.sessionManager.saveSession();
+    }
+  }
+
+  /** Thêm chỉ thị bổ sung vào system prompt (ví dụ cho /plan mode). */
+  public appendSystemPrompt(extra: string): void {
+    const trimmed = extra.trim();
+    if (!this.systemPrompt.includes(trimmed)) {
+      this.setSystemPrompt(`${this.systemPrompt}\n\n${trimmed}`);
+    }
+  }
+
+  /** Xoá chỉ thị khỏi system prompt (ví dụ khi /plan off). */
+  public removeSystemPromptDirective(directive: string): void {
+    const target = directive.trim();
+    const updated = this.systemPrompt
+      .split('\n\n')
+      .filter((block) => block.trim() !== target)
+      .join('\n\n');
+    this.setSystemPrompt(updated);
+  }
+
   public transcript(): Message[] {
     return this.sessionManager.getSession()?.messages ?? [];
   }
@@ -136,8 +182,11 @@ export class AgentLoop {
     // chi phí cũ hoặc chi phí phát sinh đồng thời từ một run khác.
     const runCosts = new CostTracker();
     const session = this.sessionManager.getSession() ?? this.sessionManager.createSession(prompt);
-    if (!session.messages.some((m) => m.role === 'system')) {
+    const systemIdx = session.messages.findIndex((m) => m.role === 'system');
+    if (systemIdx === -1) {
       session.messages.unshift({ role: 'system', content: this.systemPrompt, timestamp: Date.now() });
+    } else {
+      session.messages[systemIdx] = { ...session.messages[systemIdx], content: this.systemPrompt };
     }
     this.sessionManager.addMessage({ role: 'user', content: prompt });
 

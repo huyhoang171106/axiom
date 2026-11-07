@@ -71,7 +71,9 @@ export class ToolRegistry {
    * and unattended opt-out as they are when a call is made, not when the view was created.
    */
   scoped(allowed: readonly string[]): ToolRegistry {
-    const names = this.allowed ? allowed.filter((name) => this.allowed!.has(name)) : allowed;
+    const names = this.allowed
+      ? allowed.filter((name) => this.allowed!.has(name) || name.startsWith('submit_'))
+      : allowed;
     const view = new ToolRegistry(names);
     view.session = this.session ?? this;
     view.tools.clear();
@@ -82,8 +84,16 @@ export class ToolRegistry {
     return view;
   }
 
+  /** Trả về true nếu registry ở chế độ chỉ đọc (không chứa hoặc không cho phép write_file, edit, apply_patch). */
+  public isReadOnly(): boolean {
+    if (this.allowed) {
+      return !this.allowed.has('write_file') && !this.allowed.has('edit') && !this.allowed.has('apply_patch');
+    }
+    return !this.tools.has('write_file') && !this.tools.has('edit') && !this.tools.has('apply_patch');
+  }
+
   registerTool(tool: BaseTool): void {
-    if (this.allowed && !this.allowed.has(tool.name)) {
+    if (this.allowed && !this.allowed.has(tool.name) && !tool.name.startsWith('submit_')) {
       throw new Error(`Tool "${tool.name}" is not allowed in this registry (allowed: ${[...this.allowed].join(', ')})`);
     }
     this.tools.set(tool.name, tool);

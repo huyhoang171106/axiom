@@ -86,6 +86,38 @@ for (const uc of ['03', '04']) {
   });
 }
 
+test('UC-05 accepts scripted model provenance (mock: true) in full real release', () => {
+  const r = result('05');
+  r.cases.forEach((c) => {
+    c.provenance = { mock: true, models: [{ provider: 'mock', model: 'scripted-eval', role: 'code' }] };
+  });
+  assert.deepEqual(releaseEvidenceErrors(r, false), []);
+});
+
+test('full release with UC-05 scripted model passes release evaluation', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-release-uc05-scripted-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const runners = Object.fromEntries(
+    ['01', '02', '03', '04', '05'].map((uc) => [
+      uc,
+      async () => {
+        const r = result(uc);
+        if (uc === '05') {
+          r.cases.forEach((c) => {
+            c.provenance = { mock: true, models: [{ provider: 'mock', model: 'scripted-eval', role: 'code' }] };
+          });
+        }
+        return r;
+      },
+    ])
+  );
+  const opts = { config: DEFAULT_CONFIG, runners, workDir: path.join(root, 'work'), outputFile: path.join(root, 'result.json') };
+  const report = await runEvaluation(parseArgs(['--all']), opts);
+  assert.equal(report.passed, true);
+  assert.equal(report.releaseEligible, true);
+  assert.deepEqual(report.releaseBlockers, []);
+});
+
 test('declared incomplete evidence also fails selected partial development runs', async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-release-partial-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

@@ -312,6 +312,17 @@ const short = (run: TestRun) =>
 
 /** Runs the reproduce/locate/patch/verify loop and returns the report; never throws for a failed fix. */
 export async function fixIssue(opts: FixOptions): Promise<FixReport> {
+  // Kiểm soát side effects trong chế độ read-only: fix workflow đòi hỏi quyền sửa đổi file
+  if (opts.tools.isReadOnly()) {
+    return {
+      status: 'failed',
+      rounds: [],
+      filesChanged: [],
+      diffStat: { files: 0, added: 0, removed: 0 },
+      summary: 'Cannot run fix workflow in read-only mode: requires file editing permissions.',
+    };
+  }
+
   const root = path.resolve(opts.workspaceRoot);
   const maxRounds = opts.maxRounds ?? DEFAULT_MAX_ROUNDS;
   const runTests = opts.runTests ?? runPytest;

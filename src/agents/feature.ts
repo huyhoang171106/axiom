@@ -253,6 +253,19 @@ export function buildFeatureWorkflow(
     const step = currentTaskState.steps.find((st) => st.status === 'todo' || st.status === 'doing');
     if (!step) return {};
 
+    // Kiểm soát side effects trong chế độ read-only: không sửa đổi workspace hoặc tạo snapshot khi chỉ đọc
+    if (opts.tools.isReadOnly()) {
+      step.status = 'failed';
+      step.note = 'Cannot execute mutating steps in read-only mode.';
+      currentTaskState.updatedAt = new Date().toISOString();
+      saveTaskState(currentTaskState);
+      appendProgress(currentTaskState.threadId, `step ${step.id} failed: read-only mode, mutation prevented`);
+      return {
+        taskState: currentTaskState,
+        error: 'Cannot execute mutating steps in read-only mode.',
+      };
+    }
+
     // P7: Chụp snapshot files trước khi chuyển sang 'doing'
     const snapDir = path.join(taskDir(currentTaskState.threadId), `snap-${step.id}`);
     snapshotFiles(opts.workspaceRoot, snapDir);
