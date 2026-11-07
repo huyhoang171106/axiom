@@ -118,3 +118,14 @@ test('the discovery cache adds new models; seed metadata and models.json win', (
   assert.equal(models.find((m) => m.id === 'brand-new')?.contextWindow, 128000);
   assert.equal(models.find((m) => m.id === 'mine')?.name, 'Mine');
 });
+
+test('both ChatGPT Codex logins call the codex responses endpoint with a model the backend accepts', () => {
+  for (const id of ['openai-codex', 'openai-codex-device']) {
+    const p = providerFileSchema.parse(readJson(path.join(catalogDir, 'providers', `${id}.json`)));
+    // The wire appends `/responses`; `backend-api/responses` is a 404 on chatgpt.com.
+    assert.equal(`${p.baseUrl}/responses`, 'https://chatgpt.com/backend-api/codex/responses', id);
+    // `gpt-5.5` is rejected for ChatGPT-account Codex logins.
+    assert.equal(p.defaultModel, 'gpt-6.1-sol', id);
+    assert.ok(!p.seed.some((m) => m.id === 'gpt-5.5'), id);
+  }
+});

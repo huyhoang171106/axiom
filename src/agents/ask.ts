@@ -3,7 +3,7 @@
 import type { EventBus } from '../core/event-bus.js';
 import { checkSupport, citationKey, findCitations, validateCitation, type CitationInText } from '../core/rag/citations.js';
 import { RepoIndex } from '../core/rag/index.js';
-import type { Chunk, Citation, Embedder } from '../core/rag/types.js';
+import type { Chunk, Citation, Embedder, ScoredChunk } from '../core/rag/types.js';
 import type { Message } from '../core/types.js';
 import type { BaseLLMProvider } from '../llm/base-provider.js';
 import { defaultCostTracker, type CostTracker } from '../llm/cost-tracker.js';
@@ -23,7 +23,12 @@ export interface AskOptions {
   indexDir?: string;
   /** The team's conventions to index as source 'team' (`TEAM_DOCS_DIR` for /ask); without it only the repo is searched. */
   teamDir?: string;
+  /** Picks the excerpts the answer may use (/ask: `rerankedSearch`); default the top 5 of a single search. */
+  retrieve?: (question: string, index: RepoIndex) => Promise<ScoredChunk[]>;
 }
+
+/** What a retrieval step needs to call the model and account for it. */
+export type ModelCall = Pick<AskOptions, 'provider' | 'model' | 'signal' | 'bus' | 'costTracker'>;
 
 export interface AskAnswer {
   text: string;
@@ -46,9 +51,65 @@ const SYSTEM_PROMPT = [
   'Answer in the language of the question.',
 ].join('\n');
 
+/** Each candidate searched per query in `rerankedSearch`. */
+export const POOL_PER_QUERY = 8;
+/** Lines of each candidate the reranker sees; enough for the signature and docstring. */
+const RERANK_PREVIEW_LINES = 12;
+
+export const REWRITE_PROMPT = [
+  'You turn a question about a code repository into search queries for a code search engine.',
+  'Write 1 to 3 short English queries, one per line, nothing else.',
+  'If answering needs several parts of the code (a call path across files, a feature and its helpers), give one query per part.',
+  'Use likely function, class or file names and code terms.',
+].join('\n');
+
+export const RERANK_PROMPT = [
+  'You pick code excerpts that a developer needs to answer a question about a repository.',
+  'Candidates are numbered. Reply with the numbers of the 5 most useful candidates, most useful first, comma-separated, nothing else.',
+  'Prefer the code that actually implements what the question asks about, including every file on the path the question describes, over tests and broad class overviews.',
+].join('\n');
+
+const label = (c: Chunk): string => `${c.source === 'team' ? 'team:' : ''}${c.path}`;
+
 function contextBlock(chunks: readonly Chunk[]): string {
-  const label = (c: Chunk): string => `${c.source === 'team' ? 'team:' : ''}${c.path}`;
   return chunks.map((c) => `### ${label(c)}:L${c.startLine}-L${c.endLine} (${c.symbol ?? c.kind})\n${c.text}`).join('\n\n');
+}
+
+async function chatOnce(call: ModelCall, messages: Message[]): Promise<string> {
+  const result = await call.provider.chat({ model: call.model, messages, signal: call.signal });
+  (call.costTracker ?? defaultCostTracker).record(call.model, result.usage);
+  call.bus?.emit('cost_update', result.usage);
+  return result.content.trim();
+}
+
+/**
+ * Top 5 for questions whose answer spans several files, where one hybrid search keeps only the main file: the model
+ * rewrites the question into up to 3 queries, the candidates of all queries are pooled, and the model picks 5.
+ * A question with no relevant chunk costs no model call; an unreadable pick falls back to the first search's order.
+ */
+export async function rerankedSearch(question: string, index: RepoIndex, call: ModelCall): Promise<ScoredChunk[]> {
+  const first = await index.search(question, POOL_PER_QUERY);
+  if (!first.some((c) => c.score >= MIN_SCORE)) return first.slice(0, TOP_K);
+  const ask = (system: string, user: string) => chatOnce(call, [{ role: 'system', content: system }, { role: 'user', content: user }]);
+  const queries = (await ask(REWRITE_PROMPT, question))
+    .split('\n')
+    .map((line) => line.replace(/^\s*(?:[-*]|\d+[.)])\s*/, '').trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  const pool = [...first];
+  for (const query of queries) {
+    for (const c of await index.search(query, POOL_PER_QUERY)) if (!pool.some((p) => p.id === c.id)) pool.push(c);
+  }
+  const listing = pool
+    .map((c, i) => `[${i + 1}] ${label(c)}:L${c.startLine}-L${c.endLine} (${c.symbol ?? c.kind})\n${c.text.split('\n').slice(0, RERANK_PREVIEW_LINES).join('\n')}`)
+    .join('\n\n');
+  const picked = [...(await ask(RERANK_PROMPT, `Question: ${question}\n\nCandidates:\n\n${listing}`)).matchAll(/\d+/g)]
+    .map((m) => Number(m[0]))
+    .filter((n) => n >= 1 && n <= pool.length)
+    .map((n) => pool[n - 1]);
+  const top: ScoredChunk[] = [];
+  for (const c of [...picked, ...first]) if (top.length < TOP_K && !top.includes(c)) top.push(c);
+  return top;
 }
 
 interface Checked extends CitationInText { reason: string | null }
@@ -97,20 +158,14 @@ function stripInvalid(text: string, checked: readonly Checked[]): string {
 export async function answerQuestion(question: string, opts: AskOptions): Promise<AskAnswer> {
   const notFound: AskAnswer = { text: NOT_FOUND_TEXT, citations: [], found: false };
   const index = await RepoIndex.open(opts.workspaceRoot, opts.embedder, { dir: opts.indexDir, embedModel: opts.embedModel, teamDir: opts.teamDir });
-  const retrieved = await index.search(question, TOP_K);
+  const retrieved = opts.retrieve ? await opts.retrieve(question, index) : await index.search(question, TOP_K);
   if (!retrieved.some((c) => c.score >= MIN_SCORE)) return notFound;
 
-  const tracker = opts.costTracker ?? defaultCostTracker;
   const messages: Message[] = [
     { role: 'system', content: SYSTEM_PROMPT },
     { role: 'user', content: `Excerpts:\n\n${contextBlock(retrieved)}\n\nQuestion: ${question}` },
   ];
-  const chat = async (): Promise<string> => {
-    const result = await opts.provider.chat({ model: opts.model, messages, signal: opts.signal });
-    tracker.record(opts.model, result.usage);
-    opts.bus?.emit('cost_update', result.usage);
-    return result.content.trim();
-  };
+  const chat = (): Promise<string> => chatOnce(opts, messages);
 
   let text = await chat();
   let checked = check(text, index.root, retrieved, opts.teamDir);

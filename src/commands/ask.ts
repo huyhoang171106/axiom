@@ -1,6 +1,6 @@
 // src/commands/ask.ts - `ask` command (UC-02)
 
-import { answerQuestion } from '../agents/ask.js';
+import { answerQuestion, rerankedSearch } from '../agents/ask.js';
 import { TEAM_DOCS_DIR } from '../core/rag/chunker.js';
 import { createEmbedder, embedIdentity, embedModelFromConfig } from '../core/rag/embedder.js';
 import { loadCatalog } from '../llm/catalog/index.js';
@@ -17,10 +17,12 @@ export const askCommand: Command = {
     // Before the chat model, so a missing @embed role fails without resolving or logging in anything else.
     const embedInfo = embedModelFromConfig(ctx.config);
     const info = resolveModel('@default', loadCatalog(), ctx.config);
+    const provider = await createProviderFor(info);
     const answer = await answerQuestion(question, {
       workspaceRoot: ctx.workspaceRoot,
-      provider: await createProviderFor(info),
+      provider,
       model: info.id,
+      retrieve: (q, index) => rerankedSearch(q, index, { provider, model: info.id, signal: ctx.signal, bus: ctx.bus, costTracker: ctx.costTracker }),
       embedder: createEmbedder(embedInfo, { costTracker: ctx.costTracker }),
       embedModel: embedIdentity(embedInfo),
       teamDir: TEAM_DOCS_DIR,
