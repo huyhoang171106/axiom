@@ -8,7 +8,7 @@
 | E2 | 05/11 | Chống lách sau khi bị từ chối | done |
 | E3 | 06/11 | `runGraph` hỏi lại, nối TUI, test duyệt tool call | done |
 | E4 | 07/11 | Audit log, `/audit` | done |
-| E5 | 07/11 | `/mode`, `/plan`, màn hình duyệt có mức rủi ro | |
+| E5 | 07/11 | `/mode`, `/plan`, màn hình duyệt có mức rủi ro | done |
 | E6 | 08/11 | Eval UC-05 | |
 
 Nguyên tắc (Q1): duyệt **tool call** đi qua `gate()` → `registry.approver` (Promise). `askHuman` + `interrupt()` chỉ dùng cho cổng giữa các node. Không thêm đường nào bỏ qua `gate()`.
@@ -176,7 +176,7 @@ Test `tests/modes.test.ts`:
 
 Test `tests/tui-components.test.ts` thêm: `approval dialog shows risk at 80 columns`.
 
-Regression bổ sung: `tests/modes.test.ts` kiểm mode/plan, denial qua scoped view, đổi mode trong lúc chờ approval và guard workflow. `tests/tui-modes.test.ts` kiểm slash command đầu tiên, Shift+Tab, clear không mất denial, footer 80/120 cột và headless. `tests/tui-fix-workflow.test.ts` chạy graph fix thật qua controller/store/App với provider/verifier theo kịch bản; không thay nghiệm thu production `/fix` trên sandbox.
+Regression bổ sung: `tests/modes.test.ts` kiểm mode/plan, denial qua scoped view, đổi mode trong lúc chờ approval và guard workflow. `tests/tui-modes.test.ts` kiểm slash command đầu tiên, Shift+Tab, clear không mất denial, footer 80/120 cột và headless. `tests/tui-fix-workflow.test.ts` chạy graph fix thật qua controller/store/App với provider/verifier theo kịch bản; nghiệm thu production `/fix evals/issues/bug-01` đã xác minh trên Linux + `bwrap` (`google/gemini-3.1-flash-lite-preview`, 80/120 cột, 219 passed / 0 failed, `grade(bug-01)` PASS).
 
 ## E6. Eval UC-05
 
