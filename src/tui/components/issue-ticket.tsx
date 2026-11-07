@@ -1,6 +1,14 @@
 // src/tui/components/issue-ticket.tsx - Hiển thị thông tin phân loại của IssueTicket.
 import { Box, Text } from 'ink';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { IssueTicket } from '../../agents/triage.js';
+
+function linkFile(workspaceRoot: string, file: string): string {
+  // Mã hóa URL bằng API của Node để dấu cách và ký tự đặc biệt không làm hỏng đích mở file.
+  const url = pathToFileURL(path.resolve(workspaceRoot, file)).href;
+  return `\u001b]8;;${url}\u001b\\${file}\u001b]8;;\u001b\\`;
+}
 
 export function IssueTicketView(props: {
   ticket: IssueTicket;
@@ -27,7 +35,7 @@ export function IssueTicketView(props: {
           <Box flexDirection="column" flexGrow={1} flexShrink={1}>
             {/* Không bỏ hàng rỗng: người đọc cần biết ticket không có mục nào. */}
             {values.length === 0 ? <Text>—</Text> : values.map((value, index) => (
-              <Text key={index} wrap="wrap">{value}</Text>
+              <Text key={index} wrap="wrap">{label === 'affected_files' ? linkFile(props.workspaceRoot, value) : value}</Text>
             ))}
           </Box>
         </Box>

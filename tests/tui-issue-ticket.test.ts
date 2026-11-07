@@ -3,6 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createElement } from 'react';
 import { renderToString } from 'ink';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { IssueTicket } from '../src/agents/triage.js';
 import { IssueTicketView } from '../src/tui/components/issue-ticket.js';
 import { visibleWidth } from '../src/tui/layout.js';
@@ -25,6 +27,18 @@ for (const width of [80, 120]) test(`renders ticket classification in two column
     assert.match(output, new RegExp(`${label}\\s+${value}`));
   }
   assert.ok(output.split('\n').every((line) => visibleWidth(line) <= width));
+});
+
+test('renders affected files as OSC 8 links to encoded workspace file URLs', () => {
+  const workspaceRoot = path.resolve('workspace with spaces');
+  const files = ['src/main.ts', 'docs/a #1.md'];
+  const output = renderToString(createElement(IssueTicketView, {
+    ticket: { ...ticket, affected_files: files }, warnings: [], width: 120, workspaceRoot,
+  }), { columns: 120 });
+  for (const file of files) {
+    const url = pathToFileURL(path.resolve(workspaceRoot, file)).href;
+    assert.ok(output.includes(`\u001b]8;;${url}\u001b\\${file}\u001b]8;;\u001b\\`));
+  }
 });
 
 test('renders every list item and marks empty lists', () => {
