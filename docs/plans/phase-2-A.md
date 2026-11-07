@@ -7,7 +7,7 @@
 | A1 | 04/11 | Role `@code`/`@embed`, `/cost` theo model và budget theo run (#6) | done |
 | A2 | 05/11 | Graph `triage → confirm`, gọi `runRoute` ngoài graph (#7) | in progress |
 | A3 | 06/11 | `UC_RUNNERS`, `--uc NN`, `--all`, chỉ số mục 6.2 (#8) | done |
-| A4 | 07/11 | Số đo thật UC-01 | |
+| A4 | 07/11 | Số đo thật UC-01 | in progress |
 | A5 | 08/11 | Renderer IssueTicket trong TUI | done |
 
 ## A1. Model theo role
@@ -67,7 +67,7 @@ Nghiệm thu theo issue #8: release thiếu UC-01..05, zero case, thiếu bằng
 
 ## A4. Số đo thật UC-01
 
-Branch `a/a4-uc01-real`. Cần key thật trên máy A (không commit key).
+Branch `a/a4-uc01-real`. Checklist triển khai và chia commit: [a4-uc01-real.md](a4-uc01-real.md). Máy eval thật theo quyết định chung tại `phase-2.md` mục 10; cần xác nhận môi trường trước lượt chạy thật, không commit credential.
 
 1. Đặt `modelRoles.smol` trong `~/.axiom/config.json`.
 2. `npm run eval -- --uc 01`. Ghi lại `typeAccuracy`, `routeAccuracy`, `schemaValidRate`.
