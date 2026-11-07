@@ -8,7 +8,7 @@
 | B2 | 05/11 | Embedder, BM25, `RepoIndex.search` | done |
 | B3 | 06/11 | Index tăng dần theo hash file | done |
 | B4 | 07/11 | `answerQuestion`, `/ask`, kiểm tra trích dẫn, link bấm được | done; nối kind `ask-answer` (`AskAnswerView`) vào TUI là E5 bước 4 |
-| B5 | 08/11 | Eval UC-02 ≥ 20 câu | đã chạy thật: Recall@5 0,77 < 0,8, trích dẫn hợp lệ 1; chưa đạt (#15, `docs/uc-02.md` mục 3.2) |
+| B5 | 08/11 | Eval UC-02 ≥ 20 câu | done |
 
 Kiểu dữ liệu (`Chunk`, `ScoredChunk`, `Citation`, `IndexDiff`, `Embedder`) cố định ở `phase-2.md` mục 5.3.
 

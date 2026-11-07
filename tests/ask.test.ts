@@ -5,7 +5,9 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
-import { answerQuestion, NOT_FOUND_TEXT, type AskOptions } from '../src/agents/ask.js';
+import { answerQuestion, NOT_FOUND_TEXT, RERANK_PROMPT, rerankedSearch, REWRITE_PROMPT, type AskOptions } from '../src/agents/ask.js';
+import type { RepoIndex } from '../src/core/rag/index.js';
+import type { ScoredChunk } from '../src/core/rag/types.js';
 import { askCommand } from '../src/commands/ask.js';
 import type { CommandContext } from '../src/commands/types.js';
 import { DEFAULT_CONFIG } from '../src/core/config.js';
@@ -138,5 +140,60 @@ describe('ask', () => {
     };
     await assert.rejects(askCommand.run('  ', ctx), { message: MISSING_EMBED_MESSAGE });
     assert.deepEqual(ui.asked, ['Question: ']);
+  });
+});
+
+describe('rerankedSearch', () => {
+  const chunk = (id: string, score: number): ScoredChunk => ({
+    id: `db/${id}.py:1-2`, path: `db/${id}.py`, symbol: id, kind: 'function', startLine: 1, endLine: 2, fileType: 'python', text: `def ${id}():\n    pass`, score,
+  });
+  const [a, b, c, d] = [chunk('a', 0.6), chunk('b', 0.5), chunk('c', 0.4), chunk('d', 0.3)];
+  function fakeIndex(results: Record<string, ScoredChunk[]>): { index: RepoIndex; searched: string[] } {
+    const searched: string[] = [];
+    const index = { search: async (query: string) => { searched.push(query); return results[query] ?? []; } } as unknown as RepoIndex;
+    return { index, searched };
+  }
+  function scripted(rewrite: string, rerank: string): MockProvider {
+    const provider = new MockProvider('mock');
+    provider.setHandler((params) => (params.messages[0].content === REWRITE_PROMPT ? rewrite : params.messages[0].content === RERANK_PROMPT ? rerank : 'unexpected'));
+    return provider;
+  }
+
+  it('searches every rewritten query and returns the reranked picks first', async () => {
+    const { index, searched } = fakeIndex({ q: [a, b], 'sub one': [c, a], 'sub two': [d] });
+    const provider = scripted('1. sub one\n- sub two', '3, 4, 1');
+    const tracker = new CostTracker();
+    const top = await rerankedSearch('q', index, { provider, model: 'mock-model', costTracker: tracker });
+    assert.deepEqual(searched, ['q', 'sub one', 'sub two']);
+    assert.deepEqual(top.map((x) => x.symbol), ['c', 'd', 'a', 'b']);
+    assert.match(provider.callHistory[1].messages[1].content, /\[3\] db\/c\.py:L1-L2 \(c\)\ndef c\(\):/);
+    assert.equal(tracker.getSessionSummary().byModel['mock-model'].calls, 2);
+  });
+
+  it('an unreadable rerank reply keeps the order of the first search', async () => {
+    const { index } = fakeIndex({ q: [a, b], other: [c] });
+    const top = await rerankedSearch('q', index, { provider: scripted('other', 'none of them'), model: 'mock-model', costTracker: new CostTracker() });
+    assert.deepEqual(top.map((x) => x.symbol), ['a', 'b']);
+  });
+
+  it('a question with no relevant chunk costs no model call', async () => {
+    const { index, searched } = fakeIndex({ q: [chunk('weak', 0.1)] });
+    const provider = scripted('other', '1');
+    const top = await rerankedSearch('q', index, { provider, model: 'mock-model', costTracker: new CostTracker() });
+    assert.deepEqual(top.map((x) => x.symbol), ['weak']);
+    assert.deepEqual(searched, ['q']);
+    assert.equal(provider.callHistory.length, 0);
+  });
+
+  it('answerQuestion answers from the chunks that retrieve returns', needsPython, async () => {
+    const provider = new MockProvider('mock');
+    provider.setHandler(() => 'Remove is at db/table.py:L8-L10.');
+    const answer = await answerQuestion('Where is insert?', {
+      ...options(provider),
+      retrieve: async (_q, index) => (await index.search('remove', 5)).filter((x) => x.symbol === 'Table.remove'),
+    });
+    assert.match(provider.callHistory[0].messages[1].content, /\(Table\.remove\)/);
+    assert.doesNotMatch(provider.callHistory[0].messages[1].content, /\(Table\.insert\)/);
+    assert.deepEqual(answer.citations, [{ path: 'db/table.py', startLine: 8, endLine: 10 }]);
   });
 });

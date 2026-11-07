@@ -4,11 +4,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import { answerQuestion } from '../../src/agents/ask.js';
+import { answerQuestion, REWRITE_PROMPT, RERANK_PROMPT, rerankedSearch } from '../../src/agents/ask.js';
 import { TEAM_DOCS_DIR } from '../../src/core/rag/chunker.js';
 import { checkSupport, findCitations, validateCitation } from '../../src/core/rag/citations.js';
 import { createEmbedder, embedIdentity, embedModelFromConfig, fakeEmbedder } from '../../src/core/rag/embedder.js';
-import { RepoIndex } from '../../src/core/rag/index.js';
 import type { Embedder, ScoredChunk } from '../../src/core/rag/types.js';
 import type { BaseLLMProvider, ChatParams } from '../../src/llm/base-provider.js';
 import { loadCatalog } from '../../src/llm/catalog/index.js';
@@ -60,6 +59,10 @@ export function mockAskProvider(): MockProvider {
   const provider = new MockProvider('mock');
   provider.callLimit = 100;
   provider.setHandler((params) => {
+    const system = params.messages[0]?.content;
+    // Retrieval steps: search with the question as is, keep the hybrid order.
+    if (system === REWRITE_PROMPT) return params.messages.at(-1)?.content ?? '';
+    if (system === RERANK_PROMPT) return '1, 2, 3, 4, 5';
     const excerpt = /^### (\S+:L\d+-L\d+) \(.*\)\n(.*)/m.exec(params.messages.at(-1)?.content ?? '');
     const word = excerpt && /[A-Za-z_]\w{3,}/.exec(excerpt[2])?.[0];
     return excerpt && word ? `The excerpt ${excerpt[1]} defines ${word}.` : 'No excerpt was given.';
@@ -116,15 +119,21 @@ export async function runUc02Cases(questions: readonly Uc02Question[], opts: Uc0
         applyEdit(root, q.edit);
       }
       const embedder = opts.embedder(tracker);
-      const index = await RepoIndex.open(root, embedder, { dir: indexDir, embedModel: opts.embedModel, teamDir: opts.teamDir });
-      const hits = await index.search(q.question, 5);
       const { provider, replies } = recordReplies(await opts.createProvider());
+      // Graded on the excerpts the answer was given, from the same retrieval as /ask.
+      let hits: ScoredChunk[] = [];
+      let indexRoot = root;
       const answer = await answerQuestion(q.question, {
         workspaceRoot: root, provider, model: opts.model, embedder, embedModel: opts.embedModel, indexDir, teamDir: opts.teamDir, costTracker: tracker,
+        retrieve: async (question, index) => {
+          indexRoot = index.root;
+          hits = await rerankedSearch(question, index, { provider, model: opts.model, costTracker: tracker });
+          return hits;
+        },
       });
       const last = replies.at(-1) ?? '';
       const cited = findCitations(last);
-      const validCited = cited.filter((c) => (validateCitation(c.citation, index.root, hits, opts.teamDir) ?? checkSupport(c.claim, c.citation, hits)) === null).length;
+      const validCited = cited.filter((c) => (validateCitation(c.citation, indexRoot, hits, opts.teamDir) ?? checkSupport(c.claim, c.citation, hits)) === null).length;
       const found = goldFound(hits, q);
       return {
         answered: answer.found,
