@@ -61,3 +61,22 @@ test('renders every list item and marks empty lists', () => {
   assert.match(output, /missing_info\s+—/);
   assert.ok(output.split('\n').every((line) => visibleWidth(line) <= 80));
 });
+
+for (const width of [80, 120]) test(`wraps long ticket values and keeps file links at ${width} columns`, () => {
+  const workspaceRoot = path.resolve('workspace');
+  const file = `src/${'long-directory/'.repeat(10)}file.ts`;
+  const criterion = 'Verify that the command reports the correct result for every supported input without dropping any details';
+  const output = renderToString(createElement(IssueTicketView, {
+    ticket: { ...ticket, affected_files: [file], acceptance_criteria: [criterion] },
+    warnings: [], width, workspaceRoot,
+  }), { columns: width });
+  const lines = output.split('\n');
+  assert.ok(lines.every((line) => visibleWidth(line) <= width));
+  const url = pathToFileURL(path.resolve(workspaceRoot, file)).href;
+  const links = [...output.matchAll(/\u001b\]8;;([^\u001b]+)\u001b\\([^\u001b\n]+)\u001b\]8;;\u001b\\/g)];
+  assert.ok(links.length > 1, 'long path should wrap into linked segments');
+  assert.ok(links.every((link) => link[1] === url));
+  assert.equal(links.map((link) => link[2]).join(''), file);
+  const plain = output.replace(/\u001b\]8;;[^\u001b]*\u001b\\/g, '').replace(/\s+/g, ' ');
+  assert.ok(plain.includes(criterion));
+});
