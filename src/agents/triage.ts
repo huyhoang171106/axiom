@@ -34,6 +34,11 @@ export const issueTicketSchema = z.object({
 
 export type IssueTicket = z.infer<typeof issueTicketSchema>;
 
+// Schema gửi model dùng regex tương thích provider; schema kiểm tra đầu ra vẫn giữ đầy đủ ràng buộc.
+const issueTicketToolSchema = issueTicketSchema.extend({
+  priority: z.string().regex(/^P[0-3]/).describe('Priority P0-P3 plus a short reason, e.g. "P1 - crashes the CLI"'),
+});
+
 export class TriageSchemaError extends Error {}
 
 /** First attempt plus two schema retries; past this the model is not trusted to converge. */
@@ -46,7 +51,7 @@ class SubmitIssueTicketTool extends BaseTool {
   readonly parameters = {
     type: 'object',
     properties: {
-      ticket: { ...z.toJSONSchema(issueTicketSchema), description: 'The structured IssueTicket' },
+      ticket: { ...z.toJSONSchema(issueTicketToolSchema), description: 'The structured IssueTicket' },
     },
     required: ['ticket'],
   };

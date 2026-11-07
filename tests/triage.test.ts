@@ -47,6 +47,9 @@ test('the submit tool advertises the IssueTicket schema', async () => {
   for (const field of ['type', 'priority', 'affected_files', 'reproduction_steps', 'acceptance_criteria', 'missing_info', 'route']) {
     assert.ok(field in schema.properties, `${field} is in the schema`);
   }
+  // Provider có thể dùng regex engine không hỗ trợ lookahead hoặc Unicode property escapes.
+  const priority = schema.properties.priority as { pattern: string };
+  assert.equal(priority.pattern, '^P[0-3]');
 });
 
 test('a valid ticket is accepted and the loop stops at one model turn', async () => {
