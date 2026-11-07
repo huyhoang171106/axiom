@@ -8,7 +8,7 @@
 | E2 | 05/11 | Chống lách sau khi bị từ chối | done |
 | E3 | 06/11 | `runGraph` hỏi lại, nối TUI, test duyệt tool call | done |
 | E4 | 07/11 | Audit log, `/audit` | done |
-| E5 | 07/11 | `/mode`, `/plan`, màn hình duyệt có mức rủi ro | |
+| E5 | 07/11 | `/mode`, `/plan`, màn hình duyệt có mức rủi ro | done |
 | E6 | 08/11 | Eval UC-05 | |
 
 Nguyên tắc (Q1): duyệt **tool call** đi qua `gate()` → `registry.approver` (Promise). `askHuman` + `interrupt()` chỉ dùng cho cổng giữa các node. Không thêm đường nào bỏ qua `gate()`.
@@ -152,30 +152,31 @@ Branch `e/e5-modes`.
 
 ```ts
 // src/tools/permissions.ts
-export type PermissionMode = 'read-only' | 'edit' | 'auto';
+export type PermissionMode = 'read-only' | 'edit';
 export const READ_ONLY_TOOLS: readonly string[];   // tool có isReadOnly = true: read_file, list_dir, search_code
 export function applyMode(verdict: PolicyDecision, mode: PermissionMode): PolicyDecision;
 ```
 
 | Mode | Registry | `ask` thành | `deny` thành |
 |---|---|---|---|
-| `read-only` | `new ToolRegistry(READ_ONLY_TOOLS)` | — | deny |
+| `read-only` | View chỉ đọc của registry phiên, không thay registry gốc | ask | deny |
 | `edit` (mặc định) | đầy đủ | ask | deny |
-| `auto` | đầy đủ | allow nếu `risk === 'low'` hoặc `'medium'` **và** không thuộc dòng 1–4, 6–9 của E1; còn lại ask | deny |
 
-1. `/mode <read-only|edit|auto>`: đổi mode của phiên, dựng lại registry, footer hiện mode.
-2. `/plan`: bật `read-only` + system prompt thêm "Chỉ lập kế hoạch, không sửa file". `/plan off` về mode trước đó.
+1. `/mode <read-only|edit>` theo quyết định 04/11 trong `DESIGN.md`: giữ registry gốc và denial của phiên, footer hiện mode. `ToolRegistry.setPermissionMode` áp quyền cho cả scoped view cũ, lọc definitions và kiểm lại trước execution. Không thay registry gốc; không bật `auto` của helper upstream.
+2. `/plan`: bật `read-only` + system prompt thêm "Chỉ lập kế hoạch, không sửa file.". `/plan off` về mode trước đó; bật lặp không ghi đè mode đã nhớ. `/mode` tường minh kết thúc plan. `permission-session.ts` dùng `SessionManager` và API prompt đã merge ở #90, không đổi `CommandContext`; TUI nối state vào agent khi tạo lười và cập nhật footer. Shift+Tab gọi cùng mode command, chỉ khi không có tương tác đang chờ.
 3. Hộp duyệt (`approval-dialog.tsx`): thêm dòng `Mức rủi ro: low|medium|high` (màu xanh/vàng/đỏ); `apply_patch`, `edit` hiện diff (dùng `DiffView` của C7 khi đã merge, chưa thì in diff thô); phím `y`/`n`/`e` như hiện có.
 4. Nối renderer theo `kind` vào `src/tui/app.tsx` khi các làn nhắn: `issue-ticket` (A), `ask-answer` (B), `fix-report` (C), `feature-report` và `cost` (D), `audit` (E).
 
 Test `tests/modes.test.ts`:
 - `read-only registry does not expose write_file, edit, apply_patch, run_command`
-- `auto still denies .env`
-- `auto still asks for pip install and git push`
-- `auto allows a small apply_patch`
+- `edit still denies .env`
+- `edit still asks for pip install and git push`
+- `edit allows a small apply_patch`
 - `/plan off restores the previous mode`
 
 Test `tests/tui-components.test.ts` thêm: `approval dialog shows risk at 80 columns`.
+
+Regression bổ sung: `tests/modes.test.ts` kiểm mode/plan, denial qua scoped view, đổi mode trong lúc chờ approval và guard workflow. `tests/tui-modes.test.ts` kiểm slash command đầu tiên, Shift+Tab, clear không mất denial, footer 80/120 cột và headless. `tests/tui-fix-workflow.test.ts` chạy graph fix thật qua controller/store/App với provider/verifier theo kịch bản; nghiệm thu production `/fix evals/issues/bug-01` đã xác minh trên Linux + `bwrap` (`google/gemini-3.1-flash-lite-preview`, 80/120 cột, 219 passed / 0 failed, `grade(bug-01)` PASS).
 
 ## E6. Eval UC-05
 

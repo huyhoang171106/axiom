@@ -52,7 +52,11 @@ export interface TuiState {
   };
   // These fields are populated by the app/approval integration in E4, not by bus events.
   readonly model: Readonly<ModelInfo> | null;
-  readonly mode: 'read-only' | 'edit' | 'auto';
+  readonly mode: 'read-only' | 'edit';
+  readonly planMode: boolean;
+  readonly approvalEdit: EditorState | null;
+  readonly approvalExpanded: boolean;
+  readonly approvalEditError: string;
   readonly pendingApproval: Readonly<ApprovalRequest> | null;
   /** Cached `git status` for the footer; null until known. */
   readonly git: Readonly<GitStatus> | null;
@@ -76,7 +80,7 @@ export class TuiStore {
   private snapshot: TuiState = {
     editor: { text: '', cursor: 0 }, busy: false, expanded: false, notice: '', question: null, menu: null, revision: 0,
     entries: [], live: null, status: 'idle', error: null,
-    usage: { latest: null, total: null }, model: null, mode: 'edit', pendingApproval: null, git: null,
+    usage: { latest: null, total: null }, model: null, mode: 'edit', planMode: false, pendingApproval: null, approvalEdit: null, approvalEditError: '', approvalExpanded: false, git: null,
   };
   private pending = this.snapshot;
   private readonly listeners = new Set<() => void>();
@@ -93,7 +97,7 @@ export class TuiStore {
   private answerReject?: (error: Error) => void;
   private menuResolve?: (value: string | null) => void;
 
-  public update(patch: Partial<Pick<TuiState, 'editor' | 'busy' | 'expanded' | 'notice' | 'model' | 'git'>>): void {
+  public update(patch: Partial<Pick<TuiState, 'editor' | 'busy' | 'expanded' | 'notice' | 'model' | 'git' | 'mode' | 'planMode'>>): void {
     this.pending = { ...this.pending, ...patch };
     this.schedule();
   }
@@ -123,7 +127,7 @@ export class TuiStore {
   public requestApproval(request: ApprovalRequest, resolve: (decision: ApprovalDecision) => void): void {
     this.resolveApproval('deny');
     this.approvalResolve = resolve;
-    this.pending = { ...this.pending, pendingApproval: structuredClone(request) };
+    this.pending = { ...this.pending, pendingApproval: structuredClone(request), approvalEdit: null, approvalEditError: '', approvalExpanded: false };
     this.schedule();
   }
 
@@ -131,9 +135,49 @@ export class TuiStore {
     const resolve = this.approvalResolve;
     this.approvalResolve = undefined;
     if (!resolve) return;
-    this.pending = { ...this.pending, pendingApproval: null };
+    this.pending = { ...this.pending, pendingApproval: null, approvalEdit: null, approvalEditError: '', approvalExpanded: false };
     this.schedule();
     resolve(decision);
+  }
+
+  public toggleApprovalExpanded(): void {
+    if (!this.pending.pendingApproval) return;
+    this.pending = { ...this.pending, approvalExpanded: !this.pending.approvalExpanded };
+    this.schedule();
+  }
+
+  public beginApprovalEdit(): void {
+    const request = this.pending.pendingApproval;
+    if (!request || request.name === 'confirm') return;
+    const text = JSON.stringify(request.args);
+    this.pending = { ...this.pending, approvalEdit: { text, cursor: text.length }, approvalEditError: '', approvalExpanded: false };
+    this.schedule();
+  }
+
+  public updateApprovalEdit(value: EditorState): void {
+    if (!this.pending.approvalEdit) return;
+    this.pending = { ...this.pending, approvalEdit: value };
+    this.schedule();
+  }
+
+  public getApprovalEdit = (): EditorState => this.pending.approvalEdit ?? { text: '', cursor: 0 };
+
+  public cancelApprovalEdit(): void {
+    this.pending = { ...this.pending, approvalEdit: null, approvalEditError: '', approvalExpanded: false };
+    this.schedule();
+  }
+
+  public submitApprovalEdit(text: string): void {
+    if (!this.pending.pendingApproval || !this.pending.approvalEdit) return;
+    try {
+      const args: unknown = JSON.parse(text);
+      if (!args || typeof args !== 'object' || Array.isArray(args)) throw new Error('Arguments must be a JSON object');
+      this.resolveApproval({ editedArgs: args as Record<string, unknown> });
+    } catch {
+      // Editor clears its buffer on submit; retain invalid JSON so the user can correct it.
+      this.pending = { ...this.pending, approvalEdit: { text, cursor: text.length }, approvalEditError: 'Arguments must be a valid JSON object' };
+      this.schedule();
+    }
   }
 
   public ask(text: string, secret = false, hint?: string): Promise<string> {

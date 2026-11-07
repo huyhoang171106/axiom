@@ -6,6 +6,11 @@ import { ToolRow } from './tool-row.js';
 import { formatTelemetryLine, formatUserPromptLines, truncate, visibleWidth } from '../layout.js';
 import { createTheme } from '../theme.js';
 import { issueTicketSchema } from '../../agents/triage.js';
+import { AskAnswerView } from './citation.js';
+import { z } from 'zod';
+import { redact } from '../../core/secrets.js';
+import { FixReportView, fixReportSchema } from './fix-report.js';
+import { resultText } from '../results.js';
 import { IssueTicketView } from './issue-ticket.js';
 
 function formatInlineMarkdown(text: string, theme: ReturnType<typeof createTheme>): string {
@@ -108,7 +113,9 @@ export function Turn({
   expanded,
   width,
   maxLines,
+  workspaceRoot,
 }: {
+  workspaceRoot?: string;
   turn: TuiTurn;
   expanded: boolean;
   width: number;
@@ -134,6 +141,14 @@ export function Turn({
     ? turn.data as { ticket?: unknown; warnings?: unknown; workspaceRoot?: unknown } : undefined;
   const ticket = preview ? issueTicketSchema.safeParse(preview.ticket) : undefined;
 
+  const route = turn.kind === 'issue-ticket' ? z.object({ result: z.object({ route: z.string(), data: z.unknown().optional() }) }).safeParse(turn.data) : undefined;
+  const kind = route?.success ? ({ answer: 'ask-answer', fix: 'fix-report', implement: 'feature-report' } as Record<string,string>)[route.data.result.route] : turn.kind;
+  const data = route?.success ? route.data.result.data : turn.data;
+  const fix = kind === 'fix-report' ? fixReportSchema.safeParse(data) : undefined;
+  const cleanFix = fix?.success ? fixReportSchema.parse(JSON.parse(redact(JSON.stringify(fix.data)))) : undefined;
+  const structuredText = resultText(kind, data);
+  const answer = kind === 'ask-answer' ? z.object({ text: z.string(), found: z.boolean(),
+    citations: z.array(z.object({ path: z.string(), startLine: z.number().int().positive(), endLine: z.number().int().positive(), source: z.enum(['repo', 'team']).optional() })) }).safeParse(data) : undefined;
   return (
     <Box flexDirection="column">
       {promptLines.map((line, idx) => (
@@ -147,7 +162,14 @@ export function Turn({
         && typeof preview.workspaceRoot === 'string' && (
           <IssueTicketView ticket={ticket.data} warnings={preview.warnings} width={cols} workspaceRoot={preview.workspaceRoot} />
         )}
-      {turn.text && <Box flexDirection="column">{renderAssistantLines(turn.text, theme, cols, maxLines)}</Box>}
+      {cleanFix && <Box flexDirection="column" width={cols}><FixReportView report={cleanFix} width={cols} />
+        {cleanFix.rounds.flatMap(r => r.regressions).map((line, i) => <Text key={`regression-${i}`} wrap="wrap">{line}</Text>)}
+      </Box>}
+      {answer?.success && workspaceRoot && <AskAnswerView answer={{ ...answer.data, text: redact(answer.data.text) }} root={workspaceRoot} width={cols} />}
+      {!cleanFix && !(answer?.success && workspaceRoot) && structuredText !== undefined && <Box flexDirection="column" width={cols}>
+        {redact(structuredText).split(/\r?\n/).map((line, i) => <Text key={`result-${i}`} wrap="wrap">{line}</Text>)}
+      </Box>}
+      {!cleanFix && !(answer?.success && workspaceRoot) && structuredText === undefined && turn.text && <Box flexDirection="column">{renderAssistantLines(redact(turn.text), theme, cols, maxLines)}</Box>}
       {errorLines.map((line, idx) => (
         <Text key={`err-${idx}`}>
           {idx === 0
@@ -166,7 +188,9 @@ export function Transcript({
   width,
   maxLiveLines,
   header,
+  workspaceRoot,
 }: {
+  workspaceRoot?: string;
   state: TuiState;
   expanded: boolean;
   width: number;
@@ -187,7 +211,7 @@ export function Transcript({
           if (item === 'header') {
             return <Box key="header">{header}</Box>;
           }
-          return <Turn key={item.id} turn={item} expanded={false} width={width} />;
+          return <Turn workspaceRoot={workspaceRoot} key={item.id} turn={item} expanded={false} width={width} />;
         }}
       </Static>
       {expanded &&
@@ -196,7 +220,8 @@ export function Transcript({
           .flatMap((turn) =>
             turn.tools.map((row, index) => <ToolRow key={`${turn.id}-${index}`} row={row} expanded width={width} />),
           )}
-      {state.live && <Turn turn={state.live} expanded={expanded} width={width} maxLines={maxLiveLines} />}
+      {state.live && <Turn workspaceRoot={workspaceRoot} turn={state.live} expanded={expanded} width={width} maxLines={maxLiveLines} />}
     </Box>
   );
 }
+

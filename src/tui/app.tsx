@@ -54,6 +54,12 @@ export function App({
       return;
     }
     if (state.pendingApproval) {
+      if (key.ctrl && input === 'o') { store.toggleApprovalExpanded(); return; }
+      if (state.approvalEdit) {
+        if (key.escape) store.cancelApprovalEdit();
+        return;
+      }
+      if (input.toLowerCase() === 'e') { store.beginApprovalEdit(); return; }
       if (key.escape || input.toLowerCase() === 'n' || key.return) store.resolveApproval('deny');
       else if (input.toLowerCase() === 'y') store.resolveApproval('approve');
       return;
@@ -68,6 +74,10 @@ export function App({
     }
     if (key.ctrl && input === 'o') store.update({ expanded: !state.expanded });
     if (state.busy && !state.question) return;
+    if (key.shift && key.tab && !state.question) {
+      void controller.submit(`/mode ${state.mode === 'edit' ? 'read-only' : 'edit'}`);
+      return;
+    }
     if (matches.length > 1 && (key.upArrow || key.downArrow)) {
       const delta = key.downArrow ? 1 : -1;
       setSlashIndex((clampedSlashIdx + delta + matches.length) % matches.length);
@@ -96,13 +106,20 @@ export function App({
   return (
     <Box flexDirection="column" width={safeColumns}>
       <Transcript
+        workspaceRoot={workspace}
         state={state}
         expanded={state.expanded}
         width={safeColumns}
         header={<Header workspace={workspace} model={modelLabel} mode={state.mode} width={safeColumns} />}
       />
       {noticeLine && <Text>{noticeLine}</Text>}
-      {state.pendingApproval && <ApprovalDialog approval={state.pendingApproval} width={safeColumns} />}
+      {state.pendingApproval && <ApprovalDialog approval={state.pendingApproval} width={safeColumns} expanded={state.approvalExpanded} draft={state.approvalEdit?.text} />}
+      {state.approvalEdit && <>
+        {state.approvalEditError && <Text>{state.approvalEditError}</Text>}
+        <Editor value={state.approvalEdit} getValue={store.getApprovalEdit} width={safeColumns}
+          onChange={(value) => store.updateApprovalEdit(value)}
+          onSubmit={(text) => store.submitApprovalEdit(text)} />
+      </>}
       {state.menu ? (
         <SelectMenu
           menu={state.menu}
