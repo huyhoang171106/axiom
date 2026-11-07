@@ -54,6 +54,11 @@ export function App({
       return;
     }
     if (state.pendingApproval) {
+      if (state.approvalEdit) {
+        if (key.escape) store.cancelApprovalEdit();
+        return;
+      }
+      if (input.toLowerCase() === 'e') { store.beginApprovalEdit(); return; }
       if (key.escape || input.toLowerCase() === 'n' || key.return) store.resolveApproval('deny');
       else if (input.toLowerCase() === 'y') store.resolveApproval('approve');
       return;
@@ -96,6 +101,7 @@ export function App({
   return (
     <Box flexDirection="column" width={safeColumns}>
       <Transcript
+        workspaceRoot={workspace}
         state={state}
         expanded={state.expanded}
         width={safeColumns}
@@ -103,6 +109,12 @@ export function App({
       />
       {noticeLine && <Text>{noticeLine}</Text>}
       {state.pendingApproval && <ApprovalDialog approval={state.pendingApproval} width={safeColumns} />}
+      {state.approvalEdit && <>
+        {state.approvalEditError && <Text>{state.approvalEditError}</Text>}
+        <Editor value={state.approvalEdit} width={safeColumns}
+          onChange={(value) => store.updateApprovalEdit(value)}
+          onSubmit={(text) => store.submitApprovalEdit(text)} />
+      </>}
       {state.menu ? (
         <SelectMenu
           menu={state.menu}

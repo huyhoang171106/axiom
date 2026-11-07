@@ -19,9 +19,10 @@ export function ApprovalDialog({
   return (
     <Box borderStyle="round" flexDirection="column" paddingX={1} width={cols}>
       <Text>{truncate(theme.warning(`${theme.icons.warning} Cần duyệt: ${approval.name}`), innerWidth)}</Text>
+      <Text>{truncate((approval.risk === 'high' ? theme.error : approval.risk === 'low' ? theme.success : theme.warning)(`Risk: ${approval.risk ?? 'unknown'}`), innerWidth)}</Text>
       <Text>{truncate(String(primaryArg).replace(/[\r\n]+/g, ' '), innerWidth)}</Text>
       <Text>{truncate(theme.muted(`Lý do: ${approval.reason}`), innerWidth)}</Text>
-      <Text>{truncate(`${theme.success('[y] Duyệt')}   ${theme.error('[n / Enter] Từ chối')}`, innerWidth)}</Text>
+      <Text>{truncate(`${theme.success('[y] Duyệt')}   ${theme.error('[n / Enter] Từ chối')}${approval.name === 'confirm' ? '' : '   [e] Edit'}`, innerWidth)}</Text>
     </Box>
   );
 }

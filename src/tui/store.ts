@@ -53,6 +53,8 @@ export interface TuiState {
   // These fields are populated by the app/approval integration in E4, not by bus events.
   readonly model: Readonly<ModelInfo> | null;
   readonly mode: 'read-only' | 'edit' | 'auto';
+  readonly approvalEdit: EditorState | null;
+  readonly approvalEditError: string;
   readonly pendingApproval: Readonly<ApprovalRequest> | null;
   /** Cached `git status` for the footer; null until known. */
   readonly git: Readonly<GitStatus> | null;
@@ -76,7 +78,7 @@ export class TuiStore {
   private snapshot: TuiState = {
     editor: { text: '', cursor: 0 }, busy: false, expanded: false, notice: '', question: null, menu: null, revision: 0,
     entries: [], live: null, status: 'idle', error: null,
-    usage: { latest: null, total: null }, model: null, mode: 'edit', pendingApproval: null, git: null,
+    usage: { latest: null, total: null }, model: null, mode: 'edit', pendingApproval: null, approvalEdit: null, approvalEditError: '', git: null,
   };
   private pending = this.snapshot;
   private readonly listeners = new Set<() => void>();
@@ -123,7 +125,7 @@ export class TuiStore {
   public requestApproval(request: ApprovalRequest, resolve: (decision: ApprovalDecision) => void): void {
     this.resolveApproval('deny');
     this.approvalResolve = resolve;
-    this.pending = { ...this.pending, pendingApproval: structuredClone(request) };
+    this.pending = { ...this.pending, pendingApproval: structuredClone(request), approvalEdit: null, approvalEditError: '' };
     this.schedule();
   }
 
@@ -131,9 +133,39 @@ export class TuiStore {
     const resolve = this.approvalResolve;
     this.approvalResolve = undefined;
     if (!resolve) return;
-    this.pending = { ...this.pending, pendingApproval: null };
+    this.pending = { ...this.pending, pendingApproval: null, approvalEdit: null, approvalEditError: '' };
     this.schedule();
     resolve(decision);
+  }
+
+  public beginApprovalEdit(): void {
+    const request = this.pending.pendingApproval;
+    if (!request || request.name === 'confirm') return;
+    const text = JSON.stringify(request.args);
+    this.pending = { ...this.pending, approvalEdit: { text, cursor: text.length }, approvalEditError: '' };
+    this.schedule();
+  }
+
+  public updateApprovalEdit(value: EditorState): void {
+    if (!this.pending.approvalEdit) return;
+    this.pending = { ...this.pending, approvalEdit: value };
+    this.schedule();
+  }
+
+  public cancelApprovalEdit(): void {
+    this.pending = { ...this.pending, approvalEdit: null, approvalEditError: '' };
+    this.schedule();
+  }
+
+  public submitApprovalEdit(text: string): void {
+    try {
+      const args: unknown = JSON.parse(text);
+      if (!args || typeof args !== 'object' || Array.isArray(args)) throw new Error('Arguments must be a JSON object');
+      this.resolveApproval({ editedArgs: args as Record<string, unknown> });
+    } catch {
+      this.pending = { ...this.pending, approvalEditError: 'Arguments must be a valid JSON object' };
+      this.schedule();
+    }
   }
 
   public ask(text: string, secret = false, hint?: string): Promise<string> {
