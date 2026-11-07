@@ -76,9 +76,16 @@ test('target outside the workspace is rejected', async (t) => {
 
 test('without bwrap, run_tests refuses instead of running tests unisolated', async (t) => {
   const root = repo(t, { 'tests/test_a.py': 'def test_a():\n    pass\n' });
-  const saved = process.env.AXIOM_SANDBOX;
+  const saved = { sandbox: process.env.AXIOM_SANDBOX, local: process.env.AXIOM_ALLOW_LOCAL_TESTS };
   process.env.AXIOM_SANDBOX = 'off';
-  t.after(() => (saved === undefined ? delete process.env.AXIOM_SANDBOX : (process.env.AXIOM_SANDBOX = saved)));
+  // ci-local.sh exports AXIOM_ALLOW_LOCAL_TESTS=1 on Windows; this test is about the default without that opt-in.
+  delete process.env.AXIOM_ALLOW_LOCAL_TESTS;
+  t.after(() => {
+    for (const [key, value] of [['AXIOM_SANDBOX', saved.sandbox], ['AXIOM_ALLOW_LOCAL_TESTS', saved.local]] as const) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
   await assert.rejects(runPytest(root), /needs the bwrap sandbox.*"local" backend/);
   const result = await new ToolRegistry().executeTool('run_tests', {}, { workspaceRoot: root });
   assert.equal(result.isError, true);

@@ -34,9 +34,13 @@ const SKIP_DIRS = new Set(['.git', '.venv', '__pycache__', '.pytest_cache', 'nod
 
 type RunTests = NonNullable<FixOptions['runTests']>;
 
-/** Why UC-03 cannot be measured here, or undefined when the bwrap sandbox is usable. */
-export function sandboxUnavailable(): string | undefined {
-  if (process.env.AXIOM_ALLOW_LOCAL_TESTS === '1') return undefined;
+/**
+ * Why UC-03 cannot be measured here, or undefined when it can. AXIOM_ALLOW_LOCAL_TESTS=1 (Windows dev, #75)
+ * admits the mock smoke only: a real run executes model-written code, and its numbers count only when that
+ * code ran under bwrap with no network and no host files (DESIGN.md 2026-11-04, C3).
+ */
+export function sandboxUnavailable(mock: boolean): string | undefined {
+  if (mock && process.env.AXIOM_ALLOW_LOCAL_TESTS === '1') return undefined;
   const plan = planSandbox();
   return plan.kind === 'bwrap' ? undefined : `${plan.kind} backend (${plan.detail})`;
 }
@@ -228,7 +232,7 @@ export function mockBug01Provider(): MockProvider {
 
 export const runUc03: UcRunner = async ({ mock, config, workDir }) => {
   // Without bwrap neither the workflow nor the grader can run tests; say so instead of reporting a result.
-  const unavailable = sandboxUnavailable();
+  const unavailable = sandboxUnavailable(mock);
   if (unavailable) throw new Error(`UC 03: cannot measure without the bwrap sandbox: ${unavailable}. Run on Linux with bwrap (the eval machine).`);
   const catalog = loadCatalog();
   const info = mock ? undefined : resolveModel('@code', catalog, config);
