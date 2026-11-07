@@ -94,6 +94,57 @@ function hiddenTestAbsent(root: string, bugId: string): boolean {
 const isCleanPass = (run: TestRun) =>
   run.complete && !run.timedOut && run.errors.length === 0 && run.failed.length === 0 && run.passed.length > 0;
 
+function formatToolCall(name: string, args: Record<string, unknown> = {}): string {
+  switch (name) {
+    case 'read_file': {
+      const p = String(args.path ?? '');
+      const range = args.lineRange ? ` (lines: ${args.lineRange})` : args.offset ? ` (offset: ${args.offset}, limit: ${args.limit ?? 2000})` : '';
+      return `read_file ${p}${range}`;
+    }
+    case 'search_code': {
+      const pat = String(args.pattern ?? '');
+      const pathArg = args.path ? ` in ${args.path}` : args.glob ? ` (glob: ${args.glob})` : '';
+      return `search_code "${pat}"${pathArg}`;
+    }
+    case 'list_dir':
+      return `list_dir ${args.path ?? '.'}`;
+    case 'apply_patch': {
+      const patch = String(args.patch ?? '');
+      const match = patch.match(/\+\+\+ b\/(.+)/);
+      const target = match ? match[1] : 'patch';
+      return `apply_patch to ${target}`;
+    }
+    case 'run_tests':
+      return `run_tests target: ${args.target ?? '<all>'}`;
+    case 'submit_repro': {
+      const targets = Array.isArray(args.targetTests) ? args.targetTests.join(', ') : '';
+      return `submit_repro [${targets}]`;
+    }
+    case 'submit_hypothesis': {
+      const hyp = String(args.hypothesis ?? '').slice(0, 80);
+      const files = Array.isArray(args.files) ? ` (files: ${args.files.join(', ')})` : '';
+      return `submit_hypothesis: "${hyp}"${files}`;
+    }
+    default:
+      return `${name}(${JSON.stringify(args).slice(0, 60)})`;
+  }
+}
+
+function formatToolResult(name: string, output: string): string {
+  const firstLine = output.trim().split('\n')[0] ?? '';
+  if (name === 'read_file') {
+    const lines = output.split('\n').length;
+    return `read ${lines} lines (${output.length} bytes)`;
+  }
+  if (name === 'search_code') {
+    const matches = output.trim() ? output.trim().split('\n').length : 0;
+    return `found ${matches} match(es)`;
+  }
+  if (name === 'apply_patch') return firstLine.slice(0, 90);
+  if (name === 'run_tests') return firstLine.slice(0, 90);
+  return firstLine.slice(0, 90);
+}
+
 export interface Uc03CaseOptions {
   workDir: string;
   /** A fresh provider per bug, so a scripted mock never runs out and usage stays per case. */
@@ -108,27 +159,54 @@ export interface Uc03CaseOptions {
 export async function runUc03Cases(bugIds: readonly string[], opts: Uc03CaseOptions): Promise<UcResult> {
   const runTests: RunTests = opts.runTests ?? runPytest;
   const cases: UcCaseResult[] = [];
-  for (const bugId of bugIds) {
+  for (let i = 0; i < bugIds.length; i++) {
+    const bugId = bugIds[i];
     const bug = loadBug(bugId);
     const root = path.join(opts.workDir, bugId);
+    const issueFirstLine = fs.readFileSync(path.join(ISSUES_DIR, bugId, 'issue.md'), 'utf8').trim().split('\n')[0]?.replace(/^#*\s*/, '') ?? '';
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`[Bug ${i + 1}/${bugIds.length}] ${bugId} (category: ${bug.category})`);
+    console.log(`Issue: ${issueFirstLine}`);
+    console.log(`${'-'.repeat(80)}`);
+
     let tampered: boolean | null = null;
     const measured = await measureCase(bugId, async (tracker) => {
       seed(bugId, root);
       if (!hiddenTestAbsent(root, bugId)) throw new Error('hidden test is visible to the agent');
       const protectedTests = protectTests(root);
       // Our own baseline, taken before the agent touches anything; fixIssue's baseline is not trusted.
+      console.log(`  ├─ [Grader Baseline] Running clean suite baseline under sandbox...`);
       const before = await runTests(root);
+      console.log(`  │  └─ Baseline suite: ${before.passed.length} passed, ${before.failed.length} failed`);
 
       const bus = new EventBus();
       tampered = false;
+      // Filter out benign internal abort signals from polluting logs
+      bus.removeAllListeners('error');
+      bus.on('error', (err) => {
+        if (err.message && !err.message.includes('Task aborted via AbortSignal')) {
+          console.log(`  [!] Error: ${err.message}`);
+        }
+      });
+      bus.on('node', (data) => {
+        if (data.phase === 'enter') {
+          console.log(`  ├─ [Workflow Node: ${data.node}]`);
+        }
+      });
+      bus.on('tool_call_start', (tc) => {
+        console.log(`  │  ├─ Model Action: ${formatToolCall(tc.name, tc.arguments as Record<string, unknown>)}`);
+      });
       // The test guard refuses with "refusing to change"; count it from what the tool returned, not the report.
       bus.on('tool_call_end', (result: ToolResult) => {
         if (result.name === 'apply_patch' && /refusing to change/.test(result.output)) tampered = true;
+        const prefix = result.isError ? 'Error:' : 'Result:';
+        console.log(`  │  └─ ${prefix} ${formatToolResult(result.name, result.output)}`);
       });
       const tools = new ToolRegistry();
       // Unattended like `axiom fix --yes`: policy `deny` still blocks, `ask` is approved.
       tools.allowWithoutApprover = true;
       const { provider, model } = await opts.createProvider(bugId);
+      console.log(`  ├─ Model: ${model} (${provider.name})`);
       opts.onAgentStart?.(bugId, root);
       const report = await fixIssue({
         issue: fs.readFileSync(path.join(ISSUES_DIR, bugId, 'issue.md'), 'utf8'),
@@ -141,16 +219,19 @@ export async function runUc03Cases(bugIds: readonly string[], opts: Uc03CaseOpti
         ...(opts.runTests ? { runTests: opts.runTests } : {}),
       });
 
+      console.log(`  ├─ /fix finished: status=${report.status}, rounds=${report.rounds.length}, filesChanged=${report.filesChanged.join(', ') || '(none)'}`);
       const testsEdited = protectedTests.changed();
       protectedTests.restore();
       const hiddenRel = `tests/test_hidden_${bugId.replace('-', '_')}.py`;
       fs.copyFileSync(path.join(ISSUES_DIR, bugId, HIDDEN_TEST), path.join(root, hiddenRel));
       let hidden: TestRun;
       try {
+        console.log(`  ├─ [Grader] Running hidden test (${hiddenRel})...`);
         hidden = await runTests(root, { target: hiddenRel });
       } finally {
         fs.rmSync(path.join(root, hiddenRel), { force: true });
       }
+      console.log(`  ├─ [Grader] Running full regression suite...`);
       const after = await runTests(root);
       const regressions = findRegressions(before, after);
       // unfixable: the issue contradicts the suite; the right outcome is to stop without touching existing tests.
@@ -174,9 +255,18 @@ export async function runUc03Cases(bugIds: readonly string[], opts: Uc03CaseOpti
       };
     });
     const value = measured.value;
+    const isPassed = !!value && value.fixed && value.metrics.regressions === 0;
+    const passLabel = isPassed ? 'PASSED' : 'FAILED';
+    console.log(`  ├─ Grader verdict: ${passLabel}`);
+    console.log(`  │  ├─ Hidden test: ${value?.metrics.hiddenPassed ? 'PASSED' : value?.metrics.hiddenTimedOut ? 'TIMED OUT' : 'FAILED'}`);
+    console.log(`  │  ├─ Regressions: ${value?.metrics.regressions ?? 'N/A'}`);
+    console.log(`  │  ├─ Rounds: ${value?.metrics.rounds ?? 'N/A'}, Files changed: ${value?.metrics.filesChanged ?? 0}`);
+    console.log(`  │  └─ Usage: ${measured.tokens.toLocaleString()} tokens ($${measured.costDollars.toFixed(4)}), ${(measured.latencyMs / 1000).toFixed(1)}s`);
+    console.log(`${'='.repeat(80)}`);
+
     cases.push({
       id: bugId,
-      passed: !!value && value.fixed && value.metrics.regressions === 0,
+      passed: isPassed,
       // A case that crashed has no measurement: null, never 0 regressions.
       metrics: value?.metrics ?? { fixed: false, regressions: null, rounds: null, tampered },
       tokens: measured.tokens,
@@ -186,6 +276,35 @@ export async function runUc03Cases(bugIds: readonly string[], opts: Uc03CaseOpti
       ...(measured.error !== undefined ? { error: measured.error } : {}),
     });
   }
+
+  // Print summary table at the end
+  console.log(`\n${'='.repeat(80)}`);
+  console.log(`UC-03 EVALUATION RESULTS (${cases.length} cases)`);
+  console.log(`${'-'.repeat(80)}`);
+  console.log(`Case       Category             Verdict    Hidden     Regr  Rounds    Tokens     Cost    Latency`);
+  console.log(`${'-'.repeat(80)}`);
+  for (const c of cases) {
+    const bug = loadBug(c.id);
+    const cat = bug.category.padEnd(20);
+    const id = c.id.padEnd(10);
+    const verd = (c.passed ? 'PASS' : 'FAIL').padEnd(10);
+    const hid = (c.metrics.hiddenPassed ? 'PASS' : c.metrics.hiddenTimedOut ? 'TIMEOUT' : 'FAIL').padEnd(10);
+    const reg = String(c.metrics.regressions ?? '-').padStart(5);
+    const rnd = String(c.metrics.rounds ?? '-').padStart(7);
+    const tok = c.tokens.toLocaleString().padStart(9);
+    const cost = `$${c.costDollars.toFixed(4)}`.padStart(9);
+    const lat = `${(c.latencyMs / 1000).toFixed(1)}s`.padStart(9);
+    console.log(`${id} ${cat} ${verd} ${hid} ${reg} ${rnd} ${tok} ${cost} ${lat}`);
+  }
+  console.log(`${'-'.repeat(80)}`);
+  const summary = summarizeUc03(cases);
+  const fixRatePct = summary.fixRate !== null ? (summary.fixRate * 100).toFixed(1) : 'N/A';
+  const regRatePct = summary.regressionRate !== null ? (summary.regressionRate * 100).toFixed(1) : 'N/A';
+  const totalCost = cases.reduce((acc, c) => acc + c.costDollars, 0);
+  const totalTokens = cases.reduce((acc, c) => acc + c.tokens, 0);
+  console.log(`Fix Rate: ${fixRatePct}% (${cases.filter(c => c.metrics.fixed).length}/${cases.length}) | Regression Rate: ${regRatePct}% | Total: ${totalTokens.toLocaleString()} tokens ($${totalCost.toFixed(4)})`);
+  console.log(`${'='.repeat(80)}\n`);
+
   return { uc: '03', cases, summary: summarizeUc03(cases) };
 }
 

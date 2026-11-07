@@ -250,9 +250,19 @@ export class EditTool extends BaseTool {
       return { start, end: start };
     }
 
+    if (Array.isArray(args.lineRange) && args.lineRange.length >= 2 && typeof args.lineRange[0] === 'number' && typeof args.lineRange[1] === 'number') {
+      const start = Math.floor(args.lineRange[0]);
+      const end = Math.floor(args.lineRange[1]);
+      if (end < start) {
+        throw new Error('the end line is before the start line');
+      }
+      return { start, end };
+    }
+
     if (typeof args.lineRange === 'string' && args.lineRange.trim()) {
       const raw = args.lineRange.trim();
-      const match = raw.match(/^(\d+)(?:-(\d+))?$/);
+      const clean = raw.replace(/^\[|\]$/g, '').trim();
+      const match = clean.match(/^(\d+)(?:[-:,]\s*(\d+))?$/);
       // A malformed range used to fall through to the whole-file path, so a typo'd range silently edited a
       // different occurrence than the caller asked for.
       if (!match) {
