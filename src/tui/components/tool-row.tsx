@@ -1,4 +1,6 @@
 // src/tui/components/tool-row.tsx - Compact tool status with optional full output
+import { DiffView } from './diff-view.js';
+import { approvalPreview } from '../approval-preview.js';
 import { Box, Text } from 'ink';
 import type { TuiToolRow } from '../store.js';
 import { truncate } from '../layout.js';
@@ -28,6 +30,7 @@ export function ToolRow({ row, expanded, width }: { row: TuiToolRow; expanded: b
     summary = truncate(`${theme.icons.running} ${row.call.name} ${main}  ${theme.icons.success}${durationSuffix}`, width);
   }
 
+  const patch = approvalPreview(row.call.name, row.call.arguments);
   const gutter = `  ${theme.icons.bar} `;
   const expandedLines = expanded && row.result?.output ? row.result.output.split(/\r?\n/) : [];
 
@@ -35,6 +38,7 @@ export function ToolRow({ row, expanded, width }: { row: TuiToolRow; expanded: b
     <Box flexDirection="column">
       <Text>{denied || row.result?.isError ? theme.error(summary) : !row.result ? theme.accent(summary) : theme.muted(summary)}</Text>
       {row.result?.isError && !denied && <Text>{theme.error(truncate(`  ${row.result.error ?? row.result.output}`, width))}</Text>}
+      {expanded && patch !== undefined && <><Text>{theme.muted('Proposed changes' + (policy?.approval === 'edited' ? ' (arguments were edited before execution)' : ''))}</Text><DiffView patch={patch} width={width} maxLines={Number.MAX_SAFE_INTEGER} /></>}
       {expandedLines.map((line, idx) => (
         <Text key={idx}>{theme.muted(truncate(`${gutter}${line}`, width))}</Text>
       ))}

@@ -54,6 +54,7 @@ export interface TuiState {
   readonly model: Readonly<ModelInfo> | null;
   readonly mode: 'read-only' | 'edit';
   readonly approvalEdit: EditorState | null;
+  readonly approvalExpanded: boolean;
   readonly approvalEditError: string;
   readonly pendingApproval: Readonly<ApprovalRequest> | null;
   /** Cached `git status` for the footer; null until known. */
@@ -78,7 +79,7 @@ export class TuiStore {
   private snapshot: TuiState = {
     editor: { text: '', cursor: 0 }, busy: false, expanded: false, notice: '', question: null, menu: null, revision: 0,
     entries: [], live: null, status: 'idle', error: null,
-    usage: { latest: null, total: null }, model: null, mode: 'edit', pendingApproval: null, approvalEdit: null, approvalEditError: '', git: null,
+    usage: { latest: null, total: null }, model: null, mode: 'edit', pendingApproval: null, approvalEdit: null, approvalEditError: '', approvalExpanded: false, git: null,
   };
   private pending = this.snapshot;
   private readonly listeners = new Set<() => void>();
@@ -125,7 +126,7 @@ export class TuiStore {
   public requestApproval(request: ApprovalRequest, resolve: (decision: ApprovalDecision) => void): void {
     this.resolveApproval('deny');
     this.approvalResolve = resolve;
-    this.pending = { ...this.pending, pendingApproval: structuredClone(request), approvalEdit: null, approvalEditError: '' };
+    this.pending = { ...this.pending, pendingApproval: structuredClone(request), approvalEdit: null, approvalEditError: '', approvalExpanded: false };
     this.schedule();
   }
 
@@ -133,16 +134,22 @@ export class TuiStore {
     const resolve = this.approvalResolve;
     this.approvalResolve = undefined;
     if (!resolve) return;
-    this.pending = { ...this.pending, pendingApproval: null, approvalEdit: null, approvalEditError: '' };
+    this.pending = { ...this.pending, pendingApproval: null, approvalEdit: null, approvalEditError: '', approvalExpanded: false };
     this.schedule();
     resolve(decision);
+  }
+
+  public toggleApprovalExpanded(): void {
+    if (!this.pending.pendingApproval) return;
+    this.pending = { ...this.pending, approvalExpanded: !this.pending.approvalExpanded };
+    this.schedule();
   }
 
   public beginApprovalEdit(): void {
     const request = this.pending.pendingApproval;
     if (!request || request.name === 'confirm') return;
     const text = JSON.stringify(request.args);
-    this.pending = { ...this.pending, approvalEdit: { text, cursor: text.length }, approvalEditError: '' };
+    this.pending = { ...this.pending, approvalEdit: { text, cursor: text.length }, approvalEditError: '', approvalExpanded: false };
     this.schedule();
   }
 
@@ -155,7 +162,7 @@ export class TuiStore {
   public getApprovalEdit = (): EditorState => this.pending.approvalEdit ?? { text: '', cursor: 0 };
 
   public cancelApprovalEdit(): void {
-    this.pending = { ...this.pending, approvalEdit: null, approvalEditError: '' };
+    this.pending = { ...this.pending, approvalEdit: null, approvalEditError: '', approvalExpanded: false };
     this.schedule();
   }
 

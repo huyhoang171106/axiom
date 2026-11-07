@@ -1,4 +1,4 @@
-﻿// tests/tui-approval-edit.test.ts - Editing retains the original approval promise until valid submission.
+// tests/tui-approval-edit.test.ts - Editing retains the original approval promise until valid submission.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { TuiStore } from '../src/tui/store.js';
@@ -127,4 +127,22 @@ test('Ctrl+C during argument editing aborts a real controller turn without writi
     assert.equal(store.getSnapshot().busy, false);
     assert.equal(fs.existsSync(path.join(root, 'package.json')), false);
   } finally { command.run = original; controller.abort(); app.unmount(); store.dispose(); }
+});
+
+import { LONG_APPROVAL_PATCH } from './fixtures/approval-patches.js';
+test('approval Ctrl+O expands beyond thirty and forty lines and resets per request', async () => {
+  const store = new TuiStore(); const stdin = tty(); const stdout = tty();
+  let output = ''; stdout.on('data', c => { output += String(c); });
+  const controller = { interrupt() {}, abort() {}, submit: async () => {}, lastPrompt: '' } as unknown as TuiController;
+  const app = render(createElement(App, { store, controller, workspace: '/repo', initial: '' }), { stdin: stdin as unknown as NodeJS.ReadStream, stdout: stdout as unknown as NodeJS.WriteStream, patchConsole: false, exitOnCtrlC: false, interactive: true });
+  const request = () => { store.requestApproval({ name: 'apply_patch', args: { patch: LONG_APPROVAL_PATCH }, reason: 'patch', risk: 'high' }, () => {}); store.flush(); };
+  try {
+    await wait(); request(); await wait();
+    assert.equal(output.includes('FINAL-DIFF-LINE'), false);
+    output = ''; stdin.write('\u000f'); await wait();
+    assert.equal(store.getSnapshot().approvalExpanded, true);
+    assert.ok(output.includes('FINAL-DIFF-LINE'));
+    stdin.write('\u000f'); await wait(); assert.equal(store.getSnapshot().approvalExpanded, false);
+    stdin.write('\u000f'); await wait(); request(); await wait(); assert.equal(store.getSnapshot().approvalExpanded, false);
+  } finally { app.unmount(); store.dispose(); }
 });

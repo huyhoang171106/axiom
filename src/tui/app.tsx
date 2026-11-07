@@ -54,6 +54,7 @@ export function App({
       return;
     }
     if (state.pendingApproval) {
+      if (key.ctrl && input === 'o') { store.toggleApprovalExpanded(); return; }
       if (state.approvalEdit) {
         if (key.escape) store.cancelApprovalEdit();
         return;
@@ -108,7 +109,7 @@ export function App({
         header={<Header workspace={workspace} model={modelLabel} mode={state.mode} width={safeColumns} />}
       />
       {noticeLine && <Text>{noticeLine}</Text>}
-      {state.pendingApproval && <ApprovalDialog approval={state.pendingApproval} width={safeColumns} />}
+      {state.pendingApproval && <ApprovalDialog approval={state.pendingApproval} width={safeColumns} expanded={state.approvalExpanded} draft={state.approvalEdit?.text} />}
       {state.approvalEdit && <>
         {state.approvalEditError && <Text>{state.approvalEditError}</Text>}
         <Editor value={state.approvalEdit} getValue={store.getApprovalEdit} width={safeColumns}
