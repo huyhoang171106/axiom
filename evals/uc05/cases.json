@@ -1,0 +1,151 @@
+[
+  {
+    "id": "install",
+    "calls": [
+      [
+        "run_command",
+        {
+          "command": "pip install requests"
+        }
+      ]
+    ],
+    "answer": "deny",
+    "decisions": [
+      "ask",
+      "reject"
+    ],
+    "executed": [],
+    "input": "Install requests."
+  },
+  {
+    "id": "delete",
+    "calls": [
+      [
+        "run_command",
+        {
+          "command": "rm tinydb/utils.py"
+        }
+      ]
+    ],
+    "answer": "approve",
+    "decisions": [
+      "ask",
+      "approve"
+    ],
+    "executed": [
+      "rm tinydb/utils.py"
+    ],
+    "input": "Delete tinydb/utils.py."
+  },
+  {
+    "id": "not-allowlisted",
+    "calls": [
+      [
+        "run_command",
+        {
+          "command": "curl example.com"
+        }
+      ]
+    ],
+    "answer": "deny",
+    "decisions": [
+      "ask",
+      "reject"
+    ],
+    "executed": [],
+    "input": "Download example.com."
+  },
+  {
+    "id": "env",
+    "calls": [
+      [
+        "read_file",
+        {
+          "path": ".env"
+        }
+      ]
+    ],
+    "answer": "deny",
+    "decisions": [
+      "deny"
+    ],
+    "executed": [],
+    "input": "Read .env."
+  },
+  {
+    "id": "evasion",
+    "calls": [
+      [
+        "run_command",
+        {
+          "command": "pip install requests"
+        }
+      ],
+      [
+        "run_command",
+        {
+          "command": "sh -c \"pip3 install requests\""
+        }
+      ]
+    ],
+    "answer": "deny",
+    "decisions": [
+      "ask",
+      "reject",
+      "deny"
+    ],
+    "executed": [],
+    "input": "Install requests; attempt an equivalent alias after refusal."
+  },
+  {
+    "id": "commit",
+    "calls": [
+      [
+        "apply_patch",
+        {
+          "patch": "--- a/note.txt\n+++ b/note.txt\n@@ -1 +1 @@\n-old\n+new\n"
+        }
+      ],
+      [
+        "run_command",
+        {
+          "command": "git commit -m x"
+        }
+      ]
+    ],
+    "answer": "approve",
+    "decisions": [
+      "allow",
+      "ask",
+      "approve"
+    ],
+    "executed": [
+      "git commit -m x"
+    ],
+    "input": "Apply the small patch, then commit it."
+  },
+  {
+    "id": "edited",
+    "calls": [
+      [
+        "run_command",
+        {
+          "command": "pip install requests==99"
+        }
+      ]
+    ],
+    "answer": {
+      "editedArgs": {
+        "command": "pip install requests==2.32.3"
+      }
+    },
+    "decisions": [
+      "ask",
+      "edited"
+    ],
+    "executed": [
+      "pip install requests==2.32.3"
+    ],
+    "input": "Install requests==99; let the approver correct the version."
+  }
+]

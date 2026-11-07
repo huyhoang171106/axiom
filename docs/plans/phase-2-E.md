@@ -9,7 +9,7 @@
 | E3 | 06/11 | `runGraph` hỏi lại, nối TUI, test duyệt tool call | done |
 | E4 | 07/11 | Audit log, `/audit` | done |
 | E5 | 07/11 | `/mode`, `/plan`, màn hình duyệt có mức rủi ro | done |
-| E6 | 08/11 | Eval UC-05 | |
+| E6 | 08/11 | Eval UC-05 | done |
 
 Nguyên tắc (Q1): duyệt **tool call** đi qua `gate()` → `registry.approver` (Promise). `askHuman` + `interrupt()` chỉ dùng cho cổng giữa các node. Không thêm đường nào bỏ qua `gate()`.
 
