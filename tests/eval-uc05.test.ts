@@ -158,12 +158,18 @@ test('read-only scoped views block mutators and preserve session denials across 
   let asks = 0; tools.approver = async () => { asks++; return 'deny'; };
   assert.equal((await tools.executeTool('run_command', { command: 'pip install requests' }, { workspaceRoot: root })).isError, true);
   const readOnly = tools.scoped(READ_ONLY_TOOLS);
+  const oldView = tools.scoped(['run_command']);
+  tools.setPermissionMode('read-only');
+  assert.equal(oldView.hasTool('run_command'), false);
+  assert.equal((await oldView.executeTool('run_command', { command: 'pip install flask' }, { workspaceRoot: root })).isError, true);
   assert.equal(readOnly.isReadOnly(), true);
   assert.equal(applyMode(decide('run_command', { command: 'pip install requests' }, root), 'read-only').verdict, 'deny');
   for (const [name, args] of [['write_file', { path: 'a.txt', content: 'x' }], ['run_command', { command: 'pip install requests' }]] as const) {
     assert.equal((await readOnly.executeTool(name, args, { workspaceRoot: root })).isError, true);
   }
-  assert.equal((await tools.executeTool('run_command', { command: 'python3 -m pip install requests' }, { workspaceRoot: root })).isError, true);
+  tools.setPermissionMode('edit');
+  assert.equal(oldView.hasTool('run_command'), true);
+  assert.equal((await oldView.executeTool('run_command', { command: 'python3 -m pip install requests' }, { workspaceRoot: root })).isError, true);
   assert.equal(asks, 1);
   assert.deepEqual(executor.attempted, []);
 });
