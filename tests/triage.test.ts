@@ -187,6 +187,20 @@ test('a model that ignores the reminder cannot create a ticket from plain text',
   assert.equal(provider.callHistory.length, 2);
 });
 
+test('reminds the model to submit before the final step when it keeps reading', async () => {
+  const provider = new MockProvider();
+  provider.setHandler((params) => {
+    const last = params.messages.at(-1);
+    if (last?.role === 'user' && last.content.includes('submit_issue_ticket')) {
+      return { content: '', toolCalls: [submitCall(ticket())] };
+    }
+    return { content: '', toolCalls: [{ id: `read-${provider.callHistory.length}`, name: 'read_file', arguments: { path: 'app.py' } }] };
+  });
+  const result = await runTriage({ issue: 'crash', workspaceRoot: workspace(), provider, maxSteps: 3 });
+  assert.equal(result.ticket.type, 'bug');
+  assert.equal(provider.callHistory.length, 3);
+});
+
 test('validateTicket keeps existing files and passes a clean ticket through', () => {
   const root = workspace();
   const { ticket: valid, warnings } = validateTicket(ticket(), root);

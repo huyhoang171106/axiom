@@ -32,7 +32,7 @@ export interface AgentLoopOptions {
   signal?: AbortSignal;
   /** Workflow xác nhận đã nhận đầu ra cuối cùng sau lượt tool; không dùng abort để báo thành công. */
   isComplete?: () => boolean;
-  /** Nhắc một lần khi workflow chưa hoàn tất và model dừng mà không gọi tool. */
+  /** Nhắc một lần nếu model dừng sớm hoặc sắp hết lượt khi workflow chưa hoàn tất. */
   completionReminder?: string;
   /** Context window size for auto-compaction (UC-04); defaults to model's contextWindow or 1,000,000. */
   contextWindow?: number;
@@ -159,6 +159,12 @@ export class AgentLoop {
       const cost = runCosts.getSessionSummary().totalCost;
       if (cost >= this.budgetLimitDollars) {
         return this.finish('failed', `Budget limit reached: $${cost.toFixed(4)} >= $${this.budgetLimitDollars.toFixed(4)}`);
+      }
+
+      // Dành lượt cuối để nhắc khi model cứ tiếp tục đọc mà chưa nộp kết quả.
+      if (step === this.maxSteps && step > 1 && this.completionReminder && this.isComplete && !this.isComplete() && !hasReminded) {
+        hasReminded = true;
+        this.sessionManager.addMessage({ role: 'user', content: `${this.completionReminder} This is your final available turn.` });
       }
 
       // Ước lượng token trước mỗi lượt chat: dùng promptTokens của lượt trước nếu có,
