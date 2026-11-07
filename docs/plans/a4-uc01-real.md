@@ -6,7 +6,7 @@ Branch: `a/a4-uc01-real`. Phạm vi và ngưỡng nghiệm thu: [phase-2-A.md, A
 
 - Dùng runner `evals/uc01/run.ts` và 10 fixture hiện có trong `evals/uc01/`; không viết lại runner chung A3 hoặc runner của làn khác.
 - Tài liệu kết quả nằm ở `docs/uc-01.md`. Hiện chưa có số đo thật được xác minh trong kế hoạch này.
-- Runner hiện lưu `typeCorrect` và `routeCorrect`, chưa lưu giá trị dự đoán thực tế. Cần bổ sung bằng chứng riêng UC-01 để lập bảng expected/actual, không suy ngược actual từ boolean và không đổi `evals/types.ts`.
+- Runner lưu `typeCorrect`, `routeCorrect` và bằng chứng riêng UC-01 `classification`: expected type/route của fixture, actual type/route sau validator (hoặc `null` khi không có ticket). Bằng chứng đi qua artifact và redaction, không suy ngược actual từ boolean và không đổi `evals/types.ts`.
 - Mock chỉ kiểm pipeline. Kết quả UC-01 riêng không chứng minh full release UC-01..05.
 
 ## 2. Thứ tự commit
@@ -33,7 +33,7 @@ Bỏ bước 6-7 nếu baseline không cần sửa. Không thêm thay đổi kh�
 - [ ] Xác nhận quyền dùng credential hiện có và model resolve từ `@smol`; không đọc/in giá trị credential, không yêu cầu dán secret vào chat.
 - [ ] Ghi revision code, thay đổi chưa commit nếu có, phiên bản Node, hệ điều hành, provider/model thực tế và thời điểm chạy. Ưu tiên chạy từ revision sạch.
 - [ ] Giữ nguyên input và expected của 10 fixture giữa các lượt; ghi nhận revision fixture.
-- [ ] Hoàn tất bằng chứng actual prediction trước baseline để không phải đo lại chỉ vì thiếu dữ liệu.
+- [x] Hoàn tất bằng chứng actual prediction trước baseline để không phải đo lại chỉ vì thiếu dữ liệu.
 - [ ] Chạy local CI thành công trước push; test tự động chỉ dùng mock hoặc server giả, không gọi provider thật.
 
 ## 4. Chạy và giữ bằng chứng
