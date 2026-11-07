@@ -76,6 +76,10 @@ test('runner can repeat in the same workDir without reusing audit or fixture sta
     assert.equal(result.summary.gatedRate, 1);
     assert.equal(result.cases.every(c => c.passed), true);
     assert.equal(process.env.AXIOM_HOME, before);
+    for (const directory of fs.readdirSync(workDir)) {
+      assert.ok(fs.readdirSync(path.join(workDir, directory, 'sessions')).some(file => file.endsWith('.json')));
+      if (directory.startsWith('uc05-01-')) assert.ok(fs.existsSync(path.join(workDir, directory, 'headless-sessions')));
+    }
   }
 });
 test('denied package aliases and edited prior denials stay blocked across scoped views', async t => {
@@ -94,4 +98,38 @@ test('denied package aliases and edited prior denials stay blocked across scoped
   assert.equal((await run('pip install flask')).isError, true);
   assert.equal(asks, 2);
   assert.deepEqual(executor.attempted, []);
+});
+import { passesUc05 } from '../evals/uc05/run.js';
+import { releaseEvidenceErrors } from '../evals/evidence.js';
+import type { EvidencedUcResult } from '../evals/evidence.js';
+test('local acceptance gate rejects forged metrics, failed cases and truncated scripts', async t => {
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'uc05-gate-'));
+  t.after(() => fs.rmSync(workDir, { recursive: true, force: true }));
+  const result = await runUc05({ config: DEFAULT_CONFIG, workDir, mock: false }) as EvidencedUcResult;
+  assert.equal(passesUc05(result), true);
+  assert.deepEqual(releaseEvidenceErrors(result, true), []);
+  assert.ok(releaseEvidenceErrors(result, false).length > 0);
+  assert.ok(releaseEvidenceErrors(result, false).every(error => error.includes('mock provenance mismatch')));
+  assert.equal(result.cases.every(c => c.provenance.mock), true);
+  for (const changed of [
+    { ...result, cases: result.cases.slice(1) },
+    { ...result, cases: [...result.cases, result.cases[0]] },
+    { ...result, summary: { ...result.summary, gatedRate: 0 } },
+    { ...result, cases: result.cases.map((c,i) => i ? c : { ...c, passed: false }) },
+    { ...result, cases: result.cases.map((c,i) => i ? c : { ...c, metrics: { ...c.metrics, transcriptComplete: false } }) },
+    { ...result, cases: result.cases.map((c,i) => i ? c : { ...c, metrics: { ...c.metrics, forbiddenExecuted: 1 } }) },
+  ]) assert.equal(passesUc05(changed), false);
+});
+test('fixture setup failures preserve environment and cannot pass the security gate', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'uc05-bad-fixture-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const workDir = path.join(root, 'file'); fs.writeFileSync(workDir, 'not a directory');
+  const previous = process.env.AXIOM_HOME;
+  const result = await runUc05({ config: DEFAULT_CONFIG, workDir, mock: true });
+  assert.equal(result.cases.length, 7);
+  assert.ok(result.cases.every(c => c.error && !c.passed));
+  assert.equal(result.summary.gatedRate, null);
+  assert.equal(result.summary.auditComplete, 0);
+  assert.equal(passesUc05(result), false);
+  assert.equal(process.env.AXIOM_HOME, previous);
 });
