@@ -26,3 +26,24 @@ for (const width of [80, 120]) test(`renders ticket classification in two column
   }
   assert.ok(output.split('\n').every((line) => visibleWidth(line) <= width));
 });
+
+test('renders every list item and marks empty lists', () => {
+  const full: IssueTicket = {
+    ...ticket,
+    affected_files: ['src/main.ts', 'src/app.ts'],
+    reproduction_steps: ['Start the CLI', 'Run the command'],
+    acceptance_criteria: ['The CLI starts', 'The command succeeds'],
+    missing_info: [],
+  };
+  const output = renderToString(createElement(IssueTicketView, {
+    ticket: full, warnings: [], width: 80, workspaceRoot: '/workspace',
+  }), { columns: 80 });
+  for (const label of ['affected_files', 'reproduction_steps', 'acceptance_criteria', 'missing_info']) {
+    assert.ok(output.includes(label), `missing label ${label}`);
+  }
+  for (const value of [...full.affected_files, ...full.reproduction_steps, ...full.acceptance_criteria]) {
+    assert.ok(output.includes(value), `missing item ${value}`);
+  }
+  assert.match(output, /missing_info\s+—/);
+  assert.ok(output.split('\n').every((line) => visibleWidth(line) <= 80));
+});
