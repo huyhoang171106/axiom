@@ -1,4 +1,4 @@
-﻿// tests/tui-results-integration.test.ts - Controller/store/App routing with structured command fixtures.
+// tests/tui-results-integration.test.ts - Controller/store/App routing with structured command fixtures.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -120,4 +120,19 @@ test('ticket preview reaches App before confirm and rejecting never dispatches t
     assert.equal(dispatched, false);
     assert.equal(store.getSnapshot().entries.filter(e => e.kind === 'issue-ticket-preview').length, 1);
   } finally { command.run = original; controller.abort(); app.unmount(); store.dispose(); }
+});
+
+
+test('C7 fix reports validate direct and nested payloads and redact the executed patch', () => {
+  const secret = 'fix-patch-sensitive-value'; registerSecret(secret);
+  const report = { status: 'fixed', summary: 'C7-SUMMARY', rounds: [], filesChanged: ['note.py'], diffStat: { files: 1, added: 1, removed: 0 }, patch: '+C7-PATCH\n+' + secret };
+  for (const nested of [false, true]) {
+    const turn: TuiTurn = { id: 1, kind: nested ? 'issue-ticket' : 'fix-report', data: nested ? { result: { route: 'fix', data: report } } : report, text: 'UNUSED-FALLBACK', status: 'completed', thinking: '', tools: [], usage: null, error: null };
+    const output = renderToString(createElement(Turn, { turn, width: 80, expanded: false }), { columns: 80 });
+    assert.ok(output.includes('+C7-PATCH')); assert.equal(output.includes(secret), false);
+    assert.equal(output.includes('UNUSED-FALLBACK'), false);
+    assert.equal(output.split('C7-SUMMARY').length, 2);
+    const invalid = renderToString(createElement(Turn, { turn: { ...turn, kind: 'fix-report', data: { ...report, status: 'unknown' } }, width: 80, expanded: false }), { columns: 80 });
+    assert.ok(invalid.includes('UNUSED-FALLBACK'));
+  }
 });

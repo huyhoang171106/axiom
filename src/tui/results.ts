@@ -1,8 +1,7 @@
-﻿// src/tui/results.ts - Validate structured results before formatting transcript output.
+// src/tui/results.ts - Validate structured results before formatting transcript output.
 import { z } from 'zod';
 const report = z.object({ status: z.string(), summary: z.string(), filesChanged: z.array(z.string()) });
 const feature = report.extend({ threadId: z.string(), steps: z.array(z.object({ id: z.number(), title: z.string(), status: z.string(), files: z.array(z.string()).optional() })), conventions: z.array(z.string()).optional() });
-const fix = report.extend({ rounds: z.array(z.object({ round: z.number(), hypothesis: z.string(), testsPassed: z.number(), testsFailed: z.number(), regressions: z.array(z.string()), patchApplied: z.boolean() })), diffStat: z.object({ files: z.number(), added: z.number(), removed: z.number() }), explanation: z.string().optional() });
 const usage = z.object({ promptTokens: z.number(), completionTokens: z.number(), cost: z.number() });
 const cost = z.object({ byModel: z.record(z.string(), usage), totalPromptTokens: z.number(), totalCompletionTokens: z.number(), totalCost: z.number() });
 const audit = z.array(z.object({ at: z.string(), tool: z.string(), args: z.record(z.string(), z.unknown()), risk: z.string(), decision: z.string(), approver: z.string() }));
@@ -11,11 +10,6 @@ export function resultText(kind: string | undefined, data: unknown): string | un
     const parsed = feature.safeParse(data); if (!parsed.success) return;
     const r = parsed.data;
     return [`[${r.status}] ${r.summary}`, `Thread: ${r.threadId}`, ...r.steps.map(s => `${s.id}. [${s.status}] ${s.title}${s.files?.length ? `\n${s.files.join(', ')}` : ''}`), ...r.filesChanged, ...(r.conventions ?? [])].join('\n');
-  }
-  if (kind === 'fix-report') {
-    const parsed = fix.safeParse(data); if (!parsed.success) return;
-    const r = parsed.data;
-    return [`[${r.status}] ${r.summary}`, ...r.rounds.map(s => `Round ${s.round}: passed ${s.testsPassed}, failed ${s.testsFailed}, regressions ${s.regressions.length}${s.patchApplied ? '' : ' (no patch)'}\n${s.hypothesis}${s.regressions.length ? `\n${s.regressions.join(', ')}` : ''}`), `Diff: ${r.diffStat.files} files, +${r.diffStat.added} -${r.diffStat.removed}`, r.explanation ?? '', ...r.filesChanged].join('\n');
   }
   if (kind === 'cost') {
     const parsed = cost.safeParse(data); if (!parsed.success) return;

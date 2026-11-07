@@ -9,6 +9,7 @@ import { issueTicketSchema } from '../../agents/triage.js';
 import { AskAnswerView } from './citation.js';
 import { z } from 'zod';
 import { redact } from '../../core/secrets.js';
+import { FixReportView, fixReportSchema } from './fix-report.js';
 import { resultText } from '../results.js';
 import { IssueTicketView } from './issue-ticket.js';
 
@@ -143,6 +144,8 @@ export function Turn({
   const route = turn.kind === 'issue-ticket' ? z.object({ result: z.object({ route: z.string(), data: z.unknown().optional() }) }).safeParse(turn.data) : undefined;
   const kind = route?.success ? ({ answer: 'ask-answer', fix: 'fix-report', implement: 'feature-report' } as Record<string,string>)[route.data.result.route] : turn.kind;
   const data = route?.success ? route.data.result.data : turn.data;
+  const fix = kind === 'fix-report' ? fixReportSchema.safeParse(data) : undefined;
+  const cleanFix = fix?.success ? fixReportSchema.parse(JSON.parse(redact(JSON.stringify(fix.data)))) : undefined;
   const structuredText = resultText(kind, data);
   const answer = kind === 'ask-answer' ? z.object({ text: z.string(), found: z.boolean(),
     citations: z.array(z.object({ path: z.string(), startLine: z.number().int().positive(), endLine: z.number().int().positive(), source: z.enum(['repo', 'team']).optional() })) }).safeParse(data) : undefined;
@@ -159,11 +162,14 @@ export function Turn({
         && typeof preview.workspaceRoot === 'string' && (
           <IssueTicketView ticket={ticket.data} warnings={preview.warnings} width={cols} workspaceRoot={preview.workspaceRoot} />
         )}
+      {cleanFix && <Box flexDirection="column" width={cols}><FixReportView report={cleanFix} width={cols} />
+        {cleanFix.rounds.flatMap(r => r.regressions).map((line, i) => <Text key={`regression-${i}`} wrap="wrap">{line}</Text>)}
+      </Box>}
       {answer?.success && workspaceRoot && <AskAnswerView answer={{ ...answer.data, text: redact(answer.data.text) }} root={workspaceRoot} width={cols} />}
-      {!(answer?.success && workspaceRoot) && structuredText !== undefined && <Box flexDirection="column" width={cols}>
+      {!cleanFix && !(answer?.success && workspaceRoot) && structuredText !== undefined && <Box flexDirection="column" width={cols}>
         {redact(structuredText).split(/\r?\n/).map((line, i) => <Text key={`result-${i}`} wrap="wrap">{line}</Text>)}
       </Box>}
-      {!(answer?.success && workspaceRoot) && structuredText === undefined && turn.text && <Box flexDirection="column">{renderAssistantLines(redact(turn.text), theme, cols, maxLines)}</Box>}
+      {!cleanFix && !(answer?.success && workspaceRoot) && structuredText === undefined && turn.text && <Box flexDirection="column">{renderAssistantLines(redact(turn.text), theme, cols, maxLines)}</Box>}
       {errorLines.map((line, idx) => (
         <Text key={`err-${idx}`}>
           {idx === 0
