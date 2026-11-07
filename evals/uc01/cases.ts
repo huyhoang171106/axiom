@@ -19,6 +19,13 @@ const caseSchema = z.object({
 });
 export type EvalCase = z.infer<typeof caseSchema>;
 
+// Chỉ giữ type/route sau validator, không lưu toàn bộ ticket hoặc nội dung issue vào bằng chứng.
+export const classificationEvidenceSchema = z.object({
+  expected: caseSchema.shape.expected,
+  actual: caseSchema.shape.expected.nullable(),
+});
+export type ClassificationEvidence = z.infer<typeof classificationEvidenceSchema>;
+
 // mustPass thuộc fixture/đánh giá UC-01, không thêm ngầm field này vào UcCaseResult dùng chung.
 export interface CaseResult {
   id: string;

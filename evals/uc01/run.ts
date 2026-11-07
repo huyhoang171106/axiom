@@ -5,7 +5,7 @@ import { createProviderFor, resolveModel } from '../../src/llm/model-resolver.js
 import type { BaseLLMProvider } from '../../src/llm/base-provider.js';
 import { measureCase } from '../measure.js';
 import { hasProvider, loadCases, mockProvider, passesThresholds, summarize,
-  UC01_CASES_DIR, UC01_WORKSPACE, type CaseResult, type EvalCase } from './cases.js';
+  UC01_CASES_DIR, UC01_WORKSPACE, type CaseResult, type EvalCase, type ClassificationEvidence } from './cases.js';
 import type { UcCaseResult, UcResult, UcRunner } from '../types.js';
 import type { CaseProvenance, EvidencedUcResult } from '../evidence.js';
 
@@ -14,7 +14,7 @@ export async function runUc01Cases(fixtures: readonly EvalCase[], opts: {
   workspaceRoot: string;
   createCaseProvider: () => Promise<{ provider: BaseLLMProvider; model?: string }>;
 }): Promise<UcResult> {
-  const cases: UcCaseResult[] = [];
+  const cases: (UcCaseResult & { classification: ClassificationEvidence })[] = [];
   for (const fixture of fixtures) {
     let hasSchemaFailure = false;
     let unexpectedToolCalls = 0;
@@ -37,6 +37,8 @@ export async function runUc01Cases(fixtures: readonly EvalCase[], opts: {
     const routeCorrect = ticket?.route === fixture.expected.route;
     cases.push({ id: fixture.id,
       passed: typeCorrect && routeCorrect && (!fixture.mustPass || unexpectedToolCalls === 0),
+      // Actual lấy trực tiếp từ ticket đã validate; lỗi không có ticket phải ghi null, không suy từ boolean.
+      classification: { expected: { ...fixture.expected }, actual: ticket ? { type: ticket.type, route: ticket.route } : null },
       // Dùng metrics mở rộng sẵn có; không thêm field vào contract UcCaseResult của các làn khác.
       metrics: { schemaValid: ticket ? true : hasSchemaFailure ? false : null, typeCorrect, routeCorrect, unexpectedToolCalls },
       ...usage, ...(error === undefined ? {} : { error }) });

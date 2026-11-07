@@ -11,6 +11,7 @@ import { parseArgs, type EvalArgs } from './args.js';
 import { UC_RUNNERS } from './registry.js';
 import { evidenceSchema, gateSchema, provenanceSchema, releaseEvidenceErrors } from './evidence.js';
 import { passesUc01 } from './uc01/run.js';
+import { classificationEvidenceSchema } from './uc01/cases.js';
 import type { UcResult, UcRunner } from './types.js';
 
 const REQUIRED_UCS = ['01', '02', '03', '04', '05'];
@@ -24,6 +25,8 @@ const resultSchema = z.object({
     metrics: z.record(z.string(), z.union([z.number(), z.boolean(), z.null()])),
     tokens: z.number().int().nonnegative(), costDollars: z.number().nonnegative(), latencyMs: z.number().nonnegative(),
     error: z.string().optional(),
+    // Giữ bằng chứng riêng UC-01 qua zod; không passthrough payload tùy ý hoặc đổi contract các làn.
+    classification: classificationEvidenceSchema.optional(),
     provenance: provenanceSchema.optional(), skipped: z.string().optional(),
   })),
   summary: z.record(z.string(), z.number().nullable()),

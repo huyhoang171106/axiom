@@ -34,6 +34,9 @@ export class OpenAICodexResponsesProvider extends BaseLLMProvider {
 
   async chat({ model, messages, tools, maxTokens, onToken, onThinking, signal }: ChatParams): Promise<ChatResult> {
     const accountId = this.credential ? accountIdFromCredential(this.credential) : undefined;
+    // Backend Codex không nhận message role system trong input; giữ nguyên chỉ dẫn ở trường instructions.
+    const instructions = messages.filter((message) => message.role === 'system').map((message) => message.content).join('\n\n');
+    const inputMessages = messages.filter((message) => message.role !== 'system');
     return requestResponses({
       url: `${this.info.baseUrl.replace(/\/+$/, '')}/responses`,
       headers: {
@@ -42,7 +45,8 @@ export class OpenAICodexResponsesProvider extends BaseLLMProvider {
         ...(accountId && !hasHeader(this.info.headers, 'chatgpt-account-id') && { 'chatgpt-account-id': accountId }),
       },
       // The Codex backend rejects sampling params, so temperature is dropped here, not forwarded.
-      body: buildResponsesBody(model, messages, tools, { maxTokens, allowTemperature: false }),
+      body: { ...buildResponsesBody(model, inputMessages, tools, { maxTokens, allowTemperature: false }),
+        ...(instructions && { instructions }) },
       provider: this.name,
       model,
       info: this.info,

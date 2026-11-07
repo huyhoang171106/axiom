@@ -7,8 +7,8 @@
 | A1 | 04/11 | Role `@code`/`@embed`, `/cost` theo model và budget theo run (#6) | done |
 | A2 | 05/11 | Graph `triage → confirm`, gọi `runRoute` ngoài graph (#7) | in progress |
 | A3 | 06/11 | `UC_RUNNERS`, `--uc NN`, `--all`, chỉ số mục 6.2 (#8) | done |
-| A4 | 07/11 | Số đo thật UC-01 | |
-| A5 | 08/11 | Renderer IssueTicket trong TUI | |
+| A4 | 07/11 | Số đo thật UC-01 | done |
+| A5 | 08/11 | Renderer IssueTicket trong TUI | done |
 
 ## A1. Model theo role
 
@@ -30,7 +30,7 @@ Branch `laneA` (theo yêu cầu của An). Nghiệm thu theo issue #7.
 
 - Graph `triage → confirm` dùng checkpointer chung và `askHuman`; command gọi `runRoute` sau graph khi đã duyệt. Workflow nằm ngoài node để resume không lặp thao tác sửa.
 - `answer` dùng `@default` và embedder `@embed`; `fix`/`implement` dùng `@code`. Resolve thành `ModelInfo.id` trước provider call, chỉ tạo embedder cho `answer`.
-- `ask_user`/`reject` không gọi workflow/model khác; hiển thị type, priority, missing_info theo schema hiện tại (không có `summary`).
+- `reject` không gọi workflow/model khác. `ask_user` hiển thị type, priority và missing_info; người dùng có thể bổ sung một lần để phân loại lại, rồi duyệt route trước khi gọi workflow. Schema hiện tại không có `summary`.
 - Truyền registry, bus, tracker, UI và signal của phiên. Triage lấy scoped registry, giữ approver của phiên.
 - Trace `triage`, `confirm` và route bên ngoài graph có cùng thread ID. Headless và TUI đi qua `runGraph`/`ui.confirm` chung.
 - `RouteDeps` cho phép test bằng fake workflow khi C5/D1 chưa sẵn sàng. Fake không phải bằng chứng eval thật.
@@ -67,7 +67,7 @@ Nghiệm thu theo issue #8: release thiếu UC-01..05, zero case, thiếu bằng
 
 ## A4. Số đo thật UC-01
 
-Branch `a/a4-uc01-real`. Cần key thật trên máy A (không commit key).
+Branch `a/a4-uc01-real`. Checklist triển khai và chia commit: [a4-uc01-real.md](a4-uc01-real.md). Máy eval thật theo quyết định chung tại `phase-2.md` mục 10; cần xác nhận môi trường trước lượt chạy thật, không commit credential.
 
 1. Đặt `modelRoles.smol` trong `~/.axiom/config.json`.
 2. `npm run eval -- --uc 01`. Ghi lại `typeAccuracy`, `routeAccuracy`, `schemaValidRate`.

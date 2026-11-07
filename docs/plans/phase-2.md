@@ -61,7 +61,7 @@ Task đầu của A, B, C, E (A1, B1, C1, E1) không cần file của D0, làm �
                                                                        ├─ answer    ─► answerQuestion (B)
                                                                        ├─ fix       ─► fixIssue (C)
                                                                        ├─ implement ─► runFeature (D)
-                                                                       ├─ ask_user  ─► in câu hỏi missing_info
+                                                                       ├─ ask_user  ─► hỏi bổ sung một lần → triage lại → confirm route
                                                                        └─ reject    ─► in lý do
 
  /fix  : [reproduce] ─► [locate] ─► [patch] ─► [verify] ─┬─ pass ─► [keep: askHuman "Giữ bản sửa?"] ─► report
