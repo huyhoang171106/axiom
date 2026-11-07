@@ -15,7 +15,7 @@ import type { UcRunner, UcCaseResult, UcResult } from '../types.js';
 import type { EvidencedUcResult } from '../evidence.js';
 import { IsolatedCommandTool } from './executor.js';
 
-// Not registered for release until A3 agrees scripted-model provenance semantics.
+// Scripted model provenance stays truthful (mock: true); PR #90 allows UC-05 in non-mock evaluation.
 export const runUc05: UcRunner = async ({ config, workDir }) => {
   const previousHome = process.env.AXIOM_HOME;
   const cases: UcCaseResult[] = [];
@@ -116,7 +116,7 @@ export const runUc05: UcRunner = async ({ config, workDir }) => {
   return result;
 };
 
-/** Gate is local to UC05; real-release provenance remains an A3/D0 integration decision. */
+/** Recomputes UC-05 acceptance metrics and verifies per-case security invariants. */
 export function passesUc05(result: UcResult): boolean {
   const summary = summarizeCases(result.cases, UC05_CASE_IDS);
   return result.uc === '05' && result.cases.every(c => c.passed && c.metrics.traceComplete === true

@@ -108,8 +108,10 @@ test('local acceptance gate rejects forged metrics, failed cases and truncated s
   const result = await runUc05({ config: DEFAULT_CONFIG, workDir, mock: false }) as EvidencedUcResult;
   assert.equal(passesUc05(result), true);
   assert.deepEqual(releaseEvidenceErrors(result, true), []);
-  assert.ok(releaseEvidenceErrors(result, false).length > 0);
-  assert.ok(releaseEvidenceErrors(result, false).every(error => error.includes('mock provenance mismatch')));
+  assert.deepEqual(releaseEvidenceErrors(result, false), []);
+  assert.ok(releaseEvidenceErrors({ ...result, uc: '04' }, false).every(error => error.includes('mock provenance mismatch')) && releaseEvidenceErrors({ ...result, uc: '04' }, false).length === 7);
+  const forgedReal = { ...result, cases: result.cases.map(c => ({ ...c, provenance: { ...c.provenance, mock: false } })) };
+  assert.ok(releaseEvidenceErrors(forgedReal, true).every(error => error.includes('mock provenance mismatch')) && releaseEvidenceErrors(forgedReal, true).length === 7);
   assert.equal(result.cases.every(c => c.provenance.mock), true);
   for (const changed of [
     { ...result, cases: result.cases.slice(1) },
@@ -145,4 +147,23 @@ test('summary refuses missing, invalid or skipped metric evidence', () => {
     }
   }
   assert.equal(summarizeCases([{ ...c, skipped: 'hidden skip' }], ['one']).auditComplete, 0);
+});
+
+import { READ_ONLY_TOOLS, applyMode, decide } from '../src/tools/permissions.js';
+test('read-only scoped views block mutators and preserve session denials across mode roundtrips', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'uc05-mode-roundtrip-'));
+  const previous = process.env.AXIOM_HOME; process.env.AXIOM_HOME = path.join(root, 'home');
+  t.after(() => { if (previous === undefined) delete process.env.AXIOM_HOME; else process.env.AXIOM_HOME = previous; fs.rmSync(root, { recursive: true, force: true }); });
+  const tools = new ToolRegistry(); const executor = new IsolatedCommandTool(root, []); tools.registerTool(executor);
+  let asks = 0; tools.approver = async () => { asks++; return 'deny'; };
+  assert.equal((await tools.executeTool('run_command', { command: 'pip install requests' }, { workspaceRoot: root })).isError, true);
+  const readOnly = tools.scoped(READ_ONLY_TOOLS);
+  assert.equal(readOnly.isReadOnly(), true);
+  assert.equal(applyMode(decide('run_command', { command: 'pip install requests' }, root), 'read-only').verdict, 'deny');
+  for (const [name, args] of [['write_file', { path: 'a.txt', content: 'x' }], ['run_command', { command: 'pip install requests' }]] as const) {
+    assert.equal((await readOnly.executeTool(name, args, { workspaceRoot: root })).isError, true);
+  }
+  assert.equal((await tools.executeTool('run_command', { command: 'python3 -m pip install requests' }, { workspaceRoot: root })).isError, true);
+  assert.equal(asks, 1);
+  assert.deepEqual(executor.attempted, []);
 });
