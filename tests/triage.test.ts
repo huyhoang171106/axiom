@@ -47,6 +47,9 @@ test('the submit tool advertises the IssueTicket schema', async () => {
   for (const field of ['type', 'priority', 'affected_files', 'reproduction_steps', 'acceptance_criteria', 'missing_info', 'route']) {
     assert.ok(field in schema.properties, `${field} is in the schema`);
   }
+  // Provider có thể dùng regex engine không hỗ trợ lookahead hoặc Unicode property escapes.
+  const priority = schema.properties.priority as { pattern: string };
+  assert.equal(priority.pattern, '^P[0-3]');
 });
 
 test('a valid ticket is accepted and the loop stops at one model turn', async () => {
@@ -165,6 +168,37 @@ test('a model that never submits fails with a clear error', async () => {
     runTriage({ issue: 'crash', workspaceRoot: root, provider, maxSteps: 2 }),
     /never called submit_issue_ticket/
   );
+});
+
+test('reminds a model that prints a ticket to submit it through the tool', async () => {
+  const provider = new MockProvider('mock', [
+    JSON.stringify(ticket()),
+    { content: '', toolCalls: [submitCall(ticket())] },
+  ]);
+  const result = await runTriage({ issue: 'crash', workspaceRoot: workspace(), provider, maxSteps: 2 });
+  assert.equal(result.ticket.type, 'bug');
+  assert.equal(provider.callHistory.length, 2);
+  assert.ok(provider.callHistory[1].messages.some((m) => m.role === 'user' && m.content.includes('submit_issue_ticket')));
+});
+
+test('a model that ignores the reminder cannot create a ticket from plain text', async () => {
+  const provider = new MockProvider('mock', [JSON.stringify(ticket()), JSON.stringify(ticket())]);
+  await assert.rejects(runTriage({ issue: 'crash', workspaceRoot: workspace(), provider, maxSteps: 3 }), /never called submit_issue_ticket/);
+  assert.equal(provider.callHistory.length, 2);
+});
+
+test('reminds the model to submit before the final step when it keeps reading', async () => {
+  const provider = new MockProvider();
+  provider.setHandler((params) => {
+    const last = params.messages.at(-1);
+    if (last?.role === 'user' && last.content.includes('submit_issue_ticket')) {
+      return { content: '', toolCalls: [submitCall(ticket())] };
+    }
+    return { content: '', toolCalls: [{ id: `read-${provider.callHistory.length}`, name: 'read_file', arguments: { path: 'app.py' } }] };
+  });
+  const result = await runTriage({ issue: 'crash', workspaceRoot: workspace(), provider, maxSteps: 3 });
+  assert.equal(result.ticket.type, 'bug');
+  assert.equal(provider.callHistory.length, 3);
 });
 
 test('validateTicket keeps existing files and passes a clean ticket through', () => {

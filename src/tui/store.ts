@@ -8,6 +8,8 @@ import type { ApprovalRequest, ApprovalDecision } from '../tools/permissions.js'
 import type { EditorState } from './editor.js';
 import type { TuiMenuItem, TuiMenuState } from './select-menu.js';
 import { computeTelemetry, type GitStatus, type TurnTelemetry, type TurnTiming } from './layout.js';
+import { issueTicketSchema } from '../agents/triage.js';
+import { redact } from '../core/secrets.js';
 
 // Round up: 33 ms would allow more than 30 notifications in one second.
 const FRAME_MS = Math.ceil(1000 / 30);
@@ -249,6 +251,18 @@ export class TuiStore {
       bus.on(event, listener);
       offs.push(() => bus.off(event, listener));
     };
+    on('issue_ticket', ({ ticket, warnings, workspaceRoot }) => {
+      const parsed = issueTicketSchema.safeParse(ticket);
+      if (!parsed.success) return;
+      // Dữ liệu model đi vào transcript phải che secret như output text của command.
+      const clean = parsed.data;
+      const safeTicket = { ...clean, priority: redact(clean.priority),
+        affected_files: clean.affected_files.map(redact), reproduction_steps: clean.reproduction_steps.map(redact),
+        acceptance_criteria: clean.acceptance_criteria.map(redact), missing_info: clean.missing_info.map(redact) };
+      this.print('', undefined, { kind: 'issue-ticket-preview', text: '', data: {
+        ticket: safeTicket, warnings: warnings.map(redact), workspaceRoot: redact(workspaceRoot),
+      } });
+    });
     on('stream_token', ({ delta }) => {
       if (!delta) return;
       this.markFirstOutput();

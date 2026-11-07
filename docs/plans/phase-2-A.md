@@ -78,14 +78,15 @@ Branch `a/a4-uc01-real`. Cần key thật trên máy A (không commit key).
 
 ## A5. Renderer IssueTicket
 
-Branch `a/a5-ticket-view`. Cần A2.
+Branch `a/a5-ticket-view`. Nghiệm thu theo issue #10; phụ thuộc A2 (#7) để nghiệm thu và merge. Fixture, test và fake seam không thay thế bằng chứng tích hợp thực tế.
 
-1. `src/tui/components/issue-ticket.tsx`: `export function IssueTicketView(props: { ticket: IssueTicket; warnings: string[]; width: number }): JSX.Element`. Bảng 2 cột: `type`, `severity`, `route`, `summary`, `affected_files`, `missing_info`. Mỗi path trong `affected_files` bọc OSC 8 `file://<workspaceRoot>/<path>` (dùng hàm `fileLink` của B4 nếu đã merge, chưa thì viết tạm trong file này và xoá khi B4 merge).
-2. Nhắn E tên `kind` `issue-ticket`; E nối vào `app.tsx`. Câu hỏi "Chạy route đề xuất? [Y/n]" đi qua `askHuman` → `ui.confirm` của TUI (E3).
-3. Test `tests/tui-issue-ticket.test.ts`, dùng `renderToString(createElement(...), { columns })` của `ink` như `tests/tui-components.test.ts`:
-   - `renders every ticket field at 80 columns`
-   - `long summary wraps without breaking the table at 80 columns`
-   - `affected_files are OSC 8 links`
-4. Chụp ảnh 80 và 120 cột, đính vào PR.
+Hợp đồng đề xuất theo schema hiện hành, cần D0 đồng bộ trước khi triển khai thay đổi chữ ký/thiết kế:
+
+1. `src/tui/components/issue-ticket.tsx`: `export function IssueTicketView(props: { ticket: IssueTicket; warnings: string[]; width: number; workspaceRoot: string }): JSX.Element`. Bảng 2 cột hiển thị `type`, `priority`, `route`, `affected_files`, `reproduction_steps`, `acceptance_criteria`, `missing_info` và warnings. Không dùng `severity` hoặc `summary` vì schema không có hai field đó.
+2. Mỗi path hợp lệ trong `affected_files` có OSC 8 link tới file trong `workspaceRoot`. `fileLink` của B4 nhận citation có số dòng, cần kiểm tra khả năng tái sử dụng cho link file không có số dòng; không tự thêm số dòng giả.
+3. Bàn giao E kind `issue-ticket`, payload hiện tại `{ ticket, warnings, result }` và nhu cầu truyền `workspaceRoot`. E5/D6 xác nhận controller/store render thực tế. Command hiện trả payload sau graph confirm và route; cần phối hợp A2/E để chứng minh ticket hiển thị trước câu hỏi `askHuman` → `ui.confirm`, không coi snapshot component là bằng chứng cho luồng này.
+4. `tests/tui-issue-ticket.test.ts`: kiểm tra mọi field và warnings, field dài thực tế xuống dòng trong bảng, link OSC 8 và bố cục tại 80 và 120 cột. Chụp ảnh hai độ rộng, đính vào PR.
+
+An đã đồng ý cập nhật plan theo issue #10; chưa có xác nhận D0 cho hợp đồng đề xuất. Không đánh dấu A5 `done` trước khi đủ bằng chứng và điều kiện phụ thuộc.
 
 Xong làn A khi: `/triage <issue bug>` → bảng → Y → `/fix` chạy; `npm run eval -- --all --mock` xanh; `docs/uc-01.md` có số thật.

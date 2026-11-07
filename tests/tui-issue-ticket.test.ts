@@ -1,0 +1,103 @@
+// tests/tui-issue-ticket.test.ts - Kiểm tra bảng IssueTicket bằng Ink.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createElement } from 'react';
+import { renderToString } from 'ink';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import type { IssueTicket } from '../src/agents/triage.js';
+import { IssueTicketView } from '../src/tui/components/issue-ticket.js';
+import { visibleWidth } from '../src/tui/layout.js';
+
+const ticket: IssueTicket = {
+  type: 'bug',
+  priority: 'P1 - CLI crashes',
+  route: 'fix',
+  affected_files: [],
+  reproduction_steps: [],
+  acceptance_criteria: ['The CLI starts'],
+  missing_info: [],
+};
+
+for (const width of [80, 120]) test(`renders ticket classification in two columns at ${width} columns`, () => {
+  const output = renderToString(createElement(IssueTicketView, {
+    ticket, warnings: [], width, workspaceRoot: '/workspace',
+  }), { columns: width });
+  for (const [label, value] of [['type', 'bug'], ['priority', 'P1 - CLI crashes'], ['route', 'fix']]) {
+    assert.match(output, new RegExp(`${label}\\s+${value}`));
+  }
+  assert.ok(output.split('\n').every((line) => visibleWidth(line) <= width));
+});
+
+test('renders affected files as OSC 8 links to encoded workspace file URLs', () => {
+  const workspaceRoot = path.resolve('workspace with spaces');
+  const files = ['src/main.ts', 'docs/a #1.md'];
+  const output = renderToString(createElement(IssueTicketView, {
+    ticket: { ...ticket, affected_files: files }, warnings: [], width: 120, workspaceRoot,
+  }), { columns: 120 });
+  for (const file of files) {
+    const url = pathToFileURL(path.resolve(workspaceRoot, file)).href;
+    assert.ok(output.includes(`\u001b]8;;${url}\u001b\\${file}\u001b]8;;\u001b\\`));
+  }
+});
+
+test('renders every list item and marks empty lists', () => {
+  const full: IssueTicket = {
+    ...ticket,
+    affected_files: ['src/main.ts', 'src/app.ts'],
+    reproduction_steps: ['Start the CLI', 'Run the command'],
+    acceptance_criteria: ['The CLI starts', 'The command succeeds'],
+    missing_info: [],
+  };
+  const output = renderToString(createElement(IssueTicketView, {
+    ticket: full, warnings: [], width: 80, workspaceRoot: '/workspace',
+  }), { columns: 80 });
+  for (const label of ['affected_files', 'reproduction_steps', 'acceptance_criteria', 'missing_info']) {
+    assert.ok(output.includes(label), `missing label ${label}`);
+  }
+  for (const value of [...full.affected_files, ...full.reproduction_steps, ...full.acceptance_criteria]) {
+    assert.ok(output.includes(value), `missing item ${value}`);
+  }
+  assert.match(output, /missing_info\s+—/);
+  assert.ok(output.split('\n').every((line) => visibleWidth(line) <= 80));
+});
+
+for (const width of [80, 120]) test(`wraps long ticket values and keeps file links at ${width} columns`, () => {
+  const workspaceRoot = path.resolve('workspace');
+  const file = `src/${'long-directory/'.repeat(10)}file.ts`;
+  const criterion = 'Verify that the command reports the correct result for every supported input without dropping any details';
+  const output = renderToString(createElement(IssueTicketView, {
+    ticket: { ...ticket, affected_files: [file], acceptance_criteria: [criterion] },
+    warnings: [], width, workspaceRoot,
+  }), { columns: width });
+  const lines = output.split('\n');
+  assert.ok(lines.every((line) => visibleWidth(line) <= width));
+  const url = pathToFileURL(path.resolve(workspaceRoot, file)).href;
+  const links = [...output.matchAll(/\u001b\]8;;([^\u001b]+)\u001b\\([^\u001b\n]+)\u001b\]8;;\u001b\\/g)];
+  assert.ok(links.length > 1, 'long path should wrap into linked segments');
+  assert.ok(links.every((link) => link[1] === url));
+  assert.equal(links.map((link) => link[2]).join(''), file);
+  const plain = output.replace(/\u001b\]8;;[^\u001b]*\u001b\\/g, '').replace(/\s+/g, ' ');
+  assert.ok(plain.includes(criterion));
+});
+
+test('shows each warning and wraps long warnings without overflowing', () => {
+  const warnings = [
+    'A file outside the workspace was removed from the ticket',
+    'Missing information changed the route to ask_user so that the user can provide the details needed to continue safely',
+  ];
+  const output = renderToString(createElement(IssueTicketView, {
+    ticket, warnings, width: 80, workspaceRoot: '/workspace',
+  }), { columns: 80 });
+  assert.equal((output.match(/!/g) ?? []).length, 2);
+  assert.ok(output.replace(/\s+/g, ' ').includes(warnings[1]));
+  assert.ok(output.includes(warnings[0]));
+  assert.ok(output.split('\n').every((line) => visibleWidth(line) <= 80));
+});
+
+test('does not show a warning section for an empty warnings list', () => {
+  const output = renderToString(createElement(IssueTicketView, {
+    ticket, warnings: [], width: 80, workspaceRoot: '/workspace',
+  }), { columns: 80 });
+  assert.doesNotMatch(output, /warning/i);
+});

@@ -34,6 +34,11 @@ export const issueTicketSchema = z.object({
 
 export type IssueTicket = z.infer<typeof issueTicketSchema>;
 
+// Schema gửi model dùng regex tương thích provider; schema kiểm tra đầu ra vẫn giữ đầy đủ ràng buộc.
+const issueTicketToolSchema = issueTicketSchema.extend({
+  priority: z.string().regex(/^P[0-3]/).describe('Priority P0-P3 plus a short reason, e.g. "P1 - crashes the CLI"'),
+});
+
 export class TriageSchemaError extends Error {}
 
 /** First attempt plus two schema retries; past this the model is not trusted to converge. */
@@ -46,7 +51,7 @@ class SubmitIssueTicketTool extends BaseTool {
   readonly parameters = {
     type: 'object',
     properties: {
-      ticket: { ...z.toJSONSchema(issueTicketSchema), description: 'The structured IssueTicket' },
+      ticket: { ...z.toJSONSchema(issueTicketToolSchema), description: 'The structured IssueTicket' },
     },
     required: ['ticket'],
   };
@@ -191,6 +196,7 @@ export async function runTriage(opts: TriageOptions): Promise<TriageResult> {
     model: opts.model,
     maxSteps: opts.maxSteps ?? 12,
     isComplete: () => accepted !== undefined,
+    completionReminder: 'Your response is not a submitted ticket. Call submit_issue_ticket with the ticket as its argument; do not reply with plain JSON.',
     signal: controller.signal,
   });
 
@@ -222,9 +228,12 @@ export type TriageGraphState = typeof TriageState.State;
 export function buildTriageGraph(opts: TriageOptions) {
   const bus = opts.bus ?? new EventBus();
   return new StateGraph(TriageState)
-    .addNode('triage', traceNode<TriageGraphState>(bus, 'triage', 'triage', async (s) => ({
-      ...await runTriage({ ...opts, issue: s.issue }),
-    })))
+    .addNode('triage', traceNode<TriageGraphState>(bus, 'triage', 'triage', async (s) => {
+      const result = await runTriage({ ...opts, issue: s.issue });
+      // Phát sau khi kiểm tra ticket và trước confirm; resume không chạy lại node này.
+      bus.emit('issue_ticket', { ...result, workspaceRoot: opts.workspaceRoot });
+      return result;
+    }))
     // Hỏi thêm hoặc từ chối chỉ trả thông tin, không cần xin phép chạy workflow.
     // Route còn lại dừng ở askHuman và để runGraph hỏi qua UI của CLI hoặc TUI.
     .addNode('confirm', traceNode<TriageGraphState>(bus, 'triage', 'confirm', async (s) => ({

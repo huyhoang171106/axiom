@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createElement } from 'react';
+import { renderToString } from 'ink';
 import { Annotation, START, END, StateGraph, MemorySaver } from '@langchain/langgraph';
 import { createTriageCommand, triageCommand } from '../src/commands/triage.js';
 import type { CommandContext } from '../src/commands/types.js';
@@ -15,6 +17,7 @@ import { askHuman, runGraph } from '../src/core/human-gate.js';
 import { runCli } from '../src/cli/index.js';
 import { TuiController } from '../src/tui/controller.js';
 import { TuiStore } from '../src/tui/store.js';
+import { Turn } from '../src/tui/components/transcript.js';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-triage-integration-'));
 process.env.AXIOM_HOME = root;
@@ -218,6 +221,13 @@ for (const reply of ['y', 'n']) {
     const unsubscribe = store.subscribe(() => {
       if (store.getSnapshot().pendingApproval?.name === 'confirm') {
         questions++;
+        // Bảng phải có trong transcript trước khi người dùng chọn, không chỉ sau khi command trả về.
+        const preview = store.getSnapshot().entries.filter((entry) => entry.kind === 'issue-ticket-preview');
+        assert.equal(preview.length, 1);
+        const output = renderToString(createElement(Turn, { turn: preview[0], expanded: false, width: 80 }), { columns: 80 });
+        assert.match(output, /priority\s+P2 - test/);
+        assert.match(output, /route\s+fix/);
+        assert.match(output, /Testable outcome/);
         store.resolveApproval(reply === 'y' ? 'approve' : 'deny');
       }
     });
@@ -225,6 +235,11 @@ for (const reply of ['y', 'n']) {
       await controller.submit('/triage issue'); store.flush();
       assert.equal(questions, 1); assert.deepEqual(calls, reply === 'y' ? ['fix'] : []);
       assert.equal(store.getSnapshot().error, null);
+      const entries = store.getSnapshot().entries;
+      assert.equal(entries.filter((entry) => entry.kind === 'issue-ticket-preview').length, 1);
+      const result = entries.find((entry) => entry.kind === 'issue-ticket');
+      assert.ok(result);
+      assert.equal(result.text, reply === 'y' ? 'Fixed once' : 'Đã dừng theo yêu cầu.');
       if (reply === 'y') assert.ok((contexts[0] as { tools: { approver?: unknown } }).tools.approver);
     } finally { unsubscribe(); store.dispose(); }
   });

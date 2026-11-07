@@ -447,7 +447,15 @@ export class TuiController {
         if (controller.signal.aborted) return;
         if (result?.kind === 'exit') this.opts.exit?.();
         else if (result?.kind === 'clear') this.store.clear();
-        else if (result) this.store.print(redact(result.text), input, result);
+        else if (result) {
+          // Ticket đã được in trước confirm; sau route chỉ in kết quả workflow để tránh lặp bảng.
+          const data = result.data;
+          const route = result.kind === 'issue-ticket' && data && typeof data === 'object' && 'result' in data
+            ? data.result : undefined;
+          const text = route && typeof route === 'object' && 'text' in route && typeof route.text === 'string'
+            ? route.text : result.text;
+          this.store.print(redact(text), input, result);
+        }
       } else {
         const activeModel = this.opts.mock ? MOCK_MODEL : this.ensureConnectedModel();
         this.store.update({ model: activeModel });
