@@ -36,6 +36,8 @@ Bỏ bước 6-7 nếu baseline không cần sửa. Không thêm thay đổi kh�
 - [x] Hoàn tất bằng chứng actual prediction trước baseline để không phải đo lại chỉ vì thiếu dữ liệu.
 - [ ] Chạy local CI thành công trước push; test tự động chỉ dùng mock hoặc server giả, không gọi provider thật.
 
+Các lượt trên WSL của Hoàng được ghi ở [docs/uc-01.md](../uc-01.md#các-lần-thử). Lượt thứ ba với bản sửa wire chưa commit và cấu hình tạm tạo được 10 ticket, nhưng gate injection không đạt; A4 vẫn chưa xong. Credential được người vận hành cho phép sử dụng; cấu hình tạm không thay đổi cấu hình Axiom thường dùng.
+
 ## 4. Chạy và giữ bằng chứng
 
 1. Sau khi môi trường và credential được xác nhận, chạy `npm run eval -- --uc 01` (không thêm `--mock`).

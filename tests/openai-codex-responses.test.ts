@@ -18,6 +18,29 @@ const sse = (...events: unknown[]) => events.map((e) => `data: ${JSON.stringify(
 
 const completed = { type: 'response.completed', response: { usage: { input_tokens: 10, output_tokens: 2 } } };
 
+test('moves system prompts into Codex instructions while preserving tool history', async () => {
+  const srv = await startFakeServer((_req, res) => res.writeHead(200).end(sse(completed)));
+  try {
+    await new OpenAICodexResponsesProvider(info(srv.url), 'gateway-token').chat({
+      model: 'm',
+      messages: [
+        { role: 'system', content: 'First rule' },
+        { role: 'system', content: 'Second rule' },
+        { role: 'user', content: 'Read the file' },
+        { role: 'assistant', content: '', toolCalls: [{ id: 'call-1', name: 'read_file', arguments: { path: 'a.py' } }] },
+        { role: 'tool', content: 'result', toolCallId: 'call-1', name: 'read_file' },
+      ],
+    });
+    const sent = JSON.parse(srv.seen[0].body.toString());
+    assert.equal(sent.instructions, 'First rule\n\nSecond rule');
+    assert.deepEqual(sent.input, [
+      { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Read the file' }] },
+      { type: 'function_call', call_id: 'call-1', name: 'read_file', arguments: '{"path":"a.py"}' },
+      { type: 'function_call_output', call_id: 'call-1', output: 'result' },
+    ]);
+  } finally { await srv.close(); }
+});
+
 test('sends the account id from the JWT claim and streams the answer', async () => {
   const srv = await startFakeServer((_req, res) => {
     res.writeHead(200).end(sse({ type: 'response.output_text.delta', delta: 'hi' }, completed));
