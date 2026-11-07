@@ -47,7 +47,7 @@ Các lượt trên WSL của Hoàng được ghi ở [docs/uc-01.md](../uc-01.md
 5. Ghi vào bảng "Các lần thử" trong `docs/uc-01.md`: thời điểm, revision, provider/model, liên kết artifact, ba chỉ số accuracy/schema, token, chi phí, độ trễ và lý do chạy lại.
 6. Bảng từng case phải có id, expected type/route, actual type/route, đúng/sai, schema, số unexpected tool calls và lỗi nếu có. Không có ticket thì ghi rõ không có, không điền đáp án expected thay actual.
 7. Provider lỗi hoặc thiếu credential là lượt không hoàn tất, không fallback mock và không ghi thành số đo đạt. Giữ bằng chứng lỗi đã che secret nếu đã tốn usage.
-8. Nếu sửa prompt/skill, ghi lỗi quan sát được và chạy lại toàn bộ bộ case. Không đổi expected hoặc đưa đáp án fixture vào prompt để làm đẹp số.
+8. Nếu sửa prompt/skill, ghi lỗi quan sát được và chạy lại toàn bộ bộ case. Không đưa đáp án fixture vào prompt để làm đẹp số. Riêng expected route case injection được An cho phép đổi từ `implement` sang `ask_user`; ghi rõ revision và không sửa artifact cũ.
 
 ## 5. Kiểm tra và chốt
 
