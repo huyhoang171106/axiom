@@ -5,6 +5,8 @@ import type { TuiTurn, TuiState } from '../store.js';
 import { ToolRow } from './tool-row.js';
 import { formatTelemetryLine, formatUserPromptLines, truncate, visibleWidth } from '../layout.js';
 import { createTheme } from '../theme.js';
+import { issueTicketSchema } from '../../agents/triage.js';
+import { IssueTicketView } from './issue-ticket.js';
 
 function formatInlineMarkdown(text: string, theme: ReturnType<typeof createTheme>): string {
   // Bold: **text**
@@ -128,6 +130,9 @@ export function Turn({
     ? truncate(`~ think ${doneThinking ? theme.icons.success : `${theme.icons.thinking} ${lastThought}`}`, cols)
     : '';
   const errorLines = turn.error ? turn.error.split(/\r?\n/) : [];
+  const preview = turn.kind === 'issue-ticket-preview' && turn.data && typeof turn.data === 'object'
+    ? turn.data as { ticket?: unknown; warnings?: unknown; workspaceRoot?: unknown } : undefined;
+  const ticket = preview ? issueTicketSchema.safeParse(preview.ticket) : undefined;
 
   return (
     <Box flexDirection="column">
@@ -138,6 +143,10 @@ export function Turn({
       {turn.tools.map((row, index) => (
         <ToolRow key={`${row.call.id}-${index}`} row={row} expanded={expanded} width={cols} />
       ))}
+      {ticket?.success && Array.isArray(preview?.warnings) && preview.warnings.every((w) => typeof w === 'string')
+        && typeof preview.workspaceRoot === 'string' && (
+          <IssueTicketView ticket={ticket.data} warnings={preview.warnings} width={cols} workspaceRoot={preview.workspaceRoot} />
+        )}
       {turn.text && <Box flexDirection="column">{renderAssistantLines(turn.text, theme, cols, maxLines)}</Box>}
       {errorLines.map((line, idx) => (
         <Text key={`err-${idx}`}>

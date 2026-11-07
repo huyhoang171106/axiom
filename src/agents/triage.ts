@@ -222,9 +222,12 @@ export type TriageGraphState = typeof TriageState.State;
 export function buildTriageGraph(opts: TriageOptions) {
   const bus = opts.bus ?? new EventBus();
   return new StateGraph(TriageState)
-    .addNode('triage', traceNode<TriageGraphState>(bus, 'triage', 'triage', async (s) => ({
-      ...await runTriage({ ...opts, issue: s.issue }),
-    })))
+    .addNode('triage', traceNode<TriageGraphState>(bus, 'triage', 'triage', async (s) => {
+      const result = await runTriage({ ...opts, issue: s.issue });
+      // Phát sau khi kiểm tra ticket và trước confirm; resume không chạy lại node này.
+      bus.emit('issue_ticket', { ...result, workspaceRoot: opts.workspaceRoot });
+      return result;
+    }))
     // Hỏi thêm hoặc từ chối chỉ trả thông tin, không cần xin phép chạy workflow.
     // Route còn lại dừng ở askHuman và để runGraph hỏi qua UI của CLI hoặc TUI.
     .addNode('confirm', traceNode<TriageGraphState>(bus, 'triage', 'confirm', async (s) => ({

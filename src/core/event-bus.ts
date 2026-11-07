@@ -27,6 +27,7 @@ export interface AxiomEvents {
   cost_update: (usage: TokenUsage) => void;
   error: (data: { message: string; error?: Error }) => void;
   node: (data: { graph: string; node: string; phase: 'enter' | 'exit'; threadId?: string }) => void;
+  issue_ticket: (data: { ticket: unknown; warnings: string[]; workspaceRoot: string }) => void;
   approval: (data: {
     at?: string;
     runId?: string;
