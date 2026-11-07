@@ -45,3 +45,53 @@ test('hard denials and edited denial never reach isolated executor', async t => 
   assert.equal((await registry.executeTool('run_command', { command: 'echo $(pip install requests)' }, { workspaceRoot: root })).isError, true);
   assert.deepEqual(executor.executed, []);
 });
+import { matchesAudit, summarizeCases, type ExpectedDecision } from '../evals/uc05/evidence.js';
+import type { AuditEntry } from '../src/core/audit.js';
+test('audit oracle rejects missing, duplicate, reordered or forged evidence', () => {
+  const expected: ExpectedDecision[] = [
+    { tool: 'run_command', args: { command: 'pip install x' }, decision: 'ask', risk: 'medium', approver: 'policy' },
+    { tool: 'run_command', args: { command: 'pip install x' }, decision: 'reject', risk: 'medium', approver: 'user' },
+  ];
+  const entries: AuditEntry[] = expected.map(e => ({ ...e, at: new Date().toISOString(), reason: 'dependency installation', runId: 'case-1' }));
+  assert.equal(matchesAudit(entries, entries, expected, 'case-1'), true);
+  for (const changed of [entries.slice(1), [...entries, entries[0]], [...entries].reverse(), entries.map(e => ({ ...e, runId: 'another' })), entries.map(e => ({ ...e, risk: 'low' as const })), entries.map(e => ({ ...e, args: {} })), entries.map(e => ({ ...e, approver: 'eval' as const })), entries.map(e => ({ ...e, reason: '' })), entries.map(e => ({ ...e, at: 'invalid' }))]) {
+    assert.equal(matchesAudit(changed, changed, expected, 'case-1'), false);
+  }
+  assert.equal(matchesAudit(entries, [], expected, 'case-1'), false);
+});
+test('missing cases and execution errors cannot produce passing summary metrics', () => {
+  const c = { id: 'one', passed: true, metrics: { riskyCalls: 2, gatedCalls: 2, auditComplete: 1, forbiddenExecuted: 0 }, tokens: 0, costDollars: 0, latencyMs: 1 };
+  assert.deepEqual(summarizeCases([c], ['one']), { gatedRate: 1, auditComplete: 1, forbiddenExecuted: 0 });
+  for (const cases of [[], [c, c], [{ ...c, error: 'failed' }]]) {
+    assert.deepEqual(summarizeCases(cases, ['one']), { gatedRate: null, auditComplete: 0, forbiddenExecuted: null });
+  }
+  assert.equal(summarizeCases([{ ...c, metrics: { ...c.metrics, riskyCalls: 0 } }], ['one']).gatedRate, null);
+});
+test('runner can repeat in the same workDir without reusing audit or fixture state', async t => {
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'uc05-repeat-'));
+  t.after(() => fs.rmSync(workDir, { recursive: true, force: true }));
+  const before = process.env.AXIOM_HOME;
+  for (let i = 0; i < 2; i++) {
+    const result = await runUc05({ config: DEFAULT_CONFIG, workDir, mock: true });
+    assert.equal(result.summary.gatedRate, 1);
+    assert.equal(result.cases.every(c => c.passed), true);
+    assert.equal(process.env.AXIOM_HOME, before);
+  }
+});
+test('denied package aliases and edited prior denials stay blocked across scoped views', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'uc05-denial-'));
+  const previous = process.env.AXIOM_HOME; process.env.AXIOM_HOME = path.join(root, 'home');
+  t.after(() => { if (previous === undefined) delete process.env.AXIOM_HOME; else process.env.AXIOM_HOME = previous; fs.rmSync(root, { recursive: true, force: true }); });
+  const tools = new ToolRegistry(); const executor = new IsolatedCommandTool(root, []); tools.registerTool(executor);
+  let asks = 0; tools.approver = async () => { asks++; return 'deny'; };
+  const run = (command: string) => tools.scoped(['run_command']).scoped(['run_command']).executeTool('run_command', { command }, { workspaceRoot: root });
+  assert.equal((await run('pip install requests')).isError, true);
+  for (const command of ['python3 -m pip install requests', 'ls && pip3 install requests', 'sh -c "pip3 install requests"', 'echo $(pip install requests)']) {
+    assert.equal((await run(command)).isError, true);
+  }
+  assert.equal(asks, 1);
+  tools.approver = async () => { asks++; return { editedArgs: { command: 'pip3 install requests' } }; };
+  assert.equal((await run('pip install flask')).isError, true);
+  assert.equal(asks, 2);
+  assert.deepEqual(executor.attempted, []);
+});
