@@ -45,7 +45,9 @@ export class EventBus {
 
   private installDefaultErrorHandler(): void {
     this.emitter.on('error', (data: { message?: string }) => {
-      if (data?.message) console.error(redact(`[Axiom Error] ${data.message}`));
+      if (data?.message && !data.message.includes('Task aborted via AbortSignal')) {
+        console.error(redact(`[Axiom Error] ${data.message}`));
+      }
     });
   }
 
