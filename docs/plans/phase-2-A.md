@@ -8,7 +8,7 @@
 | A2 | 05/11 | Graph `triage → confirm`, gọi `runRoute` ngoài graph (#7) | in progress |
 | A3 | 06/11 | `UC_RUNNERS`, `--uc NN`, `--all`, chỉ số mục 6.2 (#8) | done |
 | A4 | 07/11 | Số đo thật UC-01 | |
-| A5 | 08/11 | Renderer IssueTicket trong TUI | |
+| A5 | 08/11 | Renderer IssueTicket trong TUI | done |
 
 ## A1. Model theo role
 
