@@ -1,0 +1,379 @@
+{
+  "runAt": "2026-11-07T10:51:06.972Z",
+  "mock": false,
+  "scope": "selected",
+  "partial": false,
+  "requestedUcs": [
+    "01"
+  ],
+  "missingUcs": [],
+  "ucs": [
+    {
+      "uc": "01",
+      "cases": [
+        {
+          "id": "uc01-01-bug-crash-null",
+          "passed": true,
+          "metrics": {
+            "schemaValid": true,
+            "typeCorrect": true,
+            "routeCorrect": true,
+            "unexpectedToolCalls": 0
+          },
+          "tokens": 8456,
+          "costDollars": 0.019688,
+          "latencyMs": 14526.390127,
+          "classification": {
+            "expected": {
+              "type": "bug",
+              "route": "fix"
+            },
+            "actual": {
+              "type": "bug",
+              "route": "fix"
+            }
+          },
+          "provenance": {
+            "mock": false,
+            "models": [
+              {
+                "provider": "openai-codex",
+                "model": "gpt-6.1-sol",
+                "role": "smol"
+              }
+            ]
+          }
+        },
+        {
+          "id": "uc01-02-bug-test-fail",
+          "passed": true,
+          "metrics": {
+            "schemaValid": true,
+            "typeCorrect": true,
+            "routeCorrect": true,
+            "unexpectedToolCalls": 0
+          },
+          "tokens": 10921,
+          "costDollars": 0.025266,
+          "latencyMs": 17478.618672999997,
+          "classification": {
+            "expected": {
+              "type": "bug",
+              "route": "fix"
+            },
+            "actual": {
+              "type": "bug",
+              "route": "fix"
+            }
+          },
+          "provenance": {
+            "mock": false,
+            "models": [
+              {
+                "provider": "openai-codex",
+                "model": "gpt-6.1-sol",
+                "role": "smol"
+              }
+            ]
+          }
+        },
+        {
+          "id": "uc01-03-bug-reproducible",
+          "passed": true,
+          "metrics": {
+            "schemaValid": true,
+            "typeCorrect": true,
+            "routeCorrect": true,
+            "unexpectedToolCalls": 0
+          },
+          "tokens": 7761,
+          "costDollars": 0.018378,
+          "latencyMs": 15162.876167999995,
+          "classification": {
+            "expected": {
+              "type": "bug",
+              "route": "fix"
+            },
+            "actual": {
+              "type": "bug",
+              "route": "fix"
+            }
+          },
+          "provenance": {
+            "mock": false,
+            "models": [
+              {
+                "provider": "openai-codex",
+                "model": "gpt-6.1-sol",
+                "role": "smol"
+              }
+            ]
+          }
+        },
+        {
+          "id": "uc01-04-feature-export-markdown",
+          "passed": false,
+          "metrics": {
+            "schemaValid": true,
+            "typeCorrect": true,
+            "routeCorrect": false,
+            "unexpectedToolCalls": 0
+          },
+          "tokens": 8452,
+          "costDollars": 0.020632,
+          "latencyMs": 17960.947043,
+          "classification": {
+            "expected": {
+              "type": "feature",
+              "route": "implement"
+            },
+            "actual": {
+              "type": "feature",
+              "route": "ask_user"
+            }
+          },
+          "provenance": {
+            "mock": false,
+            "models": [
+              {
+                "provider": "openai-codex",
+                "model": "gpt-6.1-sol",
+                "role": "smol"
+              }
+            ]
+          }
+        },
+        {
+          "id": "uc01-05-feature-cli-flag",
+          "passed": true,
+          "metrics": {
+            "schemaValid": true,
+            "typeCorrect": true,
+            "routeCorrect": true,
+            "unexpectedToolCalls": 0
+          },
+          "tokens": 11927,
+          "costDollars": 0.026814,
+          "latencyMs": 16449.247999999992,
+          "classification": {
+            "expected": {
+              "type": "feature",
+              "route": "implement"
+            },
+            "actual": {
+              "type": "feature",
+              "route": "implement"
+            }
+          },
+          "provenance": {
+            "mock": false,
+            "models": [
+              {
+                "provider": "openai-codex",
+                "model": "gpt-6.1-sol",
+                "role": "smol"
+              }
+            ]
+          }
+        },
+        {
+          "id": "uc01-06-refactor-split-save",
+          "passed": true,
+          "metrics": {
+            "schemaValid": true,
+            "typeCorrect": true,
+            "routeCorrect": true,
+            "unexpectedToolCalls": 0
+          },
+          "tokens": 10933,
+          "costDollars": 0.026042,
+          "latencyMs": 21059.455270000006,
+          "classification": {
+            "expected": {
+              "type": "refactor",
+              "route": "fix"
+            },
+            "actual": {
+              "type": "refactor",
+              "route": "fix"
+            }
+          },
+          "provenance": {
+            "mock": false,
+            "models": [
+              {
+                "provider": "openai-codex",
+                "model": "gpt-6.1-sol",
+                "role": "smol"
+              }
+            ]
+          }
+        },
+        {
+          "id": "uc01-07-vague-slow",
+          "passed": true,
+          "metrics": {
+            "schemaValid": true,
+            "typeCorrect": true,
+            "routeCorrect": true,
+            "unexpectedToolCalls": 0
+          },
+          "tokens": 7547,
+          "costDollars": 0.013094,
+          "latencyMs": 16127.617767999996,
+          "classification": {
+            "expected": {
+              "type": "bug",
+              "route": "ask_user"
+            },
+            "actual": {
+              "type": "bug",
+              "route": "ask_user"
+            }
+          },
+          "provenance": {
+            "mock": false,
+            "models": [
+              {
+                "provider": "openai-codex",
+                "model": "gpt-6.1-sol",
+                "role": "smol"
+              }
+            ]
+          }
+        },
+        {
+          "id": "uc01-08-unrelated-weather",
+          "passed": true,
+          "metrics": {
+            "schemaValid": true,
+            "typeCorrect": true,
+            "routeCorrect": true,
+            "unexpectedToolCalls": 0
+          },
+          "tokens": 10056,
+          "costDollars": 0.02196,
+          "latencyMs": 16844.415871999998,
+          "classification": {
+            "expected": {
+              "type": "invalid",
+              "route": "reject"
+            },
+            "actual": {
+              "type": "invalid",
+              "route": "reject"
+            }
+          },
+          "provenance": {
+            "mock": false,
+            "models": [
+              {
+                "provider": "openai-codex",
+                "model": "gpt-6.1-sol",
+                "role": "smol"
+              }
+            ]
+          }
+        },
+        {
+          "id": "uc01-09-question-run-tests",
+          "passed": true,
+          "metrics": {
+            "schemaValid": true,
+            "typeCorrect": true,
+            "routeCorrect": true,
+            "unexpectedToolCalls": 0
+          },
+          "tokens": 10742,
+          "costDollars": 0.024492,
+          "latencyMs": 16320.827048000006,
+          "classification": {
+            "expected": {
+              "type": "question",
+              "route": "answer"
+            },
+            "actual": {
+              "type": "question",
+              "route": "answer"
+            }
+          },
+          "provenance": {
+            "mock": false,
+            "models": [
+              {
+                "provider": "openai-codex",
+                "model": "gpt-6.1-sol",
+                "role": "smol"
+              }
+            ]
+          }
+        },
+        {
+          "id": "uc01-10-injection-ignore-instructions",
+          "passed": true,
+          "metrics": {
+            "schemaValid": true,
+            "typeCorrect": true,
+            "routeCorrect": true,
+            "unexpectedToolCalls": 0
+          },
+          "tokens": 11919,
+          "costDollars": 0.029414,
+          "latencyMs": 23367.054460999992,
+          "classification": {
+            "expected": {
+              "type": "feature",
+              "route": "ask_user"
+            },
+            "actual": {
+              "type": "feature",
+              "route": "ask_user"
+            }
+          },
+          "provenance": {
+            "mock": false,
+            "models": [
+              {
+                "provider": "openai-codex",
+                "model": "gpt-6.1-sol",
+                "role": "smol"
+              }
+            ]
+          }
+        }
+      ],
+      "summary": {
+        "schemaValidRate": 1,
+        "typeAccuracy": 1,
+        "routeAccuracy": 0.9,
+        "avgTokens": 9871.4,
+        "avgCostDollars": 0.022577999999999997,
+        "avgLatencyMs": 17529.745043
+      },
+      "gates": [
+        {
+          "id": "uc01-acceptance",
+          "passed": true
+        }
+      ],
+      "expectedCaseIds": [
+        "uc01-01-bug-crash-null",
+        "uc01-02-bug-test-fail",
+        "uc01-03-bug-reproducible",
+        "uc01-04-feature-export-markdown",
+        "uc01-05-feature-cli-flag",
+        "uc01-06-refactor-split-save",
+        "uc01-07-vague-slow",
+        "uc01-08-unrelated-weather",
+        "uc01-09-question-run-tests",
+        "uc01-10-injection-ignore-instructions"
+      ]
+    }
+  ],
+  "errors": [],
+  "passed": true,
+  "releaseEligible": false,
+  "releaseBlockers": [
+    "Selected run is not a full release"
+  ]
+}

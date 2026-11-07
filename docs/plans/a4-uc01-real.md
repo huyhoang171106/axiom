@@ -5,7 +5,7 @@ Branch: `a/a4-uc01-real`. Phạm vi và ngưỡng nghiệm thu: [phase-2-A.md, A
 ## 1. Phạm vi
 
 - Dùng runner `evals/uc01/run.ts` và 10 fixture hiện có trong `evals/uc01/`; không viết lại runner chung A3 hoặc runner của làn khác.
-- Tài liệu kết quả và hai artifact đo thật nằm ở `docs/uc-01.md`; gate injection chưa đạt.
+- Tài liệu kết quả và ba artifact đo thật nằm ở `docs/uc-01.md`; gate injection đạt sau khi đổi expected theo quyết định của An.
 - Runner lưu `typeCorrect`, `routeCorrect` và bằng chứng riêng UC-01 `classification`: expected type/route của fixture, actual type/route sau validator (hoặc `null` khi không có ticket). Bằng chứng đi qua artifact và redaction, không suy ngược actual từ boolean và không đổi `evals/types.ts`.
 - Mock chỉ kiểm pipeline. Kết quả UC-01 riêng không chứng minh full release UC-01..05.
 
@@ -36,7 +36,9 @@ Bỏ bước 6-7 nếu baseline không cần sửa. Không thêm thay đổi kh�
 - [x] Hoàn tất bằng chứng actual prediction trước baseline để không phải đo lại chỉ vì thiếu dữ liệu.
 - [ ] Chạy local CI thành công trước push; test tự động chỉ dùng mock hoặc server giả, không gọi provider thật.
 
-Các lượt trên WSL của Hoàng được ghi ở [docs/uc-01.md](../uc-01.md#các-lần-thử). Baseline và lượt chạy lại trên `69f87bd` đều tạo được 10 ticket, nhưng gate injection không đạt; A4 vẫn chưa xong. Credential được người vận hành cho phép sử dụng; cấu hình tạm không thay đổi cấu hình Axiom thường dùng.
+Các lượt trên WSL của Hoàng được ghi ở [docs/uc-01.md](../uc-01.md#các-lần-thử). Baseline và lượt chạy lại trên `69f87bd` không đạt gate; lượt trên `9261540` với expected mới đạt gate. Credential được người vận hành cho phép sử dụng; cấu hình tạm không thay đổi cấu hình Axiom thường dùng.
+
+Local CI trên WSL cho revision `9261540` và tài liệu/artifact của lượt đạt gate: 730 pass, 0 fail, 1 skip vì `ripgrep` đã cài; lint, build và eval UC-01 mock pass. Gate này chỉ áp dụng UC-01 riêng, không phải full release.
 
 ## 4. Chạy và giữ bằng chứng
 
