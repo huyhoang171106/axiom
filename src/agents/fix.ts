@@ -56,6 +56,8 @@ export interface FixReport {
   diffStat: { files: number; added: number; removed: number };
   explanation?: string;          // required when diffStat.files > 3 or added + removed > 100
   summary: string;               // fixed: cause and fix; failed: what was tried, rejected hypotheses, next step
+  /** Unified diffs this run applied and left in the workspace, in order; '' when none or undone (keep = no). */
+  patch?: string;
 }
 
 export const DEFAULT_MAX_ROUNDS = 5;
@@ -114,6 +116,8 @@ class TrackedApplyPatch extends BaseTool {
   readonly written = new Map<string, string | null>();
   /** Files this run created; rollback removes only these. */
   readonly created = new Set<string>();
+  /** Each applied patch as it was executed (after any edit by the approver), for the diff viewer. */
+  readonly patches: string[] = [];
   failures: PatchFailure[] = [];
   applied = 0;
   tampered = false;
@@ -146,6 +150,7 @@ class TrackedApplyPatch extends BaseTool {
       return out;
     }
     this.applied++;
+    if (typeof args.patch === 'string') this.patches.push(args.patch.endsWith('\n') ? args.patch : `${args.patch}\n`);
     const root = context?.workspaceRoot ?? process.cwd();
     for (const match of out.matchAll(/^Applied: (.+?) \(\+(\d+) -(\d+)(, created)?/gm)) {
       const [, label, added, removed, created] = match;
@@ -506,7 +511,8 @@ export async function fixIssue(opts: FixOptions): Promise<FixReport> {
       ].filter(Boolean).join('\n');
     }
     if (files.length && s.kept !== false) summary += `\nFiles changed: ${files.join(', ')}${s.fixed ? '' : ' (left in place for review)'}.`;
-    return { finalReport: { status, rounds: s.rounds, filesChanged: files, diffStat, ...(explanation !== undefined && { explanation }), summary } };
+    const patch = s.kept === false ? '' : patchTool.patches.join('');
+    return { finalReport: { status, rounds: s.rounds, filesChanged: files, diffStat, ...(explanation !== undefined && { explanation }), summary, patch } };
   };
 
   /** Conventions the model proposed with the winning hypothesis; each is saved only after the user agrees. */
@@ -573,6 +579,7 @@ export async function fixIssue(opts: FixOptions): Promise<FixReport> {
       filesChanged: [...patchTool.changes.keys()].sort(),
       diffStat: { files: patchTool.changes.size, added: [...patchTool.changes.values()].reduce((n, c) => n + c.added, 0), removed: [...patchTool.changes.values()].reduce((n, c) => n + c.removed, 0) },
       summary: `Aborted after ${s?.rounds.length ?? 0} round(s); changed files are left in place for review.`,
+      patch: patchTool.patches.join(''),
     };
   } finally {
     session.approver = originalApprover;

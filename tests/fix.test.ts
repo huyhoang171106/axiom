@@ -352,6 +352,25 @@ test('answering no to keep restores the original files and removes the files the
   assert.doesNotMatch(report.summary, /Not undone/);
 });
 
+test('the report carries the patches the run applied, in order, and none after keep = no', async (t) => {
+  const kept = await fixIssue(options(workspace(t), fixingProvider(), { ui: answering(true) }));
+  assert.equal(kept.patch, REPRO_PATCH + FIX_PATCH);
+  const undone = await fixIssue(options(workspace(t), fixingProvider(), { ui: answering(false) }));
+  assert.equal(undone.patch, '');
+});
+
+test('a refused patch is not in the report diff', async (t) => {
+  const tamper = '--- a/tests/test_calc.py\n+++ b/tests/test_calc.py\n@@ -3,2 +3,2 @@\n def test_add():\n-    assert add(2, 3) == 5\n+    pass\n';
+  const provider = scripted({
+    reproduce: reproduceScript(),
+    locate: [call('submit_hypothesis', { hypothesis: 'sub adds', files: ['calc.py'] })],
+    patch: [call('apply_patch', { patch: tamper }), call('apply_patch', { patch: FIX_PATCH })],
+  });
+  const report = await fixIssue(options(workspace(t), provider));
+  assert.equal(report.status, 'fixed');
+  assert.equal(report.patch, REPRO_PATCH + FIX_PATCH);
+});
+
 test('rollback in a dirty git repo keeps the user\'s own uncommitted and untracked changes', async (t) => {
   const root = workspace(t);
   const git = (...args: string[]) => spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { cwd: root, encoding: 'utf8' });
