@@ -4,6 +4,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { IssueTicket } from '../../agents/triage.js';
 import { visibleWidth } from '../layout.js';
+import { createTheme } from '../theme.js';
 
 function linkFile(workspaceRoot: string, file: string, label: string): string {
   // Mã hóa URL bằng API của Node để dấu cách và ký tự đặc biệt không làm hỏng đích mở file.
@@ -32,6 +33,7 @@ export function IssueTicketView(props: {
   width: number;
   workspaceRoot: string;
 }) {
+  const theme = createTheme();
   const rows = [
     ['type', [props.ticket.type]],
     ['priority', [props.ticket.priority]],
@@ -59,6 +61,9 @@ export function IssueTicketView(props: {
             ) : <Text key={index} wrap="wrap">{value}</Text>)}
           </Box>
         </Box>
+      ))}
+      {props.warnings.map((warning, index) => (
+        <Text key={index} wrap="wrap">{theme.warning(`${theme.icons.warning} ${warning}`)}</Text>
       ))}
     </Box>
   );

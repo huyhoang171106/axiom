@@ -80,3 +80,24 @@ for (const width of [80, 120]) test(`wraps long ticket values and keeps file lin
   const plain = output.replace(/\u001b\]8;;[^\u001b]*\u001b\\/g, '').replace(/\s+/g, ' ');
   assert.ok(plain.includes(criterion));
 });
+
+test('shows each warning and wraps long warnings without overflowing', () => {
+  const warnings = [
+    'A file outside the workspace was removed from the ticket',
+    'Missing information changed the route to ask_user so that the user can provide the details needed to continue safely',
+  ];
+  const output = renderToString(createElement(IssueTicketView, {
+    ticket, warnings, width: 80, workspaceRoot: '/workspace',
+  }), { columns: 80 });
+  assert.equal((output.match(/!/g) ?? []).length, 2);
+  assert.ok(output.replace(/\s+/g, ' ').includes(warnings[1]));
+  assert.ok(output.includes(warnings[0]));
+  assert.ok(output.split('\n').every((line) => visibleWidth(line) <= 80));
+});
+
+test('does not show a warning section for an empty warnings list', () => {
+  const output = renderToString(createElement(IssueTicketView, {
+    ticket, warnings: [], width: 80, workspaceRoot: '/workspace',
+  }), { columns: 80 });
+  assert.doesNotMatch(output, /warning/i);
+});
