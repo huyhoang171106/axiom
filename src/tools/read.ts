@@ -231,9 +231,16 @@ export function sliceLines(content: string, args: Record<string, unknown>): Text
   let startLine = 1;
   let endLine = totalLines;
 
-  if (typeof args.lineRange === 'string' && args.lineRange.trim()) {
+  if (Array.isArray(args.lineRange) && args.lineRange.length >= 2 && typeof args.lineRange[0] === 'number' && typeof args.lineRange[1] === 'number') {
+    startLine = Math.floor(args.lineRange[0]);
+    endLine = Math.floor(args.lineRange[1]);
+    if (endLine < startLine) {
+      throw new Error(`Invalid lineRange; the end line is before the start line.`);
+    }
+  } else if (typeof args.lineRange === 'string' && args.lineRange.trim()) {
     const raw = args.lineRange.trim();
-    const match = raw.match(/^(\d+)(?:-(\d+))?$/);
+    const clean = raw.replace(/^\[|\]$/g, '').trim();
+    const match = clean.match(/^(\d+)(?:[-:,]\s*(\d+))?$/);
     // A typo like "1:5" used to fall through to the whole file, so the caller never learned the range was
     // ignored; a reversed range silently returned one line.
     if (!match) {

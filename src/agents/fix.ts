@@ -262,25 +262,29 @@ class SubmitHypothesisTool extends BaseTool {
 }
 
 const SUBMIT_TOOLS = new Set(['submit_repro', 'submit_hypothesis']);
-const SKILL_NOTE = 'Follow the bug-fix skill listed in the skills index (read it with read_file first).';
+const SKILL_NOTE = [
+  'Bug-fix workflow rules: Always use relative paths within the workspace (never absolute paths).',
+  'Code inspection: use search_code to locate functions and line numbers, then read_file with lineRange (e.g. lineRange "30-70") rather than reading entire large files.',
+  'Never modify or remove existing tests. Minimal changes only via apply_patch with unified diff context.',
+].join('\n');
 
 export const FIX_REPRODUCE_PROMPT = [
   'Axiom /fix, step: reproduce.',
   SKILL_NOTE,
   'Find or write a pytest test that fails because of the bug in the issue. A new test file goes under tests/ through apply_patch from /dev/null.',
-  'Never change or remove existing tests. When a test fails for the reason in the issue, call submit_repro with its node id.',
+  'Never change or remove existing tests. Once the test fails or hangs for the reason in the issue, call submit_repro immediately with its node id.',
 ].join('\n');
 export const FIX_LOCATE_PROMPT = [
   'Axiom /fix, step: locate.',
   SKILL_NOTE,
-  'Read the code on the failing path with read_file, search_code and list_dir. Do not edit files.',
+  'Read the code on the failing path using search_code and read_file (with lineRange for large files). Do not edit files.',
   'Call submit_hypothesis with one cause (file, function, why) and the files the fix will change. Do not repeat a rejected hypothesis.',
 ].join('\n');
 export const FIX_PATCH_PROMPT = [
   'Axiom /fix, step: patch.',
   SKILL_NOTE,
   `Make the smallest change that removes the cause, with apply_patch (unified diff with context lines). After ${MAX_PATCH_FAILURES} failed patches the round ends.`,
-  'Never change, skip or remove existing tests. When the patch is applied, reply with one line saying what changed.',
+  'Never change, skip or remove existing tests. Use read_file with lineRange on the target file to inspect exact context lines before applying patch. When the patch is applied, reply with one line saying what changed.',
 ].join('\n');
 
 const FixState = Annotation.Root({
@@ -409,6 +413,7 @@ export async function fixIssue(opts: FixOptions): Promise<FixReport> {
       `Hypothesis: ${h.hypothesis}`,
       h.files.length ? `Files to change: ${h.files.join(', ')}` : '',
       `Reproduction targets: ${s.targets.join(', ')}`,
+      'Before applying patch, use read_file with lineRange on the target function to check exact line numbers and context.',
     ].filter(Boolean).join('\n\n');
     await runAgent(prompt, FIX_PATCH_PROMPT, ['read_file', 'apply_patch'], [patchTool], controller.signal);
     return { patchApplied: patchTool.applied > 0 };
