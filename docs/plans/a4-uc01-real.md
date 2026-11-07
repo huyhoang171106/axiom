@@ -29,12 +29,12 @@ Bỏ bước 6-7 nếu baseline không cần sửa. Không thêm thay đổi kh�
 
 ## 3. Checklist trước khi gọi model thật
 
-- [ ] Xác nhận máy chạy với An/D. Quyết định chung là máy D vận hành theo [phase-2.md mục 10](phase-2.md#10-tiêu-chí-xong); không tự thay bằng máy local.
-- [ ] Xác nhận quyền dùng credential hiện có và model resolve từ `@smol`; không đọc/in giá trị credential, không yêu cầu dán secret vào chat.
-- [ ] Ghi revision code, thay đổi chưa commit nếu có, phiên bản Node, hệ điều hành, provider/model thực tế và thời điểm chạy. Ưu tiên chạy từ revision sạch.
-- [ ] Giữ nguyên input và expected của 10 fixture giữa các lượt; ghi nhận revision fixture.
+- [x] Xác nhận máy chạy với An/D. Quyết định chung là máy D vận hành theo [phase-2.md mục 10](phase-2.md#10-tiêu-chí-xong); không tự thay bằng máy local.
+- [x] Xác nhận quyền dùng credential hiện có và model resolve từ `@smol`; không đọc/in giá trị credential, không yêu cầu dán secret vào chat.
+- [x] Ghi revision code, thay đổi chưa commit nếu có, phiên bản Node, hệ điều hành, provider/model thực tế và thời điểm chạy. Ưu tiên chạy từ revision sạch.
+- [ ] Giữ nguyên input và expected của 10 fixture giữa các lượt; ghi nhận revision fixture. Expected case 10 đã đổi theo yêu cầu An, lịch sử và revision được ghi ở `docs/uc-01.md`.
 - [x] Hoàn tất bằng chứng actual prediction trước baseline để không phải đo lại chỉ vì thiếu dữ liệu.
-- [ ] Chạy local CI thành công trước push; test tự động chỉ dùng mock hoặc server giả, không gọi provider thật.
+- [x] Chạy local CI thành công trước push; test tự động chỉ dùng mock hoặc server giả, không gọi provider thật.
 
 Các lượt trên WSL của Hoàng được ghi ở [docs/uc-01.md](../uc-01.md#các-lần-thử). Baseline và lượt chạy lại trên `69f87bd` không đạt gate; lượt trên `9261540` với expected mới đạt gate. Credential được người vận hành cho phép sử dụng; cấu hình tạm không thay đổi cấu hình Axiom thường dùng.
 
@@ -53,10 +53,10 @@ Local CI trên WSL cho revision `9261540` và tài liệu/artifact của lượt
 
 ## 5. Kiểm tra và chốt
 
-- [ ] Đối chiếu số liệu tài liệu với artifact, không tự viết số accuracy hoặc chi phí.
-- [ ] Kiểm gate UC-01 theo ngưỡng ở lane plan; ghi riêng `routeAccuracy` dù không có ngưỡng chung cho toàn bộ route.
-- [ ] Case injection phải được xét riêng, không để điểm trung bình che lỗi.
-- [ ] `docs/uc-01.md` có sơ đồ graph, failure modes thực tế và hướng dẫn tái chạy.
-- [ ] Chạy `npm run ci:local`, đọc kết quả và ghi rõ các test skip do môi trường; không xem skip là bằng chứng sandbox Linux.
+- [x] Đối chiếu số liệu tài liệu với artifact, không tự viết số accuracy hoặc chi phí.
+- [x] Kiểm gate UC-01 theo ngưỡng ở lane plan; ghi riêng `routeAccuracy` dù không có ngưỡng chung cho toàn bộ route.
+- [x] Case injection phải được xét riêng, không để điểm trung bình che lỗi.
+- [x] `docs/uc-01.md` có sơ đồ graph, failure modes thực tế và hướng dẫn tái chạy.
+- [x] Chạy `npm run ci:local`, đọc kết quả và ghi rõ các test skip do môi trường; không xem skip là bằng chứng sandbox Linux.
 - [ ] Trên Windows, script CI mặc định bật local tests. Nếu hai test yêu cầu từ chối khi thiếu bwrap xung đột với cờ này, dùng `AXIOM_ALLOW_LOCAL_TESTS=0 npm run ci:local`; không sửa/skip test để né lỗi.
-- [ ] Chỉ đổi A4 thành `done` khi đủ bằng chứng thật và check đạt. Commit/push từng phần lên branch theo yêu cầu An, không tự merge trong giai đoạn này.
+- [x] Chỉ đổi A4 thành `done` khi đủ bằng chứng thật và check đạt. Commit/push từng phần lên branch theo yêu cầu An, không tự merge trong giai đoạn này.

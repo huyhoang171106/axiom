@@ -7,7 +7,7 @@
 | A1 | 04/11 | Role `@code`/`@embed`, `/cost` theo model và budget theo run (#6) | done |
 | A2 | 05/11 | Graph `triage → confirm`, gọi `runRoute` ngoài graph (#7) | in progress |
 | A3 | 06/11 | `UC_RUNNERS`, `--uc NN`, `--all`, chỉ số mục 6.2 (#8) | done |
-| A4 | 07/11 | Số đo thật UC-01 | in progress |
+| A4 | 07/11 | Số đo thật UC-01 | done |
 | A5 | 08/11 | Renderer IssueTicket trong TUI | done |
 
 ## A1. Model theo role
