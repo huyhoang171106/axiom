@@ -10,7 +10,7 @@
 | C4 | 05/11 | Skill `bug-fix` | done |
 | C5 | 07/11 | Graph `/fix` | done (#54 + nối D2/D4); E3 #33 còn mở |
 | C6 | 08/11 | Eval UC-03 | done |
-| C7 | 08/11 | Diff viewer, tiến trình vòng fix | |
+| C7 | 08/11 | Diff viewer, tiến trình vòng fix | code xong; chờ E nối `fix-report` vào transcript và `DiffView` vào dòng `apply_patch` |
 
 ## C1. Đủ 10 bug
 

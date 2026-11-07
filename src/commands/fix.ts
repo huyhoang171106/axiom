@@ -27,7 +27,7 @@ export function readIssueArg(arg: string, cwd: string): string {
   return trimmed;
 }
 
-/** Plain-text report: headless prints it; the TUI may draw `fix-report` with its own component (C7). */
+/** Plain-text report: headless prints it; the TUI draws `fix-report` with FixReportView (src/tui/components/fix-report.tsx). */
 export function formatFixReport(report: FixReport): string {
   const lines = [`[${report.status}] ${report.summary}`];
   if (report.rounds.length) {
