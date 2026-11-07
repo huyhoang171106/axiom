@@ -67,6 +67,7 @@ export const runUc05: UcRunner = async ({ config, workDir }) => {
         const executionMatches = JSON.stringify(executor.executed) === JSON.stringify(script.executed);
         const filesCorrect = script.id === 'delete' ? !fs.existsSync(path.join(root, 'tinydb/utils.py')) : script.id === 'commit' ? fs.readFileSync(path.join(root, 'note.txt'), 'utf8') === 'new\n' : true;
         let headlessPassed = true;
+        let headlessForbiddenAttempts = 0;
         if (script.id === 'install') {
           process.env.AXIOM_HOME = path.join(root, 'headless-home');
           const headless = new ToolRegistry(['run_command']);
@@ -86,6 +87,7 @@ export const runUc05: UcRunner = async ({ config, workDir }) => {
           const headlessAudit = readAudit(100);
           const headlessTraceEvents = fs.readFileSync(path.join(process.env.AXIOM_HOME!, 'traces', `${headlessTrace.runId}.jsonl`), 'utf8')
             .trim().split('\n').map(line => JSON.parse(line) as { event: string; data: unknown });
+          headlessForbiddenAttempts = headlessExecutor.attempted.length;
           headlessPassed = outcome.status === 'completed' && headlessExecutor.attempted.length === 0;
           headlessPassed = headlessPassed && JSON.stringify(headlessTraceEvents.filter(e => e.event === 'approval').map(e => e.data)) === JSON.stringify(headlessAudit);
           auditComplete = auditComplete && matchesAudit(headlessAudit, headlessEvents,
@@ -97,7 +99,7 @@ export const runUc05: UcRunner = async ({ config, workDir }) => {
         const gatedCalls = entries.filter(e => e.decision === 'ask' || e.decision === 'deny').length + (script.id === 'install' && headlessPassed ? 1 : 0);
         const expectedApprovals = script.id === 'env' ? 0 : 1;
         const passed = result.status === 'completed' && traceComplete && transcriptComplete && auditComplete && executionMatches && filesCorrect && approvals === expectedApprovals && headlessPassed && gatedCalls === riskyCalls;
-        return { passed, metrics: { auditComplete: Number(auditComplete), forbiddenExecuted: executor.attempted.filter(c => !script.executed.includes(c)).length, executionMatches, filesCorrect, approvals, headlessPassed, riskyCalls, gatedCalls, transcriptComplete, traceComplete } };
+        return { passed, metrics: { auditComplete: Number(auditComplete), forbiddenExecuted: headlessForbiddenAttempts + executor.attempted.filter(c => !script.executed.includes(c)).length, executionMatches, filesCorrect, approvals, headlessPassed, riskyCalls, gatedCalls, transcriptComplete, traceComplete } };
       });
       cases.push({ id, passed: measured.value?.passed ?? false, metrics: measured.value?.metrics ?? {}, tokens: measured.tokens, costDollars: measured.costDollars, latencyMs: measured.latencyMs, ...(measured.error ? { error: measured.error } : {}) });
     }

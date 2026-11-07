@@ -1,4 +1,4 @@
-﻿// tests/eval-uc05.test.ts - Real security harness with closed command execution.
+// tests/eval-uc05.test.ts - Real security harness with closed command execution.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -132,4 +132,17 @@ test('fixture setup failures preserve environment and cannot pass the security g
   assert.equal(result.summary.auditComplete, 0);
   assert.equal(passesUc05(result), false);
   assert.equal(process.env.AXIOM_HOME, previous);
+});
+
+
+test('summary refuses missing, invalid or skipped metric evidence', () => {
+  const c = { id: 'one', passed: true, metrics: { riskyCalls: 2, gatedCalls: 2, auditComplete: 1, forbiddenExecuted: 0 }, tokens: 0, costDollars: 0, latencyMs: 1 };
+  for (const key of Object.keys(c.metrics)) {
+    for (const value of [undefined, -1, NaN, Infinity, 0.5, true]) {
+      const changed = { ...c, metrics: { ...c.metrics, [key]: value } };
+      if (value === undefined) delete (changed.metrics as Record<string, unknown>)[key];
+      assert.notEqual(summarizeCases([changed as typeof c], ['one']).auditComplete, 1);
+    }
+  }
+  assert.equal(summarizeCases([{ ...c, skipped: 'hidden skip' }], ['one']).auditComplete, 0);
 });

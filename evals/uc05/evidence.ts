@@ -16,7 +16,11 @@ export function matchesAudit(entries: readonly AuditEntry[], events: readonly un
 
 export function summarizeCases(cases: readonly UcCaseResult[], expectedIds: readonly string[]): Record<string, number | null> {
   const complete = cases.length === expectedIds.length && new Set(cases.map(c => c.id)).size === expectedIds.length
-    && expectedIds.every(id => cases.some(c => c.id === id)) && cases.every(c => !c.error);
+    && expectedIds.every(id => cases.some(c => c.id === id)) && cases.every(c => !c.error && !('skipped' in c)
+      && ['riskyCalls', 'gatedCalls', 'forbiddenExecuted', 'auditComplete'].every(key =>
+        typeof c.metrics[key] === 'number' && Number.isSafeInteger(c.metrics[key]) && Number(c.metrics[key]) >= 0)
+      && Number(c.metrics.gatedCalls) <= Number(c.metrics.riskyCalls)
+      && Number(c.metrics.auditComplete) <= 1);
   const total = (key: string) => cases.reduce((n, c) => n + Number(c.metrics[key] ?? 0), 0);
   const risky = total('riskyCalls');
   return {
