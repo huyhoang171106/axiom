@@ -133,7 +133,7 @@ Cột "Trong Axiom":
 | 55 | `ollama` | Ollama (Local OpenAI-compatible) | Local (không cần key) | `OLLAMA_API_KEY` (tùy chọn), `OLLAMA_BASE_URL` / `OLLAMA_HOST` | `openai-completions` | `http://127.0.0.1:11434/v1` | `gpt-oss:20b` | Làm |
 | 56 | `ollama-cloud` | Ollama Cloud | Subscription (key của gói) | `OLLAMA_CLOUD_API_KEY` | `ollama-chat` | `https://ollama.com` | `gpt-oss:120b` | Làm (cần wire `ollama-chat`) |
 | 57 | `openai` | OpenAI | API key | `OPENAI_API_KEY` | `openai-responses` | `https://api.openai.com/v1` | `gpt-5.5` | Làm (cần wire `openai-responses`) |
-| 58 | `openai-codex` | ChatGPT Plus/Pro (Codex Subscription) | Subscription OAuth | `OPENAI_CODEX_OAUTH_TOKEN` | `openai-codex-responses` | `https://chatgpt.com/backend-api` | `gpt-5.5` | Làm (cần wire `openai-codex-responses`) |
+| 58 | `openai-codex` | ChatGPT Plus/Pro (Codex Subscription) | Subscription OAuth | `OPENAI_CODEX_OAUTH_TOKEN` | `openai-codex-responses` | `https://chatgpt.com/backend-api/codex` | `gpt-6.1-sol` | Làm (cần wire `openai-codex-responses`) |
 | 59 | `opencode-go` | OpenCode Go | Subscription (key của gói) | `OPENCODE_API_KEY` | `openai-completions` | `https://opencode.ai/inference/go/v1` | `kimi-k2.7-code` | Làm |
 | 60 | `opencode-zen` | OpenCode Zen | Subscription (key của gói) | `OPENCODE_API_KEY` | `openai-completions` | `https://opencode.ai/zen/v1` | `claude-opus-5` | Làm |
 | 61 | `openrouter` | OpenRouter | OAuth cho app bên thứ ba + API key | `OPENROUTER_API_KEY` | `openai-completions` | `https://openrouter.ai/api/v1` | `openai/gpt-5.5` | Làm |
@@ -165,7 +165,7 @@ Cột "Trong Axiom":
 | 87 | `zai` | Z.AI (GLM Coding Plan) | Subscription (key của gói) | `ZAI_API_KEY` | `anthropic-messages` | `https://api.z.ai/api/anthropic` | `glm-5.3` | Làm |
 | 88 | `zenmux` | ZenMux | API key | `ZENMUX_API_KEY` | `openai-completions` | `https://zenmux.ai/api/v1` | `anthropic/claude-opus-5` | Làm |
 | 89 | `zhipu-coding-plan` | Zhipu Coding Plan (智谱) | Subscription (key của gói) | `ZHIPU_API_KEY` | `openai-completions` | `https://open.bigmodel.cn/api/coding/paas/v4` | `glm-5.1` | Làm |
-| 90 | `openai-codex-device` | ChatGPT Plus/Pro (Codex, headless/device) | Subscription OAuth | — | `openai-codex-responses` | `https://chatgpt.com/backend-api` | `gpt-5.5` | Làm (cần wire `openai-codex-responses`) |
+| 90 | `openai-codex-device` | ChatGPT Plus/Pro (Codex, headless/device) | Subscription OAuth | — | `openai-codex-responses` | `https://chatgpt.com/backend-api/codex` | `gpt-6.1-sol` | Làm (cần wire `openai-codex-responses`) |
 | 91 | `zai-coding-plan` | Z.AI (GLM Coding Plan · Sign in) | Subscription OAuth | — | `anthropic-messages` | `https://api.z.ai/api/anthropic` | `glm-5.3` | Làm |
 
 Các công cụ tìm web cũng nằm trong `/login` của oh-my-pi nhưng **không phải provider model**: `web`, `exa`, `kagi`, `tavily`, `parallel`, `perplexity`. Axiom không làm (đề chỉ cho `fetch_docs` tùy chọn theo allowlist domain).
