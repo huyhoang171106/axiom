@@ -30,6 +30,7 @@ interface AnthropicContentBlock {
   tool_use_id?: string;
   content?: string;
   thinking?: string;
+  cache_control?: { type: 'ephemeral' };
 }
 
 interface AnthropicMessagePayload {
@@ -221,20 +222,55 @@ export class AnthropicProvider extends BaseLLMProvider {
       const firstUserMsg = messages.find((m) => m.role === 'user');
       const firstUserText = typeof firstUserMsg?.content === 'string' ? firstUserMsg.content : '';
       const billingHeader = createClaudeBillingHeader(firstUserText);
-      const systemBlocks: Array<{ type: 'text'; text: string }> = [
+      const systemBlocks: Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }> = [
         { type: 'text', text: billingHeader },
         { type: 'text', text: CLAUDE_CODE_SYSTEM_PREFIX },
       ];
       if (systemPrompt) {
-        systemBlocks.push({ type: 'text', text: systemPrompt });
+        systemBlocks.push({
+          type: 'text',
+          text: systemPrompt,
+          cache_control: { type: 'ephemeral' },
+        });
+      } else {
+        systemBlocks[systemBlocks.length - 1].cache_control = { type: 'ephemeral' };
       }
       requestBody.system = systemBlocks;
     } else if (systemPrompt) {
-      requestBody.system = systemPrompt;
+      requestBody.system = [
+        {
+          type: 'text',
+          text: systemPrompt,
+          cache_control: { type: 'ephemeral' },
+        },
+      ];
     }
 
     if (formattedTools && formattedTools.length > 0) {
-      requestBody.tools = formattedTools;
+      // Set cache_control on the last tool to cache system prompt + tool definitions together
+      const toolsWithCache = formattedTools.map((t, idx) =>
+        idx === formattedTools.length - 1
+          ? { ...t, cache_control: { type: 'ephemeral' } }
+          : t
+      );
+      requestBody.tools = toolsWithCache;
+    }
+
+    // Set cache breakpoint on the conversation tail if multi-turn
+    if (formattedMessages.length >= 2) {
+      const lastMsg = formattedMessages[formattedMessages.length - 1];
+      if (typeof lastMsg.content === 'string') {
+        lastMsg.content = [
+          {
+            type: 'text',
+            text: lastMsg.content,
+            cache_control: { type: 'ephemeral' },
+          },
+        ];
+      } else if (Array.isArray(lastMsg.content) && lastMsg.content.length > 0) {
+        const lastBlock = lastMsg.content[lastMsg.content.length - 1] as AnthropicContentBlock & { cache_control?: { type: 'ephemeral' } };
+        lastBlock.cache_control = { type: 'ephemeral' };
+      }
     }
 
     if (temperature !== undefined && !isThinkingModel) {
@@ -254,7 +290,7 @@ export class AnthropicProvider extends BaseLLMProvider {
 
     if (isOAuth) {
       headers['authorization'] = `Bearer ${apiKey}`;
-      headers['anthropic-beta'] = 'claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,effort-2025-11-24';
+      headers['anthropic-beta'] = 'claude-code-20250219,oauth-2025-04-20,prompt-caching-2024-07-31,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,effort-2025-11-24';
       headers['anthropic-dangerous-direct-browser-access'] = 'true';
       headers['user-agent'] = 'claude-cli/2.1.280 (external, cli)';
       headers['x-app'] = 'cli';
