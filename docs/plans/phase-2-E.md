@@ -46,6 +46,22 @@ Test `tests/permissions-catalog.test.ts`: một test bảng `for (const row of C
 - `install hidden after a read-only command still asks`
 - `unknown tool asks instead of allowing`
 
+### Checklist nghiệm thu E1 (đối chiếu Issue #31 ngày 08/11/2026)
+
+Bằng chứng đọc trực tiếp từ commit `b83764a409563b9840eff895c60ac1b94e1a8a9c` trên `main`; số liệu 56 test E1 và 786 pass bên dưới thuộc lần đối chiếu tại commit này.
+
+- [x] Catalog cho tool đăng ký, tên không ánh xạ, submit và unknown ASK: `tests/permissions-catalog.test.ts` so danh sách registry thật, kiểm ASK/medium cho unknown (gồm `bash`, `read`, `submit_unknown`), medium/high cho hành động rủi ro và low cho submit thực tế `submit_issue_ticket`.
+- [x] Workspace/secret và shell expansion: `tests/permissions-paths.test.ts` kiểm outside cat DENY/high trước approval/executor, junction và secret traversal; `tests/permissions-shell.test.ts` kiểm substitution, expansion và quoted helper options không vượt allowlist.
+- [x] Git destination/refspec thực tế: `tests/permissions-git.test.ts` kiểm upstream, nhiều refspec, main/master, remote push config, mirror/wildcard, repo con, worktree và `git -C`; feature push vẫn ASK.
+- [x] Bundled skill được khoanh vùng và patch parser C2 đã tích hợp: `tests/permissions-bundled.test.ts` chặn tài nguyên giả và junction alias; `tests/permissions-patch.test.ts` dùng parser thật, kiểm patch nhỏ, hơn 5 file, xoá file, cấu hình, cả hai đầu rename, path/secret/junction và malformed patch; không còn skip chờ C2.
+- [x] Test hành vi và kiểm tra local đạt, không skip che yêu cầu E1: `npx.cmd tsx --test tests/permissions*.test.ts` đạt 56 pass, 0 fail, 0 skip. Local CI qua Git Bash đạt đủ 6 bước (lint, full test, build, eval smoke UC01 và các guard); full test có 786 pass, 0 fail, 11 skip / 797 test.
+- [x] Tài liệu/ownership và trạng thái lane khớp: E1 đã là `done`; danh mục ở `docs/uc-05.md`, implementation `src/tools/permissions.ts` và luồng chuyển `risk` tới approver trong `src/tools/registry.ts` có bằng chứng test tương ứng.
+- [x] Hoàn tất ship E1 qua quy trình chính thức: PR code [#44](https://github.com/se373agenticengineering/nhom-30/pull/44) đã MERGED, body có `Closes #31`; merge commit `9ddcb0c8726975d398d10f01c3b716ba1e2e52df` là ancestor của `b83764a`. PR nghiệm thu từ branch `e/e1-acceptance-evidence` chạy trực tiếp `scripts/ship.sh` (local CI đủ 6 bước, push branch, tạo PR, kiểm title, merge commit, cập nhật main). Đây là lần ship bổ sung để hoàn tất nghiệm thu; không khẳng định PR #44 từng chạy script khi chưa có log lịch sử.
+
+11 skip của lần kiểm tra hiện tại có điều kiện rõ: 1 POSIX permissions trên Windows (`tests/auth-store.test.ts`), 1 ca thiếu ripgrep khi máy đã có ripgrep (`tests/search-code.test.ts`), 1 ca cần `/bin/bash` (`tests/secrets.test.ts`), 8 ca cần Linux + bwrap + Python/pytest (`tests/verifier.test.ts`). Không tính skip là pass hoặc bằng chứng sandbox Linux. Local CI lịch sử ngày 08/11 do nhóm trưởng ghi trong [Issue #31](https://github.com/se373agenticengineering/nhom-30/issues/31): 797 pass, 0 fail, 1 skip. Đây là số liệu lịch sử được báo cáo, không phải kết quả chạy lại trên Windows; không gán test skip hiện tại cho lần chạy đó. Chênh lệch môi trường không che tiêu chí E1 (56 pass, 0 skip). Local CI bắt buộc được script ship chạy lại trên HEAD đã rebase trước khi merge; số test có thể tăng do các PR khác đã vào main.
+
+E1 hoàn tất bằng chứng kỹ thuật và ship bổ sung qua script của repository. Issue #31 CLOSED, các tiêu chí đã tick; checklist này phân biệt bằng chứng code trên main, số CI lịch sử và lần ship nghiệm thu bổ sung. Không thay đổi source, test hoặc nội dung E2-E6.
+
 ## E2. Chống lách
 
 Branch `e/e2-anti-evasion`.
