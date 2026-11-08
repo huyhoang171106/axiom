@@ -233,6 +233,10 @@ test('runFeature prevents step mutations when tools are read-only', async () => 
   } finally {
     if (oldHome === undefined) delete process.env.AXIOM_HOME;
     else process.env.AXIOM_HOME = oldHome;
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+    } catch {
+      // Windows: the feature workflow's SQLite checkpointer keeps checkpoints.db open until exit (EPERM); temp dir only.
+    }
   }
 });
