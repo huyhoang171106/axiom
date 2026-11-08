@@ -10,6 +10,7 @@
 | D3 | 06/11 | Compaction, `/compact` | done |
 | D4 | 06/11 | Memory, `/memory` | done |
 | D5 | 07/11 | 3 feature + eval UC-04 | done |
+| D6 | 07/11 | Kiểm tích hợp TUI: slash command, duyệt, resume, cost | done |
 | D7 | 08/11 | Ghép, video, tag `v0.2-phase2` | |
 
 ## D0. Khung (merge trước 12:00 T4 04/11)
@@ -165,6 +166,18 @@ Branch `d/d5-eval`.
 4. Thêm `'04': runUc04` vào `evals/registry.ts`. Ghi `docs/uc-04.md`.
 
 Đạt: `featurePassRate ≥ 2/3`; 5/5 case đạt.
+
+## D6. Kiểm tích hợp TUI
+
+Bằng chứng đầy đủ ở [docs/d6-tui-integration.md](../d6-tui-integration.md): chụp pane thật cho `/cost`, `/memory`, `/resume`,
+`/mode`, `/plan`, `/audit`, `/models`, hộp duyệt `run_command` (risk + lý do + `[y]/[n]/[e]`) kèm dòng `ask`→`reject`
+trong `~/.axiom/audit.jsonl`, ticket của `/triage` render trong phiên, `/feature` bị ngắt giữa chừng rồi `/resume`
+làm tiếp mà không chạy lại bước đã xong, và `/compact` sinh đủ 5 đề mục.
+
+Cách lái TUI để kiểm tự động: gửi phím bằng `tmux send-keys` rồi `C-m` (gửi `Enter` không submit), chụp bằng
+`tmux capture-pane -p -S -60`, chỉ dùng lệnh không gọi model ở lượt đầu.
+
+Ghi lại để xử lý sau: bước bị ngắt giữa chừng được đánh `failed` và `/resume` đi tiếp sang bước sau thay vì chạy lại bước đó.
 
 ## D7. Ghép 10/11
 
