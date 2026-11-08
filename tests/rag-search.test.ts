@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { DEFAULT_CONFIG } from '../src/core/config.js';
 import { pythonBin } from '../src/core/paths.js';
 import { Bm25, tokenize } from '../src/core/rag/bm25.js';
-import { createEmbedder, embedderFromConfig, embedIdentity, fakeEmbedder, MISSING_EMBED_MESSAGE } from '../src/core/rag/embedder.js';
+import { BATCH_SIZE, createEmbedder, EMBED_TIMEOUT_MS, embedderFromConfig, embedIdentity, fakeEmbedder, MISSING_EMBED_MESSAGE } from '../src/core/rag/embedder.js';
 import { PREPROCESSING_VERSION, RepoIndex } from '../src/core/rag/index.js';
 import type { Embedder } from '../src/core/rag/types.js';
 import type { ModelInfo } from '../src/llm/catalog/index.js';
@@ -119,7 +119,8 @@ describe('rag search', () => {
       res.end(JSON.stringify({ data: input.map((_, i) => ({ index: i, embedding: [i] })).reverse(), usage: { prompt_tokens: 3 } }));
     });
     try {
-      const embed = createEmbedder(model('openai-completions', `${server.url}/v1`));
+      // Test này kiểm cách chia lô, không kiểm hằng số mặc định: truyền batchSize 64 để giữ nguyên phép đếm 2 lô bên dưới.
+      const embed = createEmbedder(model('openai-completions', `${server.url}/v1`), { batchSize: 64 });
       const texts = Array.from({ length: 70 }, (_, i) => `t${i}`);
       const vectors = await embed(texts);
       assert.deepEqual(vectors.map((v) => v[0]), [...Array.from({ length: 64 }, (_, i) => i), ...Array.from({ length: 6 }, (_, i) => i)]);
@@ -268,6 +269,18 @@ describe('rag search', () => {
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  it('the default embed timeout tolerates a cold ollama model load', () => {
+    // Đo thật 08/11/2026: POST /v1/embeddings của ollama mất 22,3s ở lượt nạp model đầu tiên.
+    // Hạn 20s cũ làm /ask hỏng ngay câu hỏi đầu dù server vẫn sống, nên hạn mặc định phải rộng hơn.
+    assert.ok(EMBED_TIMEOUT_MS >= 120_000, `expected a cold-load tolerant default, got ${EMBED_TIMEOUT_MS}ms`);
+  });
+
+  it('a batch completes inside the timeout on slow CPU inference', () => {
+    // Đo thật 08/11/2026 với ollama CPU-only: 16 chunk đã 101s, 32 chunk 151s, 64 chunk không xong trong 240s.
+    // Một lô phải xong trước hạn mặc định, nếu không mọi repo thật sẽ hỏng ngay lượt dựng index đầu tiên.
+    assert.ok(BATCH_SIZE > 0 && BATCH_SIZE <= 8, `expected at most 8 chunks per request, got ${BATCH_SIZE}`);
   });
 
   it('embedder times out when server does not respond and throws ProviderError', async () => {

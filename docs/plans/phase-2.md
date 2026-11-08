@@ -227,7 +227,7 @@ Renderer TUI theo `kind` của `CommandResult`: chủ UC viết component trong 
 
 - [x] `npm install && npm start` mở TUI như Phase 1.
 - [x] `/triage <issue bug>` → bảng IssueTicket → hỏi "Chạy route đề xuất? [Y/n]" → Y → `/fix` chạy. (Đã thấy ticket và câu hỏi duyệt route trong phiên thật; nhánh chạy `/fix` kiểm riêng bằng `/fix` trực tiếp, xem `docs/d6-tui-integration.md`.)
-- [ ] `/ask "Hàm insert nằm ở đâu?"` → câu trả lời có `tinydb/table.py:Lx-Ly` bấm được; `/ask "Có hỗ trợ MongoDB không?"` → "không tìm thấy trong repo". **Chưa kiểm được trên TUI**: `POST /api/embed` của ollama treo trong lượt kiểm và axiom không có timeout cho embed, nên TUI đứng ở `Đang xử lý…`; lý do đầy đủ ở `docs/d6-tui-integration.md` mục 8.
+- [x] `/ask "Hàm insert nằm ở đâu?"` → câu trả lời có `tinydb/table.py:L137-L175` bấm được (link OSC 8 `file://…/table.py#L137`); `/ask "Có hỗ trợ MongoDB không?"` → trả lời kèm trích dẫn thật (`README.rst`, `docs/intro.rst`) vì tài liệu TinyDB có nhắc MongoDB, nên không rơi vào "không tìm thấy"; nhánh đó đã có case `uc02-15..17` trong eval thật (`abstentionRate` = 1). Bằng chứng TUI: `docs/d6-tui-integration.md` mục 9.
 - [x] `/fix evals/issues/bug-01` → diff tô màu, tiến trình vòng n/5, test xanh, hỏi "Giữ bản sửa?". (Diff và báo cáo fail-closed đã thấy trong phiên thật; câu hỏi "Giữ bản sửa?" chỉ xuất hiện khi sửa thành công nên lượt này không có.)
 - [x] `/feature "<yêu cầu feat-01>"` → duyệt kế hoạch → `Ctrl+C` hai lần → `npm start` → `/resume` → làm tiếp từ bước còn thiếu, không chạy lại bước đã xong.
 - [x] Hội thoại vượt 60% context tự nén; `/compact` nén tay; `/memory` xem, `/memory clear` xoá.
@@ -245,7 +245,7 @@ Renderer TUI theo `kind` của `CommandResult`: chủ UC viết component trong 
 | 05 | `npm run eval -- --uc 05` | 100% hành động rủi ro chờ duyệt; 0 hành động cấm được chạy | `docs/uc-05.md` |
 
 - [x] `npm run eval -- --all --mock` xanh trong CI (`scripts/ci-local.sh` bước 6 chạy `--all --mock` khi có `bwrap` + `python3`, thiếu thì fallback UC-01 và in lý do; lượt 08/11 exit 0 với cả 5 UC).
-- [x] `npm run eval -- --all` với model thật ra `evals/results.json` có token, chi phí, độ trễ trung bình mỗi case (đề mục 6.2). Đây là **lần chạy 1** cho so sánh 2 lần ở Phase 3 (đề mục 6.3). Bản sao đã commit: `docs/eval-run-1.json` (`runAt` 2026-11-08T11:11:06Z, `releaseEligible: true`).
+- [x] `npm run eval -- --all` với model thật ra `evals/results.json` có token, chi phí, độ trễ trung bình mỗi case (đề mục 6.2). **Lần chạy 1**: `docs/eval-run-1.json` (`runAt` 2026-11-08T11:11:06Z, `releaseEligible: true`, code `b83764a`). **Lần chạy 2** trên HEAD sau #102/#103 và fix embed: `docs/eval-run-2.json` (`runAt` 2026-11-08T15:53:19Z, `mock: false`, `releaseEligible: true`, không blocker) — UC-01 `typeAccuracy` 1 / `routeAccuracy` 0,9; UC-02 `recallAt5` **0,8846**, `citationsValid` 1, `abstentionRate` 1, `freshAfterEditRate` 1; UC-03 5/10, 0 regression, 0 patch sửa test; UC-04 5/5 + `featurePassRate` 1; UC-05 `gatedRate` 1, `forbiddenExecuted` 0, `auditComplete` 1. Tag và release trỏ về lần chạy 2 vì nó chụp đúng code đã ship.
 - [x] Trace có event `node` và `approval`; test `no registered secret value reaches the trace` vẫn pass.
 - [x] Mỗi `docs/uc-XX.md` có: thiết kế (sơ đồ ASCII), failure mode đã gặp, bảng kết quả eval thật, model đã dùng, chi phí.
 
@@ -260,8 +260,8 @@ Máy eval thật (P2-R0, #38; quyết định ở `DESIGN.md` mục 9, 2026-11-0
 
 1. [x] Kiểm mọi PR đã merge: `gh pr list --state open` rỗng.
 2. [x] `git switch main && git pull && npm install && npm run lint && npm test`.
-3. [x] Chạy checklist mục 9 trên TUI thật, ghi dòng nào hỏng vào nhóm chat, chủ làn sửa trong ngày. Bằng chứng: `docs/d6-tui-integration.md`; dòng `/ask` chưa kiểm được (ollama treo ở `/api/embed`).
-4. [x] `npm run eval -- --all`, commit `evals/results.json` vào `docs/eval-run-1.json` qua PR.
-5. [x] Quyết định bỏ quay video demo (ghi vào `docs/DESIGN.md` ngày 08/11/2026); `git tag v0.2-phase2 && git push origin v0.2-phase2` gắn kèm release notes trỏ tới `docs/eval-run-1.json` và `docs/d6-tui-integration.md`.
+3. [x] Chạy checklist mục 9 trên TUI thật, ghi dòng nào hỏng vào nhóm chat, chủ làn sửa trong ngày. Bằng chứng: `docs/d6-tui-integration.md` mục 2–7 và mục 9; dòng `/ask` hỏng ở lượt đầu vì embed (lô 64 chunk + hạn 20 s), đã sửa và kiểm lại trên TUI cùng ngày ở mục 9.
+4. [x] `npm run eval -- --all`, commit kết quả vào `docs/eval-run-1.json` (lượt 1) và `docs/eval-run-2.json` (lượt 2, sau các bản sửa) qua PR.
+5. [x] Quyết định bỏ quay video demo (ghi vào `docs/DESIGN.md` ngày 08/11/2026); tag `v0.2-phase2` trỏ tới commit cuối cùng của Phase 2 (không phải `a83d6ef`, vốn thiếu #102/#103), gắn kèm release notes trỏ tới `docs/eval-run-2.json` và `docs/d6-tui-integration.md`.
 
 Video: `/triage` bug → Y → `/fix` ra diff + test xanh → `/ask` có trích dẫn, bấm mở file → `/feature` tắt giữa chừng → `/resume` → chat "cài requests" bị dừng, từ chối → `/audit` → `npm run eval -- --all`.
