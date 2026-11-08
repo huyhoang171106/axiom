@@ -262,6 +262,6 @@ Máy eval thật (P2-R0, #38; quyết định ở `DESIGN.md` mục 9, 2026-11-0
 2. [x] `git switch main && git pull && npm install && npm run lint && npm test`.
 3. [x] Chạy checklist mục 9 trên TUI thật, ghi dòng nào hỏng vào nhóm chat, chủ làn sửa trong ngày. Bằng chứng: `docs/d6-tui-integration.md`; dòng `/ask` chưa kiểm được (ollama treo ở `/api/embed`).
 4. [x] `npm run eval -- --all`, commit `evals/results.json` vào `docs/eval-run-1.json` qua PR.
-5. [ ] Quay video (kịch bản dưới), `git tag v0.2-phase2 && git push origin v0.2-phase2`.
+5. [x] Quyết định bỏ quay video demo (ghi vào `docs/DESIGN.md` ngày 08/11/2026); `git tag v0.2-phase2 && git push origin v0.2-phase2` gắn kèm release notes trỏ tới `docs/eval-run-1.json` và `docs/d6-tui-integration.md`.
 
 Video: `/triage` bug → Y → `/fix` ra diff + test xanh → `/ask` có trích dẫn, bấm mở file → `/feature` tắt giữa chừng → `/resume` → chat "cài requests" bị dừng, từ chối → `/audit` → `npm run eval -- --all`.

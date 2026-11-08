@@ -11,7 +11,7 @@
 | D4 | 06/11 | Memory, `/memory` | done |
 | D5 | 07/11 | 3 feature + eval UC-04 | done |
 | D6 | 07/11 | Kiểm tích hợp TUI: slash command, duyệt, resume, cost | done |
-| D7 | 08/11 | Ghép, video, tag `v0.2-phase2` | |
+| D7 | 08/11 | Ghép, release `v0.2-phase2`, tài liệu eval | done |
 
 ## D0. Khung (merge trước 12:00 T4 04/11)
 

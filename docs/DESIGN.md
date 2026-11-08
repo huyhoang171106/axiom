@@ -161,6 +161,7 @@ Quy tắc của lớp: mỗi phase chỉ dùng kiến thức đã học đến t
 | 2026-10-28 | Giữ TypeScript, dùng LangGraph.js | Core Axiom đã có ~40% harness; đề cho phép TS |
 | 2026-10-28 | Chat tự do + slash command theo UC, dùng chung harness | Trải nghiệm như Claude Code nhưng mỗi UC vẫn có workflow và eval riêng |
 | 2026-10-28 | Connectors qua MCP, phải `/connect` trước khi dùng | Token không vào context LLM; MCP thuộc kiến thức Phase 3 |
+| 2026-11-08 | Bỏ quay video demo Phase 2, phát hành `v0.2-phase2` trực tiếp kèm bằng chứng eval/TUI đã commit | Bằng chứng release đầy đủ trong docs/eval-run-1.json (all 5 UC pass, releaseEligible: true) và docs/d6-tui-integration.md; video được thay bằng trace, artifact và kịch bản TUI có thể tái hiện |
 | 2026-10-28 | Xong Phase 1 phải là bản dùng được hằng ngày | Nhóm tự dùng Axiom để phát triển các phase sau |
 | 2026-10-28 | Provider theo thiết kế oh-my-pi, TUI theo bố cục pi-open-tui (dựng lại bằng Ink) | Chỉ học thiết kế, không chép code |
 | 2026-10-28 | Danh sách provider giống oh-my-pi (91 ID), có cả subscription OAuth (Claude Pro/Max, ChatGPT Plus/Pro, Copilot, Gemini, …) | Dùng gói subscription của provider để gọi model. Rủi ro: provider có thể chặn client hoặc khoá tài khoản → eval và demo dùng API key |
