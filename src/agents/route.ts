@@ -50,7 +50,7 @@ export async function runRoute(ticket: IssueTicket, issue: string, ctx: RouteCon
     // Selector/alias không đủ: đổi endpoint mà giữ selector vẫn phải dựng lại index.
     const embedInfo = embedModelFromConfig(ctx.config);
     const data = await deps.answer(issue, { ...opts,
-      embedder: createEmbedder(embedInfo, { costTracker: ctx.costTracker }),
+      embedder: createEmbedder(embedInfo, { costTracker: ctx.costTracker, signal: ctx.signal }),
       embedModel: embedIdentity(embedInfo) });
     return { route: ticket.route, text: data.text, data };
   }

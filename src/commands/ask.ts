@@ -23,7 +23,7 @@ export const askCommand: Command = {
       provider,
       model: info.id,
       retrieve: (q, index) => rerankedSearch(q, index, { provider, model: info.id, signal: ctx.signal, bus: ctx.bus, costTracker: ctx.costTracker }),
-      embedder: createEmbedder(embedInfo, { costTracker: ctx.costTracker }),
+      embedder: createEmbedder(embedInfo, { costTracker: ctx.costTracker, signal: ctx.signal }),
       embedModel: embedIdentity(embedInfo),
       teamDir: TEAM_DOCS_DIR,
       signal: ctx.signal,
