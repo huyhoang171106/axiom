@@ -12,6 +12,7 @@ import type { Embedder } from './types.js';
 
 const BATCH_SIZE = 64;
 const FAKE_DIM = 64;
+export const EMBED_TIMEOUT_MS = 20_000;
 
 interface EmbedResponse { vectors: number[][]; promptTokens: number }
 
@@ -50,8 +51,9 @@ function checkVectors(info: ModelInfo, vectors: readonly number[][]): void {
 const NOT_AN_EMBED_MODEL = new Set([400, 404, 422, 501]);
 
 /** `costTracker` records embedding usage of the run (eval tokens and cost per case). */
-export function createEmbedder(info: ModelInfo, opts?: { fetchImpl?: typeof fetch; costTracker?: CostTracker }): Embedder {
+export function createEmbedder(info: ModelInfo, opts?: { fetchImpl?: typeof fetch; costTracker?: CostTracker; timeoutMs?: number; signal?: AbortSignal }): Embedder {
   const fetchImpl = opts?.fetchImpl ?? fetch;
+  const timeoutMs = opts?.timeoutMs ?? EMBED_TIMEOUT_MS;
   const base = info.baseUrl.replace(/\/+$/, '');
   const isOllama = info.api === 'ollama-chat';
   const url = isOllama ? `${base}/api/embed` : `${base}/embeddings`;
@@ -62,14 +64,19 @@ export function createEmbedder(info: ModelInfo, opts?: { fetchImpl?: typeof fetc
     credential ??= resolveCredential(info.provider, {}).then((c) => c?.value);
     const key = await credential;
     let response: Response;
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    const signal = opts?.signal ? AbortSignal.any([opts.signal, timeoutSignal]) : timeoutSignal;
     try {
       response = await fetchImpl(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...info.headers, ...(key ? { authorization: `Bearer ${key}` } : {}) },
         body: JSON.stringify({ model: info.id, input }),
+        signal,
       });
     } catch (error) {
-      throw new ProviderError(redact(`${info.provider} embeddings request to ${url} failed: ${error instanceof Error ? error.message : String(error)}`), { provider: info.provider, model: info.id });
+      const isTimeout = timeoutSignal.aborted && !opts?.signal?.aborted;
+      const hint = isTimeout ? `. Embedder did not respond within ${timeoutMs / 1000}s. Check that ollama/embedding service is running and responsive (modelRoles.embed)` : '';
+      throw new ProviderError(redact(`${info.provider} embeddings request to ${url} failed: ${error instanceof Error ? error.message : String(error)}${hint}`), { provider: info.provider, model: info.id, code: isTimeout ? 'timeout' : undefined });
     }
     if (!response.ok) {
       const { detail, code } = await describeErrorResponse(response);

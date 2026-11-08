@@ -269,4 +269,25 @@ describe('rag search', () => {
       fs.rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it('embedder times out when server does not respond and throws ProviderError', async () => {
+    // Start a server that intentionally hangs without sending headers or body
+    const server = await startFakeServer(() => {
+      // do nothing, let the connection hang
+    });
+    try {
+      const embed = createEmbedder(model('ollama-chat', `${server.url}/`, 'ollama'), { timeoutMs: 50 });
+      await assert.rejects(
+        () => embed(['hello world']),
+        (err: unknown) => {
+          assert.ok(err instanceof ProviderError);
+          assert.equal((err as ProviderError).code, 'timeout');
+          assert.match((err as Error).message, /Embedder did not respond within 0.05s/);
+          return true;
+        },
+      );
+    } finally {
+      await server.close();
+    }
+  });
 });
