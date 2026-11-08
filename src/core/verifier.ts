@@ -109,10 +109,15 @@ export function findRegressions(before: TestRun, after: TestRun): string[] {
     if (nowPassing.has(id)) continue;
     out.push(`${id} (${failed.has(id) ? 'failed' : skipped.has(id) ? 'skipped' : 'missing'})`);
   }
-  if (after.timedOut) out.push('<run> timed out');
-  else if (!after.complete) out.push('<run> did not finish');
-  for (const id of after.errors) out.push(`<run> collection error in ${id}`);
-  if (after.exitCode !== null && after.exitCode !== 0 && after.exitCode !== 1) out.push(`<run> pytest exit code ${after.exitCode}`);
+  if (after.timedOut && !before.timedOut) out.push('<run> timed out');
+  else if (!after.complete && before.complete) out.push('<run> did not finish');
+  const beforeErrors = new Set(before.errors);
+  for (const id of after.errors) {
+    if (!beforeErrors.has(id)) out.push(`<run> collection error in ${id}`);
+  }
+  if (after.exitCode !== null && after.exitCode !== 0 && after.exitCode !== 1 && after.exitCode !== before.exitCode) {
+    out.push(`<run> pytest exit code ${after.exitCode}`);
+  }
   return out;
 }
 
