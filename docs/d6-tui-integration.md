@@ -22,6 +22,9 @@ Mọi trích dẫn dưới đây là output pane chụp bằng `tmux capture-pan
 | `/plan off` | `Mode: read-only` |
 | `/mode edit` | `Mode: edit` |
 | `/models find embed` | `fireworks (not connected) fireworks/qwen3-embedding-8b 41k $0/$0` và `ollama (connected) ollama/qwen3-embedding:0.6b 128k -` |
+| `/memory add <note>` | `Added to project memory: luon chay pytest truoc khi sua file python` |
+| `/memory` | `# Project memory (/home/hoang/.axiom/memory/ax-feature-demo-5961a22f.md)` + bullet vừa thêm |
+| `/memory clear` | hộp duyệt `{"question":"Clear all project memory for this repository?"}` → `y` → `Project memory cleared.` |
 | `/audit 3` | log có mốc thời gian, dạng `2026-11-08T11:12:13.654Z submit_issue_ticket` + `low \| allow \| policy` + JSON args |
 
 Mỗi lượt do người dùng gõ bắt đầu bằng marker `▌ > ` trong transcript.
