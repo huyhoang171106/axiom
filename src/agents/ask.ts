@@ -52,24 +52,38 @@ const SYSTEM_PROMPT = [
 ].join('\n');
 
 /** Each candidate searched per query in `rerankedSearch`. */
-export const POOL_PER_QUERY = 8;
+export const POOL_PER_QUERY = 16;
 /** Lines of each candidate the reranker sees; enough for the signature and docstring. */
-const RERANK_PREVIEW_LINES = 12;
+const RERANK_PREVIEW_LINES = 14;
 
 export const REWRITE_PROMPT = [
   'You turn a question about a code repository into search queries for a code search engine.',
   'Write 1 to 3 short English queries, one per line, nothing else.',
-  'If answering needs several parts of the code (a call path across files, a feature and its helpers), give one query per part.',
-  'Use likely function, class or file names and code terms.',
+  'If answering needs several parts of the code (a call path across files, or both documentation examples and implementation for how-to questions), give one query per part.',
+  'Use likely function, class, file or module names.',
 ].join('\n');
 
 export const RERANK_PROMPT = [
-  'You pick code excerpts that a developer needs to answer a question about a repository.',
+  'You pick code and documentation excerpts that a developer needs to answer a question about a repository.',
   'Candidates are numbered. Reply with the numbers of the 5 most useful candidates, most useful first, comma-separated, nothing else.',
-  'Prefer the code that actually implements what the question asks about, including every file on the path the question describes, over tests and broad class overviews.',
+  'Prefer the code and documentation that actually show and implement what the question asks about, including every file on the path the question describes, over tests and broad class overviews.',
 ].join('\n');
 
 const label = (c: Chunk): string => `${c.source === 'team' ? 'team:' : ''}${c.path}`;
+
+const STOP_WORDS = new Set(['field', 'fields', 'document', 'documents', 'database', 'tinydb', 'every', 'when', 'what', 'does', 'call', 'reach', 'from', 'with', 'this', 'that', 'have', 'user']);
+
+function previewChunk(c: Chunk, query: string, lines = RERANK_PREVIEW_LINES): string {
+  const allLines = c.text.split('\n');
+  if (allLines.length <= lines) return c.text;
+  const terms = query.toLowerCase().split(/\W+/).filter((w) => w.length > 3 && !STOP_WORDS.has(w));
+  const matchIdx = allLines.findIndex((line) => terms.some((t) => line.toLowerCase().includes(t)));
+  if (matchIdx > 0) {
+    const start = Math.max(0, matchIdx - 2);
+    return allLines.slice(start, start + lines).join('\n');
+  }
+  return allLines.slice(0, lines).join('\n');
+}
 
 function contextBlock(chunks: readonly Chunk[]): string {
   return chunks.map((c) => `### ${label(c)}:L${c.startLine}-L${c.endLine} (${c.symbol ?? c.kind})\n${c.text}`).join('\n\n');
@@ -96,12 +110,16 @@ export async function rerankedSearch(question: string, index: RepoIndex, call: M
     .map((line) => line.replace(/^\s*(?:[-*]|\d+[.)])\s*/, '').trim())
     .filter(Boolean)
     .slice(0, 3);
-  const pool = [...first];
+  const rawPool = [...first];
   for (const query of queries) {
-    for (const c of await index.search(query, POOL_PER_QUERY)) if (!pool.some((p) => p.id === c.id)) pool.push(c);
+    for (const c of await index.search(query, POOL_PER_QUERY)) if (!rawPool.some((p) => p.id === c.id)) rawPool.push(c);
   }
+  const pool = [
+    ...rawPool.filter((c) => !c.path.startsWith('tests/')),
+    ...rawPool.filter((c) => c.path.startsWith('tests/')),
+  ];
   const listing = pool
-    .map((c, i) => `[${i + 1}] ${label(c)}:L${c.startLine}-L${c.endLine} (${c.symbol ?? c.kind})\n${c.text.split('\n').slice(0, RERANK_PREVIEW_LINES).join('\n')}`)
+    .map((c, i) => `[${i + 1}] ${label(c)}:L${c.startLine}-L${c.endLine} (${c.symbol ?? c.kind})\n${previewChunk(c, question)}`)
     .join('\n\n');
   const picked = [...(await ask(RERANK_PROMPT, `Question: ${question}\n\nCandidates:\n\n${listing}`)).matchAll(/\d+/g)]
     .map((m) => Number(m[0]))
