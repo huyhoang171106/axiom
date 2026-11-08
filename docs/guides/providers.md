@@ -526,7 +526,7 @@ Không có credential khi gọi model thì báo: "`<provider>` chưa kết nối
 - **Lỗ hổng hiện tại (phải sửa trước hết):** `src/tools/bash.ts` gọi `spawn` mà không truyền `env`, nên process con nhận toàn bộ `process.env`. Ngoài ra `env` và `printenv` đang nằm trong danh sách lệnh chỉ đọc. Agent gõ `printenv` là API key đi vào context của LLM và vào trace.
 - Giá trị secret để redact gồm: biến môi trường có tên khớp mẫu trên (dài từ 8 ký tự), mọi key và token trong `auth.json`, `apiKey` đã phân giải từ `models.json`.
 - Key và token không bao giờ được in ra log, trace, hay thông báo lỗi. Khi báo lỗi chỉ ghi tên biến (`OPENROUTER_API_KEY`).
-- Repo chỉ commit `.env.example`. CI chạy `gitleaks` (đề trừ 1,0 điểm nếu lộ key).
+- Repo chỉ commit `.env.example`. Bước 1/6 của `scripts/ci-local.sh` quét tên file bí mật và mẫu key trên diff so với `origin/main` (GitHub Actions của repo đã tắt, local CI là cổng bắt buộc).
 
 ## 12. Các bước làm (theo đúng thứ tự)
 
@@ -626,7 +626,7 @@ const agent = new AgentLoop({
 - [ ] `npm run lint && npm test` pass.
 - [ ] `grep -rn "claude-\|gpt-\|glm-\|qwen" src/ --include=*.ts` không có tên model viết cứng (tên model chỉ nằm trong JSON).
 - [ ] Mỗi `clientId` trong `src/llm/catalog/auth/` có trường `"source"`.
-- [ ] Không có giá trị key nào trong `git diff`. `gitleaks detect` sạch.
+- [ ] Không có giá trị key nào trong `git diff`. `npm run ci:local` qua bước 1/6 (quét tên file bí mật và mẫu `sk-`, `sk-ant-`, `ghp_`, `xox`, `BEGIN PRIVATE KEY`).
 - [ ] Provider mới: đã đăng nhập thật, `/model` thấy model, chat 1 câu có gọi tool.
 - [ ] Đã cập nhật README nếu đổi lệnh hoặc file cấu hình.
 - [ ] Đổi thiết kế thì đã ghi vào "Nhật ký quyết định" trong `docs/DESIGN.md`.

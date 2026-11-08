@@ -133,14 +133,49 @@ Chưa thấy câu hỏi "Giữ bản sửa?" trong lượt này vì kết quả 
 
 ## 8. Việc chưa kiểm được trong lượt này
 
-- `/ask` với citation bấm mở file và câu trả lời "không tìm thấy": **chưa kiểm được vì môi trường**, không phải vì code TUI.
+- `/ask` với citation bấm mở file và câu trả lời "không tìm thấy": **lượt 08/11 này chưa kiểm được**, đã kiểm lại và đóng cùng ngày ở mục 9.
   Trong lượt kiểm, `POST http://127.0.0.1:11434/api/embed` của ollama treo (curl timeout 20–30 s) trong khi
   `GET /api/tags` vẫn trả lời trong 10 ms; gọi `keep_alive: 0` để dỡ model thì embed chạy lại được một lần (55 s,
   phần lớn là load model) rồi treo tiếp. Axiom không đặt timeout cho lời gọi embed, nên TUI đứng ở `Đang xử lý…`
-  với 0 token, trace chỉ có `run_start`. Đường code này đã được kiểm ở nơi khác: `tests/rag-search.test.ts`
-  (server HTTP giả), `tests/citation-*`, và eval UC-02 thật trong `docs/eval-run-1.json` (recall@5 0.8077,
-  107/107 citation hợp lệ) — nhưng **không** thay thế được việc bấm link trong TUI.
-  Việc cần làm: thêm timeout/huỷ cho lời gọi embed và một luồng kiểm `/ask` trên TUI khi ollama khoẻ.
+  với 0 token, trace chỉ có `run_start`.
 - `/fix` hiển thị câu hỏi "Giữ bản sửa?" và tiến trình `n/5`: chỉ thấy khi có vòng sửa thật; lượt này bug không tái hiện được nên
   dừng ở `not fixed`. Phần renderer đã có test riêng (`tests/tui-diff-*`, `tests/tui-fix-progress*`).
 - Auto-compaction tại ngưỡng 60%: kiểm bằng case `uc04-compaction` trong eval; `/compact` thủ công thì đã kiểm ở mục 6.
+
+## 9. Kiểm lại `/ask` trên TUI (08/11/2026, sau khi sửa embed)
+
+Nguyên nhân gốc của "ollama treo" ở mục 8 không phải server chết mà là **kích thước lô embed**: `embedder.ts` gửi 64 chunk
+một request với hạn 20 s. Máy này ollama chạy CPU-only (`/api/ps` → `size_vram: 0`) nên đo thật: 1 chunk 9,7 s (cold load
+22,3 s), 8 chunk 33,6 s, 16 chunk 101 s, 32 chunk 151 s, 64 chunk không xong trong 240 s. Vì vậy mọi lời gọi embed của
+một repo thật đều bị huỷ dù `curl` cùng URL trả 200 trong 35 ms.
+
+Sửa: `BATCH_SIZE` 64 → 8, `EMBED_TIMEOUT_MS` 20 s → 120 s (comment ghi số đo, test `rag-search` giữ cả hai trong ngưỡng).
+Sau khi sửa, kiểm lại trong `tmux` (pane 110×45, gõ phím thật):
+
+```
+▌ > /ask "Hàm insert nằm ở đâu?"
+Hàm `insert` là phương thức của class `Table`, được định nghĩa trong tinydb/table.py:L137-L175. Hàm nhận một
+`document: Mapping`, kiểm tra kiểu, chọn doc_id rồi ghi vào bảng qua `_update_table`
+(tinydb/table.py:L137-L175).
+
+Ngoài ra, `insert_multiple` nằm ngay sau đó trong cùng file, tại tinydb/table.py:L177-L219.
+✓ 2 trích dẫn đã kiểm tra
+
+▌ > /ask "Có hỗ trợ MongoDB không?"
+TinyDB không hỗ trợ MongoDB trực tiếp trong các tài liệu được cung cấp. README mô tả TinyDB là "document
+oriented" giống MongoDB, lưu bất kỳ document nào dưới dạng `dict` (README.rst:L27-L28). …
+```
+
+Captured bằng `tmux capture-pane -p -e`, mỗi trích dẫn là một link OSC 8 thật:
+
+```
+\x1b]8;;file:///home/hoang/nhom-30/workspace/tinydb/tinydb/table.py#L137\x1b\\ tinydb/table.py:L137-L175 \x1b]8;;\x1b\\
+\x1b]8;;file:///home/hoang/nhom-30/workspace/tinydb/tinydb/table.py#L177\x1b\\ tinydb/table.py:L177-L219 \x1b]8;;\x1b\\
+```
+
+Tức là ô `/ask` của mục 9 trong `plans/phase-2.md` đã kiểm được trên TUI thật, không còn là "chưa kiểm được vì môi trường".
+Nhánh "không tìm thấy trong repo" không xuất hiện ở câu hỏi MongoDB vì tài liệu TinyDB có nhắc MongoDB; nhánh đó được đo bằng
+case `uc02-15..17` của eval thật (`abstentionRate` = 1).
+
+Chi phí lượt kiểm: dựng index lần đầu cho `workspace/tinydb` (346 chunk, 43 lô) mất khoảng 25 phút trên CPU-only; các lượt
+sau dùng lại index đã lưu trong `~/.axiom/index/<hash>/index.json` nên `/ask` trả lời trong vài giây.

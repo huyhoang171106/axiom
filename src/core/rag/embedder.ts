@@ -10,9 +10,15 @@ import type { AxiomConfig } from '../types.js';
 import { tokenize } from './bm25.js';
 import type { Embedder } from './types.js';
 
-const BATCH_SIZE = 64;
+// Số chunk mỗi lời gọi embed. Máy eval CPU-only (ollama không dùng GPU, size_vram = 0) đo 08/11/2026:
+// 8 chunk = 34s, 16 chunk = 101s, 32 chunk = 151s, 64 chunk > 240s (bị huỷ). Batch 64 cũ làm chỉ một
+// lời gọi đã vượt mọi hạn hợp lý, nên giữ 8 để mỗi request nằm gọn trong EMBED_TIMEOUT_MS.
+export const BATCH_SIZE = 8;
 const FAKE_DIM = 64;
-export const EMBED_TIMEOUT_MS = 20_000;
+// Ollama nạp model ở lượt embed đầu tiên (cold start) mất ~22,3s trên máy đo 08/11/2026, nên hạn 20s cũ
+// làm /ask hỏng ngay lượt đầu dù server vẫn sống: nó báo "did not respond within 20s" rồi bỏ cả câu hỏi.
+// 120s vẫn là hạn cứng cho một server treo thật, và mỗi batch đều bị huỷ khi quá hạn này.
+export const EMBED_TIMEOUT_MS = 120_000;
 
 interface EmbedResponse { vectors: number[][]; promptTokens: number }
 
@@ -50,10 +56,11 @@ function checkVectors(info: ModelInfo, vectors: readonly number[][]): void {
 /** Status codes a server gives for a model it cannot embed with (a chat model, a wrong tag). */
 const NOT_AN_EMBED_MODEL = new Set([400, 404, 422, 501]);
 
-/** `costTracker` records embedding usage of the run (eval tokens and cost per case). */
-export function createEmbedder(info: ModelInfo, opts?: { fetchImpl?: typeof fetch; costTracker?: CostTracker; timeoutMs?: number; signal?: AbortSignal }): Embedder {
+/** `costTracker` records embedding usage of the run (eval tokens and cost per case). `batchSize` overrides how many chunks go in one request. */
+export function createEmbedder(info: ModelInfo, opts?: { fetchImpl?: typeof fetch; costTracker?: CostTracker; timeoutMs?: number; batchSize?: number; signal?: AbortSignal }): Embedder {
   const fetchImpl = opts?.fetchImpl ?? fetch;
   const timeoutMs = opts?.timeoutMs ?? EMBED_TIMEOUT_MS;
+  const batchSize = opts?.batchSize ?? BATCH_SIZE;
   const base = info.baseUrl.replace(/\/+$/, '');
   const isOllama = info.api === 'ollama-chat';
   const url = isOllama ? `${base}/api/embed` : `${base}/embeddings`;
@@ -95,7 +102,7 @@ export function createEmbedder(info: ModelInfo, opts?: { fetchImpl?: typeof fetc
 
   return async (texts) => {
     const vectors: number[][] = [];
-    for (let i = 0; i < texts.length; i += BATCH_SIZE) vectors.push(...(await embedBatch(texts.slice(i, i + BATCH_SIZE))));
+    for (let i = 0; i < texts.length; i += batchSize) vectors.push(...(await embedBatch(texts.slice(i, i + batchSize))));
     if (vectors.length > 0) checkVectors(info, vectors);
     return vectors;
   };

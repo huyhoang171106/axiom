@@ -5,7 +5,7 @@
 | # | Ngày | Việc | Trạng thái |
 |---|---|---|---|
 | A1 | 04/11 | Role `@code`/`@embed`, `/cost` theo model và budget theo run (#6) | done |
-| A2 | 05/11 | Graph `triage → confirm`, gọi `runRoute` ngoài graph (#7) | in progress |
+| A2 | 05/11 | Graph `triage → confirm`, gọi `runRoute` ngoài graph (#7) | done (#7 đóng 05/11; `src/agents/triage.ts` + `src/commands/triage.ts` trên `main`, TUI thật ở `docs/d6-tui-integration.md`) |
 | A3 | 06/11 | `UC_RUNNERS`, `--uc NN`, `--all`, chỉ số mục 6.2 (#8) | done |
 | A4 | 07/11 | Số đo thật UC-01 | done |
 | A5 | 08/11 | Renderer IssueTicket trong TUI | done |
@@ -37,10 +37,10 @@ Branch `laneA` (theo yêu cầu của An). Nghiệm thu theo issue #7.
 
 Kiểm: test triage, command, graph và human-gate; `npm run lint`, `npm test`, `npm run build`.
 
-### Bằng chứng trên nhánh `laneA` (chưa nghiệm thu Done)
+### Bằng chứng trên nhánh `laneA` (đã nghiệm thu, #7 đóng 05/11)
 
 - Code và test có comment tiếng Việt giải thích ranh giới graph/route, điều kiện hoàn tất không dùng abort, registry phiên và fake workflow seam.
-- Chia commit theo phần việc: kết thúc AgentLoop, dispatch route/model, graph và command, test tích hợp CLI/TUI, tài liệu, sửa định danh embedding. PR từ `laneA` dùng để đối chiếu nghiệm thu và xin D xác nhận thay đổi core trước khi merge; chưa đánh dấu Done.
+- Chia commit theo phần việc: kết thúc AgentLoop, dispatch route/model, graph và command, test tích hợp CLI/TUI, tài liệu, sửa định danh embedding. PR từ `laneA` được merge, thay đổi core (`AgentLoopOptions.isComplete`) đã ghi trong `DESIGN.md` và #7 đóng ngày 05/11/2026.
 - Đã rebase lên `origin/main` tại `641dece`; giữ cả các dòng quyết định của main và quyết định A2 khi giải quyết conflict tài liệu.
 - Lệnh kiểm A2: `npx tsx --test tests/agent-loop-completion.test.ts tests/triage.test.ts tests/triage-command.test.ts tests/triage-graph.test.ts tests/triage-integration.test.ts tests/human-gate.test.ts`: 55 pass, 0 skip. `npm run lint` và `npm run build` pass.
 - Full suite sau sửa định danh embedding: 543 test, 530 pass, 13 skip, 0 fail. Máy Windows cần venv Python có pytest và `AXIOM_PYTHON` trỏ tới Python của venv; 13 skip là điều kiện môi trường, gồm 8 test cần Linux/bwrap. Không coi các skip này là bằng chứng sandbox trên Linux.
