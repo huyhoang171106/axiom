@@ -1,5 +1,6 @@
 // evals/uc04/run.ts - Runner for UC-04 (multi-step features, resume, compaction, memory)
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { runFeature, resumeTask, type FeatureOptions } from '../../src/agents/feature.js';
 import { loadCatalog } from '../../src/llm/catalog/index.js';
@@ -29,10 +30,25 @@ import {
 } from './cases.js';
 
 export const runUc04: UcRunner = async ({ mock, config, workDir }: UcRunOptions) => {
+  const originalHome = process.env.AXIOM_HOME;
   const catalog = loadCatalog();
   const info = mock ? undefined : resolveModel('@code', catalog, config);
   if (info && !hasProvider(config, info, catalog)) {
     throw new Error(`UC 04: provider ${info.provider} is not set up; run /login or pass --mock`);
+  }
+
+  function initCaseHome(home: string) {
+    fs.mkdirSync(home, { recursive: true });
+    process.env.AXIOM_HOME = home;
+    const realHome = originalHome ?? path.join(os.homedir(), '.axiom');
+    const authFile = path.join(realHome, 'auth.json');
+    if (fs.existsSync(authFile)) {
+      fs.copyFileSync(authFile, path.join(home, 'auth.json'));
+    }
+    const configFile = path.join(realHome, 'config.json');
+    if (fs.existsSync(configFile)) {
+      fs.copyFileSync(configFile, path.join(home, 'config.json'));
+    }
   }
 
   const cases: UcCaseResult[] = [];
@@ -133,7 +149,7 @@ export const runUc04: UcRunner = async ({ mock, config, workDir }: UcRunOptions)
     const ws = path.join(caseDir, 'workspace');
     const home = path.join(caseDir, 'home');
     copyWorkspace(ws);
-    process.env.AXIOM_HOME = home;
+    initCaseHome(home);
 
     const feat = loadFeatureCase('feat-01');
     const provider = mock ? createMockStraightProvider(ws) : await createProviderFor(info!);
@@ -184,7 +200,7 @@ export const runUc04: UcRunner = async ({ mock, config, workDir }: UcRunOptions)
     const ws = path.join(caseDir, 'workspace');
     const home = path.join(caseDir, 'home');
     copyWorkspace(ws);
-    process.env.AXIOM_HOME = home;
+    initCaseHome(home);
 
     const feat = loadFeatureCase('feat-02');
     const dbPath = path.join(home, 'checkpoints.db');
@@ -322,7 +338,7 @@ export const runUc04: UcRunner = async ({ mock, config, workDir }: UcRunOptions)
     const ws = path.join(caseDir, 'workspace');
     const home = path.join(caseDir, 'home');
     copyWorkspace(ws);
-    process.env.AXIOM_HOME = home;
+    initCaseHome(home);
 
     const feat = loadFeatureCase('feat-03');
     const dbPath = path.join(home, 'checkpoints.db');
@@ -517,9 +533,8 @@ export const runUc04: UcRunner = async ({ mock, config, workDir }: UcRunOptions)
     const caseDir = path.join(workDir, 'uc04-memory');
     const ws = path.join(caseDir, 'workspace');
     const home = path.join(caseDir, 'home');
+    initCaseHome(home);
     fs.mkdirSync(ws, { recursive: true });
-    fs.mkdirSync(home, { recursive: true });
-    process.env.AXIOM_HOME = home;
 
     const convention = 'Always add docstrings and type annotations to new public methods';
 
@@ -588,6 +603,9 @@ export const runUc04: UcRunner = async ({ mock, config, workDir }: UcRunOptions)
       },
     ],
   };
+
+  if (originalHome === undefined) delete process.env.AXIOM_HOME;
+  else process.env.AXIOM_HOME = originalHome;
 
   return evidenced;
 };
