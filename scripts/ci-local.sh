@@ -121,7 +121,14 @@ run_stage "5/6" "Running build (tsc)" npm run build
 # 6. Eval smoke check (strictly fail-closed)
 run_eval_smoke() {
   if npm run | grep -q 'eval'; then
-    npm run eval --if-present -- --uc 01 --mock
+    # --all --mock cần bwrap + python3 cho UC-03/UC-04; thiếu thì chỉ smoke UC-01 và nói rõ,
+    # không im lặng coi một lượt UC-01 là đã phủ đủ 5 UC.
+    if command -v bwrap >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+      npm run eval --if-present -- --all --mock
+    else
+      echo "bwrap or python3 missing: eval smoke limited to UC-01 mock, not --all" >&2
+      npm run eval --if-present -- --uc 01 --mock
+    fi
   fi
 }
 run_stage "6/6" "Running eval smoke check (fail-closed)" run_eval_smoke

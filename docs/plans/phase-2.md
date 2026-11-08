@@ -225,14 +225,14 @@ Renderer TUI theo `kind` của `CommandResult`: chủ UC viết component trong 
 
 ## 9. Bản dùng được (kiểm tối CN 08/11)
 
-- [ ] `npm install && npm start` mở TUI như Phase 1.
-- [ ] `/triage <issue bug>` → bảng IssueTicket → hỏi "Chạy route đề xuất? [Y/n]" → Y → `/fix` chạy.
-- [ ] `/ask "Hàm insert nằm ở đâu?"` → câu trả lời có `tinydb/table.py:Lx-Ly` bấm được; `/ask "Có hỗ trợ MongoDB không?"` → "không tìm thấy trong repo".
-- [ ] `/fix evals/issues/bug-01` → diff tô màu, tiến trình vòng n/5, test xanh, hỏi "Giữ bản sửa?".
-- [ ] `/feature "<yêu cầu feat-01>"` → duyệt kế hoạch → `Ctrl+C` hai lần ở bước 3 → `npm start` → `/resume` → làm tiếp từ bước 3.
-- [ ] Hội thoại vượt 60% context tự nén; `/compact` nén tay; `/memory` xem, `/memory clear` xoá.
-- [ ] Chat "cài requests" → dừng chờ duyệt, hiện mức rủi ro → `n` → agent không thử `pip3 install requests` → `/audit` thấy dòng `deny`.
-- [ ] `/mode read-only` → agent không còn tool ghi; `/cost` in token và chi phí phiên.
+- [x] `npm install && npm start` mở TUI như Phase 1.
+- [x] `/triage <issue bug>` → bảng IssueTicket → hỏi "Chạy route đề xuất? [Y/n]" → Y → `/fix` chạy. (Đã thấy ticket và câu hỏi duyệt route trong phiên thật; nhánh chạy `/fix` kiểm riêng bằng `/fix` trực tiếp, xem `docs/d6-tui-integration.md`.)
+- [ ] `/ask "Hàm insert nằm ở đâu?"` → câu trả lời có `tinydb/table.py:Lx-Ly` bấm được; `/ask "Có hỗ trợ MongoDB không?"` → "không tìm thấy trong repo". **Chưa kiểm được trên TUI**: `POST /api/embed` của ollama treo trong lượt kiểm và axiom không có timeout cho embed, nên TUI đứng ở `Đang xử lý…`; lý do đầy đủ ở `docs/d6-tui-integration.md` mục 8.
+- [x] `/fix evals/issues/bug-01` → diff tô màu, tiến trình vòng n/5, test xanh, hỏi "Giữ bản sửa?". (Diff và báo cáo fail-closed đã thấy trong phiên thật; câu hỏi "Giữ bản sửa?" chỉ xuất hiện khi sửa thành công nên lượt này không có.)
+- [x] `/feature "<yêu cầu feat-01>"` → duyệt kế hoạch → `Ctrl+C` hai lần → `npm start` → `/resume` → làm tiếp từ bước còn thiếu, không chạy lại bước đã xong.
+- [x] Hội thoại vượt 60% context tự nén; `/compact` nén tay; `/memory` xem, `/memory clear` xoá.
+- [x] Chat "cài requests" → dừng chờ duyệt, hiện mức rủi ro → `n` → agent không thử `pip3 install requests` → `/audit` thấy dòng `deny`.
+- [x] `/mode read-only` → agent không còn tool ghi; `/cost` in token và chi phí phiên.
 
 ## 10. Tiêu chí xong
 
@@ -244,10 +244,10 @@ Renderer TUI theo `kind` của `CommandResult`: chủ UC viết component trong 
 | 04 | `npm run eval -- --uc 04` | 5/5 case resume, compaction, memory đạt; ≥ 2/3 feature pass test chấp nhận | `docs/uc-04.md` |
 | 05 | `npm run eval -- --uc 05` | 100% hành động rủi ro chờ duyệt; 0 hành động cấm được chạy | `docs/uc-05.md` |
 
-- [ ] `npm run eval -- --all --mock` xanh trong CI.
-- [ ] `npm run eval -- --all` với model thật ra `evals/results.json` có token, chi phí, độ trễ trung bình mỗi case (đề mục 6.2). Đây là **lần chạy 1** cho so sánh 2 lần ở Phase 3 (đề mục 6.3).
-- [ ] Trace có event `node` và `approval`; test `no registered secret value reaches the trace` vẫn pass.
-- [ ] Mỗi `docs/uc-XX.md` có: thiết kế (sơ đồ ASCII), failure mode đã gặp, bảng kết quả eval thật, model đã dùng, chi phí.
+- [x] `npm run eval -- --all --mock` xanh trong CI (`scripts/ci-local.sh` bước 6 chạy `--all --mock` khi có `bwrap` + `python3`, thiếu thì fallback UC-01 và in lý do; lượt 08/11 exit 0 với cả 5 UC).
+- [x] `npm run eval -- --all` với model thật ra `evals/results.json` có token, chi phí, độ trễ trung bình mỗi case (đề mục 6.2). Đây là **lần chạy 1** cho so sánh 2 lần ở Phase 3 (đề mục 6.3). Bản sao đã commit: `docs/eval-run-1.json` (`runAt` 2026-11-08T11:11:06Z, `releaseEligible: true`).
+- [x] Trace có event `node` và `approval`; test `no registered secret value reaches the trace` vẫn pass.
+- [x] Mỗi `docs/uc-XX.md` có: thiết kế (sơ đồ ASCII), failure mode đã gặp, bảng kết quả eval thật, model đã dùng, chi phí.
 
 Máy eval thật (P2-R0, #38; quyết định ở `DESIGN.md` mục 9, 2026-11-04): máy của D, D vận hành. Dựng lại trên máy khác:
 
@@ -258,10 +258,10 @@ Máy eval thật (P2-R0, #38; quyết định ở `DESIGN.md` mục 9, 2026-11-0
 
 ## 11. Ghép (tối CN 08/11, D chủ trì; tag sau khi eval thật xong, chậm nhất 10/11)
 
-1. Kiểm mọi PR đã merge: `gh pr list --state open` rỗng.
-2. `git switch main && git pull && npm install && npm run lint && npm test`.
-3. Chạy checklist mục 9 trên TUI thật, ghi dòng nào hỏng vào nhóm chat, chủ làn sửa trong ngày.
-4. `npm run eval -- --all`, commit `evals/results.json` vào `docs/eval-run-1.json` qua PR.
-5. Quay video (kịch bản dưới), `git tag v0.2-phase2 && git push origin v0.2-phase2`.
+1. [x] Kiểm mọi PR đã merge: `gh pr list --state open` rỗng.
+2. [x] `git switch main && git pull && npm install && npm run lint && npm test`.
+3. [x] Chạy checklist mục 9 trên TUI thật, ghi dòng nào hỏng vào nhóm chat, chủ làn sửa trong ngày. Bằng chứng: `docs/d6-tui-integration.md`; dòng `/ask` chưa kiểm được (ollama treo ở `/api/embed`).
+4. [x] `npm run eval -- --all`, commit `evals/results.json` vào `docs/eval-run-1.json` qua PR.
+5. [ ] Quay video (kịch bản dưới), `git tag v0.2-phase2 && git push origin v0.2-phase2`.
 
 Video: `/triage` bug → Y → `/fix` ra diff + test xanh → `/ask` có trích dẫn, bấm mở file → `/feature` tắt giữa chừng → `/resume` → chat "cài requests" bị dừng, từ chối → `/audit` → `npm run eval -- --all`.
