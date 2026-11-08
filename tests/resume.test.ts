@@ -240,6 +240,63 @@ test('killing after step 2 of 5 and resuming runs steps 3 to 5 only', async () =
   assert.ok(finalState?.steps.every((st) => st.status === 'done'));
 });
 
+test('resume re-runs interrupted step previously marked failed via AbortSignal', async () => {
+  const tmpHome = makeTempDir('axiom-re-run-abort-home-');
+  const ws = makeTempDir('axiom-re-run-abort-ws-');
+  process.env.AXIOM_HOME = tmpHome;
+
+  const threadId = newThreadId('feature');
+  const state: TaskState = {
+    threadId,
+    workspaceRoot: canonicalWorkspace(ws),
+    goal: 'Test resume of interrupted step',
+    constraints: [],
+    acceptance: ['Step 2 is retried and finished'],
+    steps: [
+      { id: 1, title: 'Step 1: Init', files: [], status: 'done' },
+      { id: 2, title: 'Step 2: Add method', files: [], status: 'failed', note: 'Task aborted via AbortSignal' },
+      { id: 3, title: 'Step 3: Add test', files: [], status: 'todo' },
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  saveTaskState(state);
+
+  const mockProvider = new MockProvider('mock', [
+    'Step 2 done',
+    'Step 3 done',
+  ]);
+
+  const executedSteps: number[] = [];
+  const verifier: StepVerifier = async (step) => {
+    executedSteps.push(step.id);
+    return { ok: true };
+  };
+
+  const report = await resumeTask(threadId, {
+    workspaceRoot: ws,
+    provider: mockProvider,
+    model: 'mock/code-model',
+    bus: new EventBus(),
+    tools: new ToolRegistry(),
+    costTracker: new CostTracker(),
+    ui: {
+      print: () => {},
+      ask: async () => 'yes',
+      confirm: async () => true,
+    },
+    verifier,
+    checkpointer: createCheckpointer(path.join(tmpHome, 'checkpoints.db')),
+  });
+
+  assert.equal(report.status, 'completed');
+  assert.deepEqual(executedSteps, [2, 3], 'Step 2 must be re-run before step 3, step 1 must not re-run');
+  assert.doesNotMatch(report.summary, /failed at step 2/);
+
+  const finalState = loadTaskState(threadId);
+  assert.ok(finalState?.steps.every((st) => st.status === 'done'));
+});
+
 test('goal and acceptance survive resume unchanged', async () => {
   const tmpHome = makeTempDir('axiom-survive-home-');
   const ws = makeTempDir('axiom-survive-ws-');

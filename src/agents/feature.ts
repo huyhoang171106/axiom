@@ -476,7 +476,12 @@ export async function resumeTask(threadId: string | undefined, opts: FeatureOpti
 
   if (!targetId) {
     const candidates = listTasks(opts.workspaceRoot).filter((t) =>
-      t.steps.some((st) => st.status === 'todo' || st.status === 'doing')
+      t.steps.some(
+        (st) =>
+          st.status === 'todo' ||
+          st.status === 'doing' ||
+          (st.status === 'failed' && (st.note?.includes('AbortSignal') || st.note?.includes('abort') || st.note?.includes('Cancelled')))
+      )
     );
     if (candidates.length === 0) throw new Error('No unfinished tasks found to resume.');
     targetId = candidates[0].threadId;
@@ -491,14 +496,19 @@ export async function resumeTask(threadId: string | undefined, opts: FeatureOpti
     );
   }
 
-  // Khôi phục các bước đang 'doing' về lại 'todo' trước khi chạy tiếp (P7: rollback files từ snapshot)
+  // Khôi phục các bước đang 'doing' hoặc 'failed' do bị ngắt về lại 'todo' trước khi chạy tiếp (P7: rollback files từ snapshot)
   for (const st of existingState.steps) {
-    if (st.status === 'doing') {
+    const isInterrupted =
+      st.status === 'doing' ||
+      (st.status === 'failed' &&
+        (st.note?.includes('AbortSignal') || st.note?.includes('abort') || st.note?.includes('Cancelled')));
+    if (isInterrupted) {
       const snapDir = path.join(taskDir(targetId), `snap-${st.id}`);
       if (fs.existsSync(snapDir)) {
         restoreFiles(opts.workspaceRoot, snapDir, { affectedFiles: st.files });
       }
       st.status = 'todo';
+      st.note = undefined;
     }
   }
   existingState.updatedAt = new Date().toISOString();

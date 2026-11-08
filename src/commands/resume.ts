@@ -15,7 +15,12 @@ export const resumeCommand: Command = {
 
     if (!targetThreadId) {
       const candidates = listTasks(ctx.workspaceRoot).filter((t) =>
-        t.steps.some((st) => st.status === 'todo' || st.status === 'doing')
+        t.steps.some(
+          (st) =>
+            st.status === 'todo' ||
+            st.status === 'doing' ||
+            (st.status === 'failed' && (st.note?.includes('AbortSignal') || st.note?.includes('abort') || st.note?.includes('Cancelled')))
+        )
       );
 
       if (candidates.length === 0) {
